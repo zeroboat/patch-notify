@@ -11,6 +11,11 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from dotenv import load_dotenv
+import os
+from .template import  THEME_LAYOUT_DIR, THEME_VARIABLES
+
+load_dotenv("../dev.env")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,12 +25,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-%03^8!0gw+(c4iwzwo8$s#!q%z&0u5wjjnx)uvf^-3#pwet*!6'
+SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["localhost", "0.0.0.0", "127.0.0.1"]
+ENVIRONMENT = os.environ.get("DJANGO_ENVIRONMENT", default="local")
 
 
 # Application definition
@@ -40,16 +46,29 @@ INSTALLED_APPS = [
     'apps.patchnote',
     'apps.product',
     'apps.contacts',
+    'apps.dashboards',
+    "apps.layouts",
+    "apps.pages",
+    "apps.authentication",
+    "apps.cards",
+    "apps.ui",
+    "apps.extended_ui",
+    "apps.icons",
+    "apps.forms",
+    "apps.form_layouts",
+    "apps.tables",
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    "django.middleware.locale.LocaleMiddleware",
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -57,13 +76,23 @@ ROOT_URLCONF = 'core.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / "templates"],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                "django.contrib.messages.context_processors.messages",
+                "core.context_processors.my_setting",
+                "core.context_processors.environment",
+            ],
+            "libraries": {
+                "theme": "web_project.template_tags.theme",
+            },
+            "builtins": [
+                "django.templatetags.static",
+                "web_project.template_tags.theme",
             ],
         },
     },
@@ -118,3 +147,19 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+
+STATICFILES_DIRS = [
+    BASE_DIR / "src" / "assets",
+]
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+THEME_LAYOUT_DIR = THEME_LAYOUT_DIR
+THEME_VARIABLES = THEME_VARIABLES
+
+LOGIN_URL = '/auth/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/auth/login/'
