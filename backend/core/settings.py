@@ -15,11 +15,11 @@ from dotenv import load_dotenv
 import os
 from .template import  THEME_LAYOUT_DIR, THEME_VARIABLES
 
-load_dotenv("../dev.env")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+load_dotenv(f"{BASE_DIR}/../dev.env")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -45,8 +45,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'apps.patchnote',
     'apps.product',
-    'apps.contacts',
+    'apps.customer',
     'apps.dashboards',
+    "apps.base",
     "apps.layouts",
     "apps.pages",
     "apps.authentication",
