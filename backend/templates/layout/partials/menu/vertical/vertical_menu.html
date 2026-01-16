@@ -21,18 +21,41 @@
   <ul class="menu-inner py-1">
 
     <li class="menu-item {% if 'index' == request.resolver_match.url_name or '/dashbord/' in request.path %}active open{% endif %}">
-      <a href="javascript:void(0);" class="menu-link menu-toggle">
+      <a href="{% url 'index' %}" class="menu-link">
         <i class="menu-icon icon-base bx bx-home-smile"></i>
         <div class="text-truncate">Dashboards</div>
       </a>
+    </li>
+
+    <li class="menu-header small text-uppercase">
+      <span class="menu-header-text">Patch Notes</span>
+    </li>
+    {% for solution in side_solutions %}
+    <li class="menu-item">
+      <a href="javascript:void(0);" class="menu-link menu-toggle">
+        <i class="menu-icon tf-icons bx bx-collection"></i>
+        <div data-i18n="{{ solution.name }}">{{ solution.name }}</div>
+      </a>
       <ul class="menu-sub">
-        <li class="menu-item {% if 'index' == request.resolver_match.url_name %}active{% endif %}">
-          <a href="{% url 'index' %}" class="menu-link">
-            <div class="text-truncate">Analytics</div>
+        {% for product in solution.products.all %}
+        <li class="menu-item {% if product.id in request.path %}active{% endif %}">
+          <a href="{% url 'patchnote:product_patch_detail' product.id %}" class="menu-link">
+            <div class="text-truncate">
+              {{ product.get_platform_display }} {{ product.get_category_display }}
+            </div>
           </a>
         </li>
+        {% endfor %}
       </ul>
     </li>
+    {% endfor %}
+
+
+
+    <li class="menu-header small text-uppercase">
+      <span class="menu-header-text">Apps & Pages</span>
+    </li>
+    
     <!-- Layouts -->
     <li class="menu-item {% if '/layouts/' in request.path  %}active open{% endif %}">
       <a href="javascript:void(0);" class="menu-link menu-toggle">
@@ -68,42 +91,6 @@
       </ul>
     </li>
 
-    <li class="menu-header small text-uppercase">
-      <span class="menu-header-text">Patch Notes</span>
-    </li>
-    <li class="menu-item {% if '/account_settings/' in request.path %}active open{% endif %}">
-      <a href="javascript:void(0);" class="menu-link menu-toggle">
-        <i class="menu-icon icon-base bx bx-dock-top"></i>
-        <div class="text-truncate">Premium</div>
-      </a>
-      <ul class="menu-sub">
-        <li class="menu-item {% if '/account/' in request.path %}active{% endif %}">
-          <a href="{% url 'pages-account-settings-account' %}" class="menu-link">
-            <div class="text-truncate">Android Plugin</div>
-          </a>
-        </li>
-        <li class="menu-item {% if '/notifications/' in request.path %}active{% endif %}">
-          <a href="{% url 'pages-account-settings-notifications' %}" class="menu-link">
-            <div class="text-truncate">Android Moudle</div>
-          </a>
-        </li>
-        <li class="menu-item {% if '/connections/' in request.path %}active{% endif %}">
-          <a href="{% url 'pages-account-settings-connections' %}" class="menu-link">
-            <div class="text-truncate">iOS Library</div>
-          </a>
-        </li>
-        <li class="menu-item {% if '/connections/' in request.path %}active{% endif %}">
-          <a href="{% url 'pages-account-settings-connections' %}" class="menu-link">
-            <div class="text-truncate">iOS Module</div>
-          </a>
-        </li>
-      </ul>
-    </li>
-
-
-    <li class="menu-header small text-uppercase">
-      <span class="menu-header-text">Apps & Pages</span>
-    </li>
     
     <!-- Account -->
     <li class="menu-item {% if '/account_settings/' in request.path %}active open{% endif %}">

@@ -1,0 +1,91 @@
+{% extends layout_path %}
+
+{% load static %}
+{% load i18n %}
+
+{% block title %}Dashboard - Analytics{% endblock %}
+
+{% block vendor_css %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}"/>
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+  {{ block.super }}
+  <script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_js %}
+  {{ block.super }}
+  <script src="{% static 'js/dashboards-analytics.js' %}"></script>
+{% endblock page_js %}
+
+
+{% block content %}
+<div class="row">
+  <div class="col-md-3 d-none d-md-block">
+    <div class="card sticky-top" style="top: 100px; z-index: 10;">
+      <div class="card-body">
+        <h6 class="text-muted small text-uppercase mb-3">Versions</h6>
+        <nav id="version-list" class="nav flex-column nav-pills">
+          {% for note in patch_notes %}
+          <a class="nav-link mb-1 {% if forloop.first %}active{% endif %}" href="#version-{{ note.version|slugify }}">
+            <i class="bx bx-subdirectory-right me-2"></i> {{ note.version }}
+          </a>
+          {% endfor %}
+        </nav>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-9">
+    {% for note in patch_notes %}
+    <div id="version-{{ note.version|slugify }}" class="card mb-4 shadow-none border">
+      <div class="card-header d-flex justify-content-between align-items-center border-bottom">
+        <h4 class="mb-0 text-primary fw-bold">{{ note.version }}</h4>
+        <span class="badge bg-label-secondary">{{ note.release_date|date:"Y-m-d" }}</span>
+      </div>
+      <div class="card-body pt-4">
+        
+        {% if note.features.all %}
+        <div class="mb-4">
+          <h6 class="fw-bold"><span class="badge badge-dot bg-success me-2"></span>New Features</h6>
+          <ul class="list-group list-group-flush ms-3">
+            {% for item in note.features.all %}
+              {% if not item.parent %}
+              <li class="list-group-item border-0 py-1">
+                <strong>{{ item.content }}</strong>
+                {% if item.children.all %}
+                <ul class="mt-1 text-muted small">
+                  {% for child in item.children.all %}
+                  <li>{{ child.content }}</li>
+                  {% endfor %}
+                </ul>
+                {% endif %}
+              </li>
+              {% endif %}
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('#version-list a').forEach(anchor => {
+    anchor.addEventListener('click', function(e) {
+      e.preventDefault();
+      document.querySelector(this.getAttribute('href')).scrollIntoView({
+        behavior: 'smooth'
+      });
+      // 클래스 활성화 교체
+      document.querySelectorAll('#version-list a').forEach(nav => nav.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+</script>
+{% endblock %}
