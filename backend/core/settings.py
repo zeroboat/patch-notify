@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'apps.customer',
     'apps.dashboards',
     "apps.base",
+    "apps.notification",
     "apps.layouts",
     "apps.pages",
     "apps.authentication",

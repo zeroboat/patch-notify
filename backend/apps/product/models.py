@@ -30,7 +30,7 @@ class Product(BaseModel):
         MODULE = 'MOD', 'Module'
     solution = models.ForeignKey(Solution, on_delete=models.CASCADE, related_name='products', verbose_name="소속 솔루션")
     platform = models.CharField(max_length=10, choices=Platform.choices, default=Platform.AOS, verbose_name="플랫폼")
-    category = models.CharField(max_length=10, choices=Category.choices, default=Category.LIBRARY, verbose_name="카테고리")
+    category = models.CharField(max_length=10, choices=Category.choices, default=Category.PLUGIN, verbose_name="카테고리")
 
     class Meta:
         verbose_name = "상세 제품"
