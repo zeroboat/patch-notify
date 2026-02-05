@@ -6,7 +6,7 @@ from .models import PatchNote
 from apps.product.models import Product
 
 # Create your views here.
-class PatchNoteDetailView(LoginRequiredMixin, TemplateView):
+class PatchNoteDetailView(TemplateView):
     template_name = "patchnote/patch_list.html"
 
     def get_context_data(self, **kwargs):

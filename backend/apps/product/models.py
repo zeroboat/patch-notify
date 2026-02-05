@@ -38,4 +38,4 @@ class Product(BaseModel):
         unique_together = ['solution', 'platform', 'category']
 
     def __str__(self):
-        return f"{self.solution.name}-{self.get_platform_display()}-{self.get_category_display()}"
+        return f"{self.solution.name} {self.get_platform_display()} {self.get_category_display()}"

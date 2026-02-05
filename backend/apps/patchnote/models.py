@@ -18,6 +18,7 @@ class PatchNote(BaseModel):
 class PatchItemBase(BaseModel):
     """패치노트 공통 베이스 모델"""
     content = models.TextField(verbose_name="내용")
+    content_en = models.TextField(verbose_name="내용(영문)", blank=True, null=True)
     order = models.PositiveIntegerField(default=0, verbose_name="순서")
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children', verbose_name="상위 항목")
 

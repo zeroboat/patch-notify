@@ -6,7 +6,7 @@ from web_project import TemplateLayout
 
 # Create your views here.
 
-class OfficialNoticeView(LoginRequiredMixin, TemplateView):
+class OfficialNoticeView(TemplateView):
     template_name = "notification/official_notice.html"
 
     def get_context_data(self, **kwargs):

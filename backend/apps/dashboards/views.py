@@ -10,7 +10,7 @@ Refer to dashboards/urls.py file for more pages.
 """
 
 
-class DashboardsView(LoginRequiredMixin, TemplateView):
+class DashboardsView(TemplateView):
     template_name="dashboard_analytics.html"
     # Predefined function
     def get_context_data(self, **kwargs):
