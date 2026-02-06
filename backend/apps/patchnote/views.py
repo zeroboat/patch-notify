@@ -35,3 +35,13 @@ class PatchNoteDetailView(TemplateView):
         })
 
         return context
+
+def patch_note_append(request):
+    if request.method == "POST":
+        try:
+            print(request.POST)
+            print("test")
+        except Exception as e:
+            print("Error is "+ str(e))
+    else:
+        print("")

@@ -57,6 +57,7 @@ class TemplateHelper:
 
     # Import a module by string
     def import_class(fromModule, import_className):
-        pprint(f"Loading {import_className} from {fromModule}")
+        ## print template info
+        # pprint(f"Loading {import_className} from {fromModule}")
         module = import_module(fromModule)
         return getattr(module, import_className)

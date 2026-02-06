@@ -6,173 +6,205 @@
 {% block title %}Dashboard - Analytics{% endblock %}
 
 {% block vendor_css %}
-  {{ block.super }}
-  <link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}"/>
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <link rel="stylesheet" href="{% static 'css/ckeditor.css' %}"/>
+    <link rel="stylesheet" href="{% static 'css/swal.css' %}"/>
 {% endblock vendor_css %}
 
 {% block vendor_js %}
-  {{ block.super }}
-  <script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+    {{ block.super }}
+    <script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+    <script src="https://cdn.ckeditor.com/ckeditor5/41.0.0/super-build/ckeditor.js"></script>
+    <script src="https://cdn.ckeditor.com/ckeditor5/34.0.0/classic/translations/ko.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="{% static 'js/utils/datepicker.js' %}"></script>
+    <script src="{% static 'js/utils/ckeditor.js' %}"></script>
+    <script src="{% static 'js/utils/append.js' %}"></script>
+
 {% endblock vendor_js %}
 
 {% block page_js %}
-  {{ block.super }}
-  <script src="{% static 'js/dashboards-analytics.js' %}"></script>
+    {{ block.super }}
+    <script src="{% static 'js/patch_note_page.js' %}"></script>
 {% endblock page_js %}
 
 
 {% block content %}
-  <div class="mb-4 d-flex justify-content-end">
-    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#largeModal">
-      패치노트 등록
-    </button>
-  </div>
-  <!-- Extra Large Modal -->
-  <div class="modal fade" id="largeModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="exampleModalLabel4">AppSuit {{ selected_product }} 패치노트 등록</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <div class="row mb-4">
-            <div class="col-md-6">
-              <label for="patchVersion" class="form-label fw-bold">패치 버전 <span class="text-danger">*</span></label>
-              <input type="text" id="patchVersion" class="form-control" placeholder="예: v26.1.0" required>
-            </div>
-            <div class="col-md-6">
-              <label for="patchDate" class="form-label fw-bold">배포 날짜 <span class="text-danger">*</span></label>
-              <input type="date" id="patchDate" class="form-control" required>
-            </div>
-          </div>
-
-          <hr class="my-4">
-          
-          <div class="card mb-4">
-            <div class="card-body">
-              <div class="row">
-                <div class="col-md-3">
-                  <div class="form-check form-switch mb-2">
-                    <input class="form-check-input section-switch" type="checkbox" id="switch-new" data-section="new">
-                    <label class="form-check-label" for="switch-new">🚀 기능 추가</label>
-                  </div>
-                </div>
-                <div class="col-md-3">
-                  <div class="form-check form-switch mb-2">
-                    <input class="form-check-input section-switch" type="checkbox" id="switch-improve" data-section="improve">
-                    <label class="form-check-label" for="switch-improve">🛠️ 기능 개선</label>
-                  </div>
-                </div>
-                <div class="col-md-3">
-                  <div class="form-check form-switch mb-2">
-                    <input class="form-check-input section-switch" type="checkbox" id="switch-bug" data-section="bug">
-                    <label class="form-check-label" for="switch-bug">🐛 버그 수정</label>
-                  </div>
-                </div>
-                <div class="col-md-3">
-                  <div class="form-check form-switch mb-2">
-                    <input class="form-check-input section-switch" type="checkbox" id="switch-note" data-section="note">
-                    <label class="form-check-label" for="switch-note">📝 특이 사항</label>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div id="editor-section-container">
-            <div id="wrapper-new" class="editor-wrapper mb-3" style="display:none;">
-              <label class="form-label fw-bold">🚀 기능 추가 내용</label>
-              <textarea id="editor-features"></textarea>
-            </div>
-            <div id="wrapper-improve" class="editor-wrapper mb-3" style="display:none;">
-              <label class="form-label fw-bold">🛠️ 기능 개선 내용</label>
-              <textarea id="editor-improvements"></textarea>
-            </div>
-            <div id="wrapper-bug" class="editor-wrapper mb-3" style="display:none;">
-              <label class="form-label fw-bold">🐛 버그 수정 내용</label>
-              <textarea id="editor-bugfixes"></textarea>
-            </div>
-            <div id="wrapper-note" class="editor-wrapper mb-3" style="display:none;">
-              <label class="form-label fw-bold">📝 특이 사항 내용</label>
-              <textarea id="editor-remarks"></textarea>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Close</button>
-          <button type="button" class="btn btn-primary">Save changes</button>
-        </div>
-      </div>
+    <div class="mb-4 d-flex justify-content-end">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#patchAppendModal">
+            패치노트 등록
+        </button>
     </div>
-  </div>
+    <div class="modal fade" id="patchAppendModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <form id="appendForm" action="{% url 'patchnote:patch_note_append' %}" method="POST" class="modal-content">
+                {% csrf_token %}
 
+                <input type="hidden" name="product_name" value="{{ selected_product }}">
 
-<div class="row">
-  <div class="col-md-2 d-none d-md-block">
-    <div class="card sticky-top" style="top: 100px; z-index: 10;">
-      <div class="card-body">
-        <h6 class="text-muted small text-uppercase mb-3">Versions</h6>
-        <nav id="version-list" class="nav flex-column nav-pills">
-          {% for note in patch_notes %}
-          <a class="nav-link mb-1 {% if forloop.first %}active{% endif %}" href="#version-{{ note.version|slugify }}">
-            <i class="bx bx-subdirectory-right me-2"></i> {{ note.version }}
-          </a>
-          {% endfor %}
-        </nav>
-      </div>
-    </div>
-  </div>
+                <div class="modal-header border-bottom pb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar flex-shrink-0 me-3">
+                        <span class="avatar-initial rounded bg-label-primary">
+                            <i class="bx bx-file-blank fs-4"></i>
+                        </span>
+                        </div>
+                        <div>
+                            <h4 class="modal-title mb-0 fw-bold">패치내역 등록</h4>
+                            <small class="text-muted">
+                                <span class="badge bg-label-secondary text-capitalize">{{ selected_product }}</span>
+                                전용 릴리즈 노트를 작성합니다.
+                            </small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
 
+                <div class="modal-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label for="patchVersion" class="form-label fw-bold">패치 버전 <span class="text-danger">*</span></label>
+                            <input type="text" name="version" id="patchVersion" class="form-control" placeholder="예: v26.1.0" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="patchDate" class="form-label fw-bold">배포 날짜 <span class="text-danger">*</span></label>
+                            <input type="text" name="patch_date" id="patchDate" class="form-control" required>
+                        </div>
+                    </div>
 
-  <div class="col-md-10">
-    {% for note in patch_notes %}
-      <div id="version-{{ note.version|slugify }}" class="card mb-4 shadow-none border">
-        <div class="card-header d-flex justify-content-between align-items-center border-bottom">
-          <h4 class="mb-0 text-primary fw-bold">{{ note.version }}</h4>
-          <span class="badge bg-label-secondary">{{ note.release_date|date:"Y-m-d" }}</span>
+                    <hr class="my-4">
+
+                    <div class="card mb-4 shadow-none border">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch" type="checkbox" id="switch-new" data-section="new">
+                                        <label class="form-check-label" for="switch-new">🚀 기능 추가</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch" type="checkbox" id="switch-improve" data-section="improve">
+                                        <label class="form-check-label" for="switch-improve">🛠️ 기능 개선</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch" type="checkbox" id="switch-bug" data-section="bug">
+                                        <label class="form-check-label" for="switch-bug">🐛 버그 수정</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch" type="checkbox" id="switch-note" data-section="note">
+                                        <label class="form-check-label" for="switch-note">📝 특이 사항</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="editor-section-container">
+                        <div id="wrapper-new" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🚀 기능 추가</label>
+                            <textarea id="editor-features" name="new_features"></textarea>
+                        </div>
+                        <div id="wrapper-improve" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🛠️ 기능 개선</label>
+                            <textarea id="editor-improvements" name="improvements"></textarea>
+                        </div>
+                        <div id="wrapper-bug" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🐛 버그 수정</label>
+                            <textarea id="editor-bugfixes" name="bug_fixes"></textarea>
+                        </div>
+                        <div id="wrapper-note" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">📝 특이 사항</label>
+                            <textarea id="editor-remarks" name="special_notes"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary" id="btn-append-patch">Save changes</button>
+                </div>
+            </form>
         </div>
-      <div class="card-body pt-4">
-        
-      {% if note.features.all %}
-      <div class="mb-4">
-        <h6 class="fw-bold"><span class="badge badge-dot bg-success me-2"></span>New Features</h6>
-          <ul class="list-group list-group-flush ms-3">
-            {% for item in note.features.all %}
-              {% if not item.parent %}
-              <li class="list-group-item border-0 py-1">
-                <strong>{{ item.content }}</strong>
-                {% if item.children.all %}
-                <ul class="mt-1 text-muted small">
-                  {% for child in item.children.all %}
-                  <li>{{ child.content }}</li>
-                  {% endfor %}
-                </ul>
-                {% endif %}
-              </li>
-              {% endif %}
+    </div>
+
+    <div class="row">
+        <div class="col-md-2 d-none d-md-block">
+            <div class="card sticky-top" style="top: 100px; z-index: 10;">
+                <div class="card-body">
+                    <h6 class="text-muted small text-uppercase mb-3">Versions</h6>
+                    <nav id="version-list" class="nav flex-column nav-pills">
+                        {% for note in patch_notes %}
+                            <a class="nav-link mb-1 {% if forloop.first %}active{% endif %}"
+                               href="#version-{{ note.version|slugify }}">
+                                <i class="bx bx-subdirectory-right me-2"></i> {{ note.version }}
+                            </a>
+                        {% endfor %}
+                    </nav>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="col-md-10">
+            {% for note in patch_notes %}
+                <div id="version-{{ note.version|slugify }}" class="card mb-4 shadow-none border">
+                    <div class="card-header d-flex justify-content-between align-items-center border-bottom">
+                        <h4 class="mb-0 text-primary fw-bold">{{ note.version }}</h4>
+                        <span class="badge bg-label-secondary">{{ note.release_date|date:"Y-m-d" }}</span>
+                    </div>
+                    <div class="card-body pt-4">
+
+                        {% if note.features.all %}
+                            <div class="mb-4">
+                                <h6 class="fw-bold"><span class="badge badge-dot bg-success me-2"></span>New Features
+                                </h6>
+                                <ul class="list-group list-group-flush ms-3">
+                                    {% for item in note.features.all %}
+                                        {% if not item.parent %}
+                                            <li class="list-group-item border-0 py-1">
+                                                <strong>{{ item.content }}</strong>
+                                                {% if item.children.all %}
+                                                    <ul class="mt-1 text-muted small">
+                                                        {% for child in item.children.all %}
+                                                            <li>{{ child.content }}</li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                {% endif %}
+                                            </li>
+                                        {% endif %}
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+
+                    </div>
+                </div>
             {% endfor %}
-          </ul>
-      </div>
-      {% endif %}
-
         </div>
     </div>
-    {% endfor %}
-  </div>
-</div>
 
-<script>
-  document.querySelectorAll('#version-list a').forEach(anchor => {
-    anchor.addEventListener('click', function(e) {
-      e.preventDefault();
-      document.querySelector(this.getAttribute('href')).scrollIntoView({
-        behavior: 'smooth'
-      });
-      // 클래스 활성화 교체
-      document.querySelectorAll('#version-list a').forEach(nav => nav.classList.remove('active'));
-      this.classList.add('active');
-    });
-  });
-</script>
+    <script>
+        document.querySelectorAll('#version-list a').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+                // 클래스 활성화 교체
+                document.querySelectorAll('#version-list a').forEach(nav => nav.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+    </script>
 {% endblock %}
