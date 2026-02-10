@@ -1,0 +1,128 @@
+{% extends layout_path %}
+
+{% load static %}
+{% load i18n %}
+
+{% block title %}Dashboard - Analytics{% endblock %}
+
+{% block vendor_css %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}"/>
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+  {{ block.super }}
+  <script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_js %}
+  {{ block.super }}
+  <script src="{% static 'js/dashboards-analytics.js' %}"></script>
+{% endblock page_js %}
+
+{% block content %}
+    <div class="container-xxl flex-grow-1 container-p-y">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="fw-bold py-3 mb-0"><span class="text-muted fw-light">Management /</span> 솔루션 및 제품 관리</h4>
+            <div class="dt-buttons btn-group flex-wrap">
+                <button class="btn btn-outline-primary me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasSolution">
+                    <i class="bx bx-plus me-1"></i> 솔루션 추가
+                </button>
+                <button class="btn btn-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasProduct">
+                    <i class="bx bx-plus me-1"></i> 제품 추가
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h5 class="card-header">등록된 제품 목록</h5>
+            <div class="table-responsive text-nowrap">
+                <table class="table table-hover">
+                    <thead>
+                    <tr>
+                        <th>솔루션명</th>
+                        <th>제품명 (Platform)</th>
+                        <th>상태</th>
+                        <th>관리</th>
+                    </tr>
+                    </thead>
+                    <tbody class="table-border-bottom-0">
+                    {% for product in products %}
+                        <tr>
+                            <td><span class="fw-medium">{{ product.solution.name }}</span></td>
+                            <td>{{ product.get_category_display }} <span class="badge bg-label-secondary">{{ product.get_platform_display }}</span></td>
+                            <td><span class="badge bg-label-success me-1">Active</span></td>
+                            <td>
+                                <div class="dropdown">
+                                    <button type="button" class="btn p-0 dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="bx bx-dots-vertical-rounded"></i></button>
+                                    <div class="dropdown-menu">
+                                        <a class="dropdown-item" href="javascript:void(0);"><i class="bx bx-edit-alt me-1"></i> Edit</a>
+                                        <a class="dropdown-item" href="javascript:void(0);"><i class="bx bx-trash me-1"></i> Delete</a>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasSolution" aria-labelledby="offcanvasSolutionLabel">
+        <div class="offcanvas-header border-bottom">
+            <h5 id="offcanvasSolutionLabel" class="offcanvas-title">새 솔루션 등록</h5>
+            <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas"></button>
+        </div>
+        <div class="offcanvas-body mx-0 flex-grow-0">
+{#            <form id="solutionForm" action="{% url 'solution_create' %}" method="POST" class="row g-3">#}
+{#                {% csrf_token %}#}
+{#                <div class="col-sm-12">#}
+{#                    <label class="form-label fw-bold">솔루션 이름</label>#}
+{#                    <input type="text" name="name" class="form-control" placeholder="예: 스마트 팩토리 플랫폼" required>#}
+{#                </div>#}
+{#                <div class="col-sm-12">#}
+{#                    <label class="form-label fw-bold">설명</label>#}
+{#                    <textarea name="description" class="form-control" rows="3" placeholder="솔루션에 대한 간단한 설명"></textarea>#}
+{#                </div>#}
+{#                <div class="col-sm-12 mt-4">#}
+{#                    <button type="submit" class="btn btn-primary me-sm-3 me-1">등록</button>#}
+{#                    <button type="reset" class="btn btn-outline-secondary" data-bs-dismiss="offcanvas">취소</button>#}
+{#                </div>#}
+{#            </form>#}
+        </div>
+    </div>
+
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasProduct" aria-labelledby="offcanvasProductLabel">
+        <div class="offcanvas-header border-bottom">
+            <h5 id="offcanvasProductLabel" class="offcanvas-title">새 제품 등록</h5>
+            <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas"></button>
+        </div>
+        <div class="offcanvas-body mx-0 flex-grow-0">
+{#            <form id="productForm" action="{% url 'product_create' %}" method="POST" class="row g-3">#}
+{#                {% csrf_token %}#}
+{#                <div class="col-sm-12">#}
+{#                    <label class="form-label fw-bold">소속 솔루션</label>#}
+{#                    <select name="solution_id" class="form-select" required>#}
+{#                        <option value="">솔루션을 선택하세요</option>#}
+{#                        {% for sol in solutions %}#}
+{#                            <option value="{{ sol.id }}">{{ sol.name }}</option>#}
+{#                        {% endfor %}#}
+{#                    </select>#}
+{#                </div>#}
+{#                <div class="col-sm-12">#}
+{#                    <label class="form-label fw-bold">제품 이름</label>#}
+{#                    <input type="text" name="name" class="form-control" placeholder="예: 대시보드 모듈" required>#}
+{#                </div>#}
+{#                <div class="col-sm-12">#}
+{#                    <label class="form-label fw-bold">제품 코드</label>#}
+{#                    <input type="text" name="code" class="form-control" placeholder="예: DASH_APP_01" required>#}
+{#                </div>#}
+{#                <div class="col-sm-12 mt-4">#}
+{#                    <button type="submit" class="btn btn-primary me-sm-3 me-1">등록</button>#}
+{#                    <button type="reset" class="btn btn-outline-secondary" data-bs-dismiss="offcanvas">취소</button>#}
+{#                </div>#}
+{#            </form>#}
+        </div>
+    </div>
+{% endblock %}
