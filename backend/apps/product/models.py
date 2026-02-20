@@ -6,6 +6,7 @@ from apps.base.models import BaseModel
 
 class Solution(BaseModel):
     name = models.CharField(max_length=100, verbose_name="솔루션 명")
+    icon = models.CharField(max_length=50, verbose_name="아이콘", null=True, blank=True)
 
     class Meta:
         verbose_name = "솔루션"
@@ -40,3 +41,15 @@ class Product(BaseModel):
 
     def __str__(self):
         return f"{self.solution.name} {self.get_platform_display()} {self.get_category_display()}"
+
+    @property
+    def platform_color(self):
+        colors = {
+            'AOS': 'success',
+            'IOS': 'info',
+            'SERVER': 'primary',
+            'MACOS': 'secondary',
+            'WEB': 'warning',
+            'FLUTTER': 'danger',
+        }
+        return colors.get(self.platform, 'secondary')

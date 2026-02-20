@@ -29,7 +29,7 @@
                 <div class="text-truncate">Dashboards</div>
             </a>
         </li>
-        <li class="menu-item {% if 'index' == request.resolver_match.url_name or '/dashboard/' in request.path %}active open{% endif %}">
+        <li class="menu-item {% if 'management' in request.path %}active open{% endif %}">
             <a href="{% url 'product:product_management' %}" class="menu-link">
                 <i class="menu-icon icon-base bx bx-home-smile"></i>
                 <div class="text-truncate">Product Management</div>
@@ -62,7 +62,7 @@
         <li class="menu-header small text-uppercase">
             <span class="menu-header-text">Notification</span>
         </li>
-        <li class="menu-item">
+        <li class="menu-item {% if 'official_notice' in request.path %}active{% endif %}">
             <a href="{% url 'notification:official_notice' %}" class="menu-link">
                 <i class="menu-icon icon-base bx bx-collection"></i>
                 <div class="text-truncate">Official Notice</div>

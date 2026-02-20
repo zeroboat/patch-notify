@@ -3,7 +3,7 @@
 {% load static %}
 {% load i18n %}
 
-{% block title %}Dashboard - Analytics{% endblock %}
+{% block title %}Patch Notes{% endblock %}
 
 {% block vendor_css %}
     {{ block.super }}
@@ -35,9 +35,27 @@
 
 
 {% block content %}
-    <div class="mb-4 d-flex justify-content-end">
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#patchAppendModal">
-            패치노트 등록
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+        <!-- 좌측: 제품 정보 -->
+        <div>
+            <div class="d-flex align-items-center flex-wrap gap-2">
+                {% if selected_product.solution.icon %}
+                <i class="bx {{ selected_product.solution.icon }} text-{{ selected_product.platform_color }}" style="font-size:1.2rem;"></i>
+                {% endif %}
+                <span class="fw-semibold">{{ selected_product.solution.name }}</span>
+                <span class="text-muted">/</span>
+                <span class="badge bg-label-{{ selected_product.platform_color }} rounded-pill">{{ selected_product.get_platform_display }}</span>
+                <span class="text-muted">/</span>
+                <span class="badge bg-label-secondary rounded-pill">{{ selected_product.get_category_display }}</span>
+            </div>
+            {% if selected_product.description %}
+            <p class="mb-0 small text-muted mt-1">{{ selected_product.description }}</p>
+            {% endif %}
+        </div>
+        <!-- 우측: 등록 버튼 -->
+        <button type="button" class="btn btn-primary flex-shrink-0"
+                data-bs-toggle="modal" data-bs-target="#patchAppendModal">
+            <i class="bx bx-plus me-1"></i>패치노트 등록
         </button>
     </div>
     <div class="modal fade" id="patchAppendModal" tabindex="-1" aria-hidden="true">
@@ -45,7 +63,7 @@
             <form id="appendForm" action="{% url 'patchnote:patch_note_append' %}" method="POST" class="modal-content">
                 {% csrf_token %}
 
-                <input type="hidden" name="product_name" value="{{ selected_product }}">
+                <input type="hidden" name="product_id" value="{{ selected_product.id }}">
 
                 <div class="modal-header border-bottom pb-3">
                     <div class="d-flex align-items-center">
@@ -69,7 +87,7 @@
                     <div class="row mb-4">
                         <div class="col-md-6">
                             <label for="patchVersion" class="form-label fw-bold">패치 버전 <span class="text-danger">*</span></label>
-                            <input type="text" name="version" id="patchVersion" class="form-control" placeholder="예: v26.1.0" required>
+                            <input type="text" name="version" id="patchVersion" class="form-control" placeholder="ex) 26.1.0" required>
                         </div>
                         <div class="col-md-6">
                             <label for="patchDate" class="form-label fw-bold">배포 날짜 <span class="text-danger">*</span></label>
@@ -159,35 +177,132 @@
         <div class="col-md-10">
             {% for note in patch_notes %}
                 <div id="version-{{ note.version|slugify }}" class="card mb-4 shadow-none border">
-                    <div class="card-header d-flex justify-content-between align-items-center border-bottom">
-                        <h4 class="mb-0 text-primary fw-bold">{{ note.version }}</h4>
-                        <span class="badge bg-label-secondary">{{ note.release_date|date:"Y-m-d" }}</span>
+                    <div class="card-header d-flex justify-content-between align-items-center py-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bx bx-tag-alt text-primary"></i>
+                            <h5 class="mb-0 text-primary fw-bold">{{ note.version }}</h5>
+                        </div>
+                        <span class="badge bg-label-secondary fs-small">
+                            <i class="bx bx-calendar me-1"></i>{{ note.release_date|date:"Y년 m월 d일" }}
+                        </span>
                     </div>
-                    <div class="card-body pt-4">
+                    <div class="card-body px-4 py-3">
 
                         {% if note.features.all %}
-                            <div class="mb-4">
-                                <h6 class="fw-bold"><span class="badge badge-dot bg-success me-2"></span>New Features
-                                </h6>
-                                <ul class="list-group list-group-flush ms-3">
-                                    {% for item in note.features.all %}
-                                        {% if not item.parent %}
-                                            <li class="list-group-item border-0 py-1">
-                                                <strong>{{ item.content }}</strong>
-                                                {% if item.children.all %}
-                                                    <ul class="mt-1 text-muted small">
-                                                        {% for child in item.children.all %}
-                                                            <li>{{ child.content }}</li>
-                                                        {% endfor %}
-                                                    </ul>
-                                                {% endif %}
-                                            </li>
-                                        {% endif %}
-                                    {% endfor %}
-                                </ul>
+                        <div class="patch-section border-start border-3 border-success ps-3 mb-4">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="fw-bold text-success small text-uppercase">🚀 기능 추가</span>
                             </div>
+                            <ul class="mb-0 ps-3">
+                                {% for item in note.features.all %}
+                                    {% if not item.parent %}
+                                    <li class="py-1 lh-base">
+                                        <span class="fw-medium">{{ item.content }}</span>
+                                        {% if item.children.all %}
+                                        <ul class="mt-1 ps-3">
+                                            {% for child in item.children.all %}
+                                            <li class="text-muted small py-1">{{ child.content }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                        {% endif %}
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                            </ul>
+                        </div>
                         {% endif %}
 
+                        {% if note.improvements.all %}
+                        {% if note.features.all %}<hr class="my-3 opacity-25">{% endif %}
+                        <div class="patch-section border-start border-3 border-info ps-3 mb-4">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="fw-bold text-info small text-uppercase">🛠️ 기능 개선</span>
+                            </div>
+                            <ul class="mb-0 ps-3">
+                                {% for item in note.improvements.all %}
+                                    {% if not item.parent %}
+                                    <li class="py-1 lh-base">
+                                        <span class="fw-medium">{{ item.content }}</span>
+                                        {% if item.children.all %}
+                                        <ul class="mt-1 ps-3">
+                                            {% for child in item.children.all %}
+                                            <li class="text-muted small py-1">{{ child.content }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                        {% endif %}
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        {% if note.bugfixes.all %}
+                        {% if note.features.all or note.improvements.all %}<hr class="my-3 opacity-25">{% endif %}
+                        <div class="patch-section border-start border-3 border-danger ps-3 mb-4">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="fw-bold text-danger small text-uppercase">🐛 버그 수정</span>
+                            </div>
+                            <ul class="mb-0 ps-3">
+                                {% for item in note.bugfixes.all %}
+                                    {% if not item.parent %}
+                                    <li class="py-1 lh-base">
+                                        <span class="fw-medium">{{ item.content }}</span>
+                                        {% if item.children.all %}
+                                        <ul class="mt-1 ps-3">
+                                            {% for child in item.children.all %}
+                                            <li class="text-muted small py-1">{{ child.content }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                        {% endif %}
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        {% if note.remarks.all %}
+                        {% if note.features.all or note.improvements.all or note.bugfixes.all %}<hr class="my-3 opacity-25">{% endif %}
+                        <div class="patch-section border-start border-3 border-warning ps-3 mb-4">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="fw-bold text-warning small text-uppercase">📝 특이 사항</span>
+                            </div>
+                            <ul class="mb-0 ps-3">
+                                {% for item in note.remarks.all %}
+                                    {% if not item.parent %}
+                                    <li class="py-1 lh-base">
+                                        <span class="fw-medium">{{ item.content }}</span>
+                                        {% if item.children.all %}
+                                        <ul class="mt-1 ps-3">
+                                            {% for child in item.children.all %}
+                                            <li class="text-muted small py-1">{{ child.content }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                        {% endif %}
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                    </div>
+                </div>
+            {% empty %}
+                <div class="card text-center py-5" style="border: 2px dashed #d1d5db !important;">
+                    <div class="card-body">
+                        <div class="mb-3" style="font-size:3rem; opacity:0.25;">📋</div>
+                        <h6 class="fw-semibold mb-1">아직 등록된 패치노트가 없습니다.</h6>
+                        <p class="text-muted small mb-3">
+                            <span class="badge bg-label-{{ selected_product.platform_color }} rounded-pill">{{ selected_product.get_platform_display }}</span>
+                            <span class="badge bg-label-secondary rounded-pill ms-1">{{ selected_product.get_category_display }}</span>
+                            의 첫 번째 릴리즈 노트를 작성해 보세요.
+                        </p>
+                        <button type="button" class="btn btn-primary btn-sm"
+                                data-bs-toggle="modal" data-bs-target="#patchAppendModal">
+                            <i class="bx bx-plus me-1"></i>패치노트 등록
+                        </button>
                     </div>
                 </div>
             {% endfor %}
