@@ -22,6 +22,7 @@ urlpatterns = [
     path("patchnote/", include(("apps.patchnote.urls", "patchnote"), namespace="patchnote")),
     path("notification/", include(("apps.notification.urls", "notification"), namespace="notification")),
     path("product/", include(("apps.product.urls", "product"), namespace="product")),
+    path("customer/", include(("apps.customer.urls", "customer"), namespace="customer")),
 
     # Dashboard urls
     path("", include("apps.dashboards.urls")),

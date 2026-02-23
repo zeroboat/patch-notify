@@ -68,6 +68,12 @@
                 <div class="text-truncate">Official Notice</div>
             </a>
         </li>
+        <li class="menu-item {% if '/customer/' in request.path %}active{% endif %}">
+            <a href="{% url 'customer:customer_management' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-buildings"></i>
+                <div class="text-truncate">Customer Management</div>
+            </a>
+        </li>
         <li class="menu-item {% if '/cards/basic/' in request.path %}active{% endif %}">
             <a href="{% url 'cards-basic' %}" class="menu-link">
                 <i class="menu-icon icon-base bx bx-collection"></i>
