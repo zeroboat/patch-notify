@@ -74,15 +74,15 @@
                 <div class="text-truncate">Customer Management</div>
             </a>
         </li>
-        <li class="menu-item {% if '/cards/basic/' in request.path %}active{% endif %}">
-            <a href="{% url 'cards-basic' %}" class="menu-link">
-                <i class="menu-icon icon-base bx bx-collection"></i>
+        <li class="menu-item {% if '/subscriber/' in request.path %}active{% endif %}">
+            <a href="{% url 'subscriber:subscriber_management' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-bell"></i>
                 <div class="text-truncate">Subscribers</div>
             </a>
         </li>
-        <li class="menu-item {% if '/cards/basic/' in request.path %}active{% endif %}">
-            <a href="{% url 'cards-basic' %}" class="menu-link">
-                <i class="menu-icon icon-base bx bx-collection"></i>
+        <li class="menu-item {% if '/logs/' in request.path %}active{% endif %}">
+            <a href="{% url 'logs:dispatch_log' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-list-check"></i>
                 <div class="text-truncate">Logs</div>
             </a>
         </li>

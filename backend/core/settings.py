@@ -49,6 +49,8 @@ INSTALLED_APPS = [
     'apps.dashboards',
     "apps.base",
     "apps.notification",
+    "apps.subscriber",
+    "apps.logs",
     "apps.layouts",
     "apps.pages",
     "apps.authentication",

@@ -23,6 +23,8 @@ urlpatterns = [
     path("notification/", include(("apps.notification.urls", "notification"), namespace="notification")),
     path("product/", include(("apps.product.urls", "product"), namespace="product")),
     path("customer/", include(("apps.customer.urls", "customer"), namespace="customer")),
+    path("subscriber/", include(("apps.subscriber.urls", "subscriber"), namespace="subscriber")),
+    path("logs/", include(("apps.logs.urls", "logs"), namespace="logs")),
 
     # Dashboard urls
     path("", include("apps.dashboards.urls")),

@@ -1,0 +1,249 @@
+{% extends layout_path %}
+
+{% load static %}
+{% load i18n %}
+
+{% block title %}Logs{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <!-- 페이지 헤더 -->
+  <div class="mb-4">
+    <h4 class="fw-bold mb-1">발송 로그</h4>
+    <p class="text-muted mb-0 small">공문 및 구독 자동발송 이력을 확인합니다.</p>
+  </div>
+
+  <!-- 요약 카드 -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-xl-3">
+      <div class="card">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-primary">
+              <i class="bx bx-list-check fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">전체 발송</p>
+            <h4 class="mb-0 fw-bold">{{ total }}</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-success">
+              <i class="bx bx-check-circle fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">성공</p>
+            <h4 class="mb-0 fw-bold text-success">{{ success_count }}</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-danger">
+              <i class="bx bx-x-circle fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">실패</p>
+            <h4 class="mb-0 fw-bold text-danger">{{ failed_count }}</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-warning">
+              <i class="bx bx-time fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">대기</p>
+            <h4 class="mb-0 fw-bold text-warning">{{ pending_count }}</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 필터 -->
+  <div class="card mb-4">
+    <div class="card-body py-3">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-6 col-md-2">
+          <label class="form-label form-label-sm text-muted mb-1">발송 유형</label>
+          <select name="log_type" class="form-select form-select-sm">
+            <option value="">전체</option>
+            {% for val, label in log_type_choices %}
+            <option value="{{ val }}" {% if filter_log_type == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label form-label-sm text-muted mb-1">채널</label>
+          <select name="channel" class="form-select form-select-sm">
+            <option value="">전체</option>
+            {% for val, label in channel_choices %}
+            <option value="{{ val }}" {% if filter_channel == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label form-label-sm text-muted mb-1">상태</label>
+          <select name="status" class="form-select form-select-sm">
+            <option value="">전체</option>
+            {% for val, label in status_choices %}
+            <option value="{{ val }}" {% if filter_status == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label form-label-sm text-muted mb-1">고객사</label>
+          <select name="customer_id" class="form-select form-select-sm">
+            <option value="">전체</option>
+            {% for c in customers %}
+            <option value="{{ c.id }}" {% if filter_customer_id == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label form-label-sm text-muted mb-1">시작일</label>
+          <input type="date" name="date_from" class="form-control form-control-sm" value="{{ filter_date_from }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label form-label-sm text-muted mb-1">종료일</label>
+          <input type="date" name="date_to" class="form-control form-control-sm" value="{{ filter_date_to }}">
+        </div>
+        <div class="col-12 col-md-auto d-flex gap-2 mt-1">
+          <button type="submit" class="btn btn-sm btn-primary">
+            <i class="bx bx-search me-1"></i>조회
+          </button>
+          <a href="{% url 'logs:dispatch_log' %}" class="btn btn-sm btn-label-secondary">초기화</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 로그 테이블 -->
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5 class="mb-0">발송 이력</h5>
+      <span class="text-muted small">총 {{ total }}건 (페이지 {{ page_obj.number }}/{{ page_obj.paginator.num_pages }})</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover table-sm">
+        <thead>
+          <tr>
+            <th>발송일시</th>
+            <th>유형</th>
+            <th>채널</th>
+            <th>고객사</th>
+            <th>솔루션</th>
+            <th>수신자</th>
+            <th>제목</th>
+            <th class="text-center">상태</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in page_obj %}
+          <tr {% if log.status == 'failed' %}class="table-danger-subtle"{% endif %}>
+            <td class="align-middle text-nowrap small text-muted">
+              {% if log.sent_at %}{{ log.sent_at|date:"Y.m.d H:i" }}{% else %}-{% endif %}
+            </td>
+            <td class="align-middle">
+              {% if log.log_type == 'official' %}
+              <span class="badge bg-label-primary">공문</span>
+              {% else %}
+              <span class="badge bg-label-info">구독</span>
+              {% endif %}
+            </td>
+            <td class="align-middle">
+              {% if log.channel == 'email' %}
+              <span class="badge bg-label-danger"><i class="bx bx-envelope me-1"></i>Gmail</span>
+              {% else %}
+              <span class="badge bg-label-success"><i class="bx bxl-slack me-1"></i>Slack</span>
+              {% endif %}
+            </td>
+            <td class="align-middle small">
+              {% if log.customer %}{{ log.customer.name }}{% else %}<span class="text-muted">-</span>{% endif %}
+            </td>
+            <td class="align-middle small">
+              {% if log.solution %}{{ log.solution.name }}{% else %}<span class="text-muted">-</span>{% endif %}
+            </td>
+            <td class="align-middle small">{{ log.recipient }}</td>
+            <td class="align-middle small text-truncate" style="max-width:200px;" title="{{ log.subject }}">
+              {{ log.subject|default:"-" }}
+            </td>
+            <td class="align-middle text-center">
+              {% if log.status == 'success' %}
+              <span class="badge bg-success">성공</span>
+              {% elif log.status == 'failed' %}
+              <span class="badge bg-danger" {% if log.error_message %}title="{{ log.error_message }}"{% endif %}>실패</span>
+              {% else %}
+              <span class="badge bg-warning">대기</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="8" class="text-center py-5 text-muted">
+              <i class="bx bx-list-check fs-2 d-block mb-2"></i>
+              발송 이력이 없습니다.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 페이지네이션 -->
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="card-footer d-flex justify-content-center">
+      <nav>
+        <ul class="pagination pagination-sm mb-0">
+          {% if page_obj.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ page_obj.previous_page_number }}">
+              <i class="bx bx-chevron-left"></i>
+            </a>
+          </li>
+          {% endif %}
+
+          {% for num in page_obj.paginator.page_range %}
+          {% if page_obj.number == num %}
+          <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+          {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+          <li class="page-item">
+            <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ num }}">{{ num }}</a>
+          </li>
+          {% endif %}
+          {% endfor %}
+
+          {% if page_obj.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ page_obj.next_page_number }}">
+              <i class="bx bx-chevron-right"></i>
+            </a>
+          </li>
+          {% endif %}
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
+
+  </div>
+
+</div>
+{% endblock %}

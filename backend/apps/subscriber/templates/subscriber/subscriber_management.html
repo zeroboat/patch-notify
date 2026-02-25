@@ -1,0 +1,439 @@
+{% extends layout_path %}
+
+{% load static %}
+{% load i18n %}
+
+{% block title %}Subscribers{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <!-- 페이지 헤더 -->
+  <div class="mb-4">
+    <h4 class="fw-bold mb-1">Subscribers</h4>
+    <p class="text-muted mb-0 small">고객사별 패치노트 구독 현황을 관리합니다.</p>
+  </div>
+
+  <!-- 요약 카드 -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-xl-3">
+      <div class="card">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-primary">
+              <i class="bx bx-buildings fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">전체 고객사</p>
+            <h4 class="mb-0 fw-bold">{{ total_customers }}</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-danger">
+              <i class="bx bx-envelope fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">Gmail 구독</p>
+            <h4 class="mb-0 fw-bold" id="summaryEmailCount">-</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-success">
+              <i class="bx bxl-slack fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">Slack 구독</p>
+            <h4 class="mb-0 fw-bold" id="summarySlackCount">-</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 고객사 구독 현황 테이블 -->
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5 class="mb-0">구독 현황</h5>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover">
+        <thead>
+          <tr>
+            <th>고객사명</th>
+            <th><i class="bx bx-envelope me-1 text-danger"></i>Gmail 구독</th>
+            <th><i class="bxl bxl-slack me-1 text-success"></i>Slack 구독</th>
+            <th class="text-center">총 구독</th>
+            <th class="text-end">설정</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in customer_rows %}
+          <tr>
+            <td class="fw-semibold align-middle">{{ row.name }}</td>
+            <td class="align-middle">
+              {% if row.email_subs %}
+                {% for sol_name in row.email_subs %}
+                <span class="badge bg-label-danger me-1">{{ sol_name }}</span>
+                {% endfor %}
+              {% else %}
+                <span class="text-muted small">-</span>
+              {% endif %}
+            </td>
+            <td class="align-middle">
+              {% if row.slack_subs %}
+                {% for sol_name in row.slack_subs %}
+                <span class="badge bg-label-success me-1">{{ sol_name }}</span>
+                {% endfor %}
+              {% else %}
+                <span class="text-muted small">-</span>
+              {% endif %}
+            </td>
+            <td class="text-center align-middle">
+              {% if row.total > 0 %}
+              <span class="badge bg-primary rounded-pill">{{ row.total }}</span>
+              {% else %}
+              <span class="text-muted small">0</span>
+              {% endif %}
+            </td>
+            <td class="text-end align-middle">
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-primary btn-open-subscription"
+                data-customer-id="{{ row.id }}"
+                data-customer-name="{{ row.name }}"
+              >
+                <i class="bx bx-cog me-1"></i>설정
+              </button>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="text-center py-5 text-muted">
+              <i class="bx bx-buildings fs-2 d-block mb-2"></i>
+              등록된 고객사가 없습니다.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── 구독 설정 오프캔버스 ──────────────────────────── -->
+<div
+  class="offcanvas offcanvas-end"
+  tabindex="-1"
+  id="offcanvasSubscription"
+  style="width:500px;"
+  aria-labelledby="offcanvasSubscriptionLabel"
+>
+  <div class="offcanvas-header border-bottom">
+    <h5 class="offcanvas-title" id="offcanvasSubscriptionLabel">구독 설정</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body p-0" id="offcanvasSubscriptionBody">
+    <!-- JS로 동적 렌더링 -->
+    <div class="d-flex justify-content-center align-items-center h-100 py-5 text-muted" id="offcanvasLoadingState">
+      <div class="text-center">
+        <div class="spinner-border spinner-border-sm mb-2"></div>
+        <div class="small">불러오는 중...</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')
+    ? document.querySelector('[name=csrfmiddlewaretoken]').value
+    : '';
+
+  // CSRF 토큰을 위한 hidden form
+  const csrfForm = document.createElement('form');
+  csrfForm.innerHTML = '{% csrf_token %}';
+  const realCsrf = csrfForm.querySelector('[name=csrfmiddlewaretoken]').value;
+
+  const offcanvasEl = document.getElementById('offcanvasSubscription');
+  const offcanvasBody = document.getElementById('offcanvasSubscriptionBody');
+  const offcanvasLabel = document.getElementById('offcanvasSubscriptionLabel');
+  const offcanvasInstance = new bootstrap.Offcanvas(offcanvasEl);
+
+  // ── 요약 카드 업데이트 ─────────────────────────────
+  let emailTotal = 0, slackTotal = 0;
+  document.querySelectorAll('tbody tr').forEach(function (row) {
+    const emailBadges = row.querySelectorAll('td:nth-child(2) .badge');
+    const slackBadges = row.querySelectorAll('td:nth-child(3) .badge');
+    emailTotal += emailBadges.length;
+    slackTotal += slackBadges.length;
+  });
+  document.getElementById('summaryEmailCount').textContent = emailTotal;
+  document.getElementById('summarySlackCount').textContent = slackTotal;
+
+  // ── FREQUENCY / MAX_ITEMS 선택지 ──────────────────
+  const frequencyOptions = [
+    { value: 'weekly',    label: '매주' },
+    { value: 'monthly',   label: '매월' },
+    { value: 'quarterly', label: '분기' },
+  ];
+  const maxItemsOptions = [1, 2, 3, 5, 7, 10];
+
+  function buildSelect(name, options, selectedValue, cls) {
+    let html = '<select class="form-select form-select-sm ' + (cls || '') + '" name="' + name + '">';
+    options.forEach(function (opt) {
+      const val = typeof opt === 'object' ? opt.value : opt;
+      const label = typeof opt === 'object' ? opt.label : opt + '개';
+      const sel = val == selectedValue ? ' selected' : '';
+      html += '<option value="' + val + '"' + sel + '>' + label + '</option>';
+    });
+    html += '</select>';
+    return html;
+  }
+
+  // ── 오프캔버스 콘텐츠 렌더링 ──────────────────────
+  function renderSubscriptionPanel(data) {
+    const customerId = data.customer_id;
+
+    if (!data.solutions || data.solutions.length === 0) {
+      offcanvasBody.innerHTML =
+        '<div class="d-flex justify-content-center align-items-center py-5 text-muted">'
+        + '<div class="text-center"><i class="bx bx-layer fs-2 d-block mb-2"></i>'
+        + '<div class="small">구매한 솔루션이 없습니다.</div></div></div>';
+      return;
+    }
+
+    let html = '<div class="p-3">';
+
+    data.solutions.forEach(function (sol) {
+      const emailActive = sol.email.active;
+      const slackActive = sol.slack.active;
+
+      html += '<div class="card mb-3 solution-card" data-solution-id="' + sol.id + '" data-customer-id="' + customerId + '">';
+      html += '<div class="card-header py-2 d-flex align-items-center justify-content-between">';
+      html += '<span class="fw-semibold">' + sol.name + '</span>';
+      html += '</div>';
+      html += '<div class="card-body pb-2">';
+
+      // Gmail 섹션
+      html += '<div class="mb-3">';
+      html += '<div class="d-flex align-items-center gap-2 mb-2">';
+      html += '<i class="bx bx-envelope text-danger fs-5"></i>';
+      html += '<span class="fw-medium small">Gmail</span>';
+      html += '<div class="form-check form-switch ms-auto mb-0">';
+      html += '<input class="form-check-input channel-toggle" type="checkbox" role="switch"';
+      html += ' data-channel="email" ' + (emailActive ? 'checked' : '') + '>';
+      html += '</div>';
+      html += '</div>';
+      html += '<div class="channel-settings ps-4 ' + (emailActive ? '' : 'd-none') + '" data-channel="email">';
+      html += '<div class="row g-2 align-items-center">';
+      html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">전달 주기</label></div>';
+      html += '<div class="col-auto">' + buildSelect('email_frequency', frequencyOptions, sol.email.frequency) + '</div>';
+      html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">최대 건수</label></div>';
+      html += '<div class="col-auto">' + buildSelect('email_max_items', maxItemsOptions, sol.email.max_items) + '</div>';
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+
+      html += '<hr class="my-2">';
+
+      // Slack 섹션
+      html += '<div class="mb-2">';
+      html += '<div class="d-flex align-items-center gap-2 mb-2">';
+      html += '<i class="bx bxl-slack text-success fs-5"></i>';
+      html += '<span class="fw-medium small">Slack</span>';
+      html += '<div class="form-check form-switch ms-auto mb-0">';
+      html += '<input class="form-check-input channel-toggle" type="checkbox" role="switch"';
+      html += ' data-channel="slack" ' + (slackActive ? 'checked' : '') + '>';
+      html += '</div>';
+      html += '</div>';
+      html += '<div class="channel-settings ps-4 ' + (slackActive ? '' : 'd-none') + '" data-channel="slack">';
+      html += '<div class="mb-2">';
+      html += '<input type="text" class="form-control form-control-sm" name="slack_channel"';
+      html += ' placeholder="#channel-name" value="' + (sol.slack.slack_channel || '') + '">';
+      html += '</div>';
+      html += '<div class="row g-2 align-items-center">';
+      html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">전달 주기</label></div>';
+      html += '<div class="col-auto">' + buildSelect('slack_frequency', frequencyOptions, sol.slack.frequency) + '</div>';
+      html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">최대 건수</label></div>';
+      html += '<div class="col-auto">' + buildSelect('slack_max_items', maxItemsOptions, sol.slack.max_items) + '</div>';
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+
+      // 저장 버튼
+      html += '</div>'; // card-body end
+      html += '<div class="card-footer py-2 d-flex justify-content-end">';
+      html += '<button type="button" class="btn btn-sm btn-primary btn-save-solution">';
+      html += '<i class="bx bx-save me-1"></i>저장</button>';
+      html += '</div>';
+      html += '</div>'; // card end
+    });
+
+    html += '</div>';
+    offcanvasBody.innerHTML = html;
+
+    // 토글 이벤트 바인딩
+    offcanvasBody.querySelectorAll('.channel-toggle').forEach(function (toggle) {
+      toggle.addEventListener('change', function () {
+        const card = this.closest('.solution-card');
+        const channel = this.dataset.channel;
+        const settingsEl = card.querySelector('.channel-settings[data-channel="' + channel + '"]');
+        if (this.checked) {
+          settingsEl.classList.remove('d-none');
+        } else {
+          settingsEl.classList.add('d-none');
+        }
+      });
+    });
+
+    // 솔루션별 저장 버튼
+    offcanvasBody.querySelectorAll('.btn-save-solution').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const card = this.closest('.solution-card');
+        saveSolution(card, btn);
+      });
+    });
+  }
+
+  // ── 솔루션 구독 저장 ──────────────────────────────
+  function saveSolution(card, btn) {
+    const customerId = card.dataset.customerId;
+    const solutionId = card.dataset.solutionId;
+
+    const emailToggle = card.querySelector('.channel-toggle[data-channel="email"]');
+    const slackToggle = card.querySelector('.channel-toggle[data-channel="slack"]');
+    const emailSettings = card.querySelector('.channel-settings[data-channel="email"]');
+    const slackSettings = card.querySelector('.channel-settings[data-channel="slack"]');
+
+    const body = new URLSearchParams({
+      customer_id: customerId,
+      solution_id: solutionId,
+      email_active: emailToggle.checked ? 'true' : 'false',
+      email_frequency: emailSettings.querySelector('[name="email_frequency"]').value,
+      email_max_items: emailSettings.querySelector('[name="email_max_items"]').value,
+      slack_active: slackToggle.checked ? 'true' : 'false',
+      slack_frequency: slackSettings.querySelector('[name="slack_frequency"]').value,
+      slack_max_items: slackSettings.querySelector('[name="slack_max_items"]').value,
+      slack_channel: slackSettings.querySelector('[name="slack_channel"]').value,
+    });
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>';
+
+    fetch("{% url 'subscriber:save_subscription' %}", {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': realCsrf,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: body.toString(),
+    })
+    .then(r => r.json())
+    .then(function (data) {
+      if (data.ok) {
+        Swal.fire({ icon: 'success', title: '저장 완료', text: data.message, confirmButtonText: '확인', timer: 2000, timerProgressBar: true });
+        // 테이블 배지 새로고침
+        reloadTableRow(customerId);
+      } else {
+        Swal.fire({ icon: 'error', title: '저장 실패', text: data.error, confirmButtonText: '확인' });
+      }
+    })
+    .catch(function () {
+      Swal.fire({ icon: 'error', title: '오류', text: '서버 오류가 발생했습니다.', confirmButtonText: '확인' });
+    })
+    .finally(function () {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bx bx-save me-1"></i>저장';
+    });
+  }
+
+  // ── 테이블 행 배지 새로고침 ───────────────────────
+  function reloadTableRow(customerId) {
+    fetch("{% url 'subscriber:get_subscriptions' customer_id=0 %}".replace('0', customerId))
+    .then(r => r.json())
+    .then(function (data) {
+      if (!data.ok) return;
+      const row = document.querySelector('[data-customer-id="' + customerId + '"]').closest('tr');
+      if (!row) return;
+
+      const emailCell = row.querySelector('td:nth-child(2)');
+      const slackCell = row.querySelector('td:nth-child(3)');
+      const totalCell = row.querySelector('td:nth-child(4)');
+
+      const emailSubs = data.solutions.filter(s => s.email.active).map(s => s.name);
+      const slackSubs = data.solutions.filter(s => s.slack.active).map(s => s.name);
+      const total = emailSubs.length + slackSubs.length;
+
+      emailCell.innerHTML = emailSubs.length
+        ? emailSubs.map(n => '<span class="badge bg-label-danger me-1">' + n + '</span>').join('')
+        : '<span class="text-muted small">-</span>';
+
+      slackCell.innerHTML = slackSubs.length
+        ? slackSubs.map(n => '<span class="badge bg-label-success me-1">' + n + '</span>').join('')
+        : '<span class="text-muted small">-</span>';
+
+      totalCell.innerHTML = total > 0
+        ? '<span class="badge bg-primary rounded-pill">' + total + '</span>'
+        : '<span class="text-muted small">0</span>';
+
+      // 요약 카드 재집계
+      let et = 0, st = 0;
+      document.querySelectorAll('tbody tr').forEach(function (r) {
+        et += r.querySelectorAll('td:nth-child(2) .badge').length;
+        st += r.querySelectorAll('td:nth-child(3) .badge').length;
+      });
+      document.getElementById('summaryEmailCount').textContent = et;
+      document.getElementById('summarySlackCount').textContent = st;
+    })
+    .catch(console.error);
+  }
+
+  // ── [설정] 버튼 클릭 → 오프캔버스 열기 ──────────
+  document.querySelectorAll('.btn-open-subscription').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const customerId = this.dataset.customerId;
+      const customerName = this.dataset.customerName;
+
+      offcanvasLabel.textContent = customerName + ' 구독 설정';
+      offcanvasBody.innerHTML =
+        '<div class="d-flex justify-content-center align-items-center py-5 text-muted">'
+        + '<div class="text-center"><div class="spinner-border spinner-border-sm mb-2"></div>'
+        + '<div class="small">불러오는 중...</div></div></div>';
+
+      offcanvasInstance.show();
+
+      fetch("{% url 'subscriber:get_subscriptions' customer_id=0 %}".replace('0', customerId))
+      .then(r => r.json())
+      .then(function (data) {
+        if (!data.ok) {
+          offcanvasBody.innerHTML = '<div class="p-4 text-danger">' + data.error + '</div>';
+          return;
+        }
+        data.customer_id = customerId;
+        renderSubscriptionPanel(data);
+      })
+      .catch(function () {
+        offcanvasBody.innerHTML = '<div class="p-4 text-danger">데이터를 불러오지 못했습니다.</div>';
+      });
+    });
+  });
+});
+</script>
+{% endblock %}
