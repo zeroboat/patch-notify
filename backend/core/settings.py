@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "apps.notification",
     "apps.subscriber",
     "apps.logs",
+    "apps.slack_app",
     "apps.layouts",
     "apps.pages",
     "apps.authentication",
@@ -180,3 +181,19 @@ THEME_VARIABLES = THEME_VARIABLES
 LOGIN_URL = '/auth/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/auth/login/'
+
+# ── Slack App ────────────────────────────────────────────────────────────────
+# Slack App 설정: https://api.slack.com/apps 에서 발급
+SLACK_CLIENT_ID = os.getenv('SLACK_CLIENT_ID', '')
+SLACK_CLIENT_SECRET = os.getenv('SLACK_CLIENT_SECRET', '')
+SLACK_SIGNING_SECRET = os.getenv('SLACK_SIGNING_SECRET', '')
+SLACK_REDIRECT_URI = os.getenv('SLACK_REDIRECT_URI', 'http://localhost:8000/slack/oauth/callback/')
+
+# ── Email (Gmail SMTP) ──────────────────────────────────────────────────────
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.getenv('GMAIL_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('GMAIL_APP_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('GMAIL_USER', '')

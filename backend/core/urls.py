@@ -25,6 +25,7 @@ urlpatterns = [
     path("customer/", include(("apps.customer.urls", "customer"), namespace="customer")),
     path("subscriber/", include(("apps.subscriber.urls", "subscriber"), namespace="subscriber")),
     path("logs/", include(("apps.logs.urls", "logs"), namespace="logs")),
+    path("slack/", include(("apps.slack_app.urls", "slack_app"), namespace="slack_app")),
 
     # Dashboard urls
     path("", include("apps.dashboards.urls")),

@@ -4,12 +4,36 @@ from django.views.generic import TemplateView
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.utils import timezone
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
 
 from web_project import TemplateLayout
 from apps.product.models import Solution
 from apps.customer.models import Customer, CustomerEmail
 from apps.logs.models import DispatchLog
 from .models import OfficialNotice
+
+
+def _send_official_email(to_email, subject, body_html):
+    """Gmail SMTP로 공문 이메일 발송. (성공 여부, 에러 메시지) 반환"""
+    try:
+        html_body = render_to_string(
+            'notification/email/official_notice_email.html',
+            {'subject': subject, 'body': body_html},
+        )
+        text_body = strip_tags(body_html)
+
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=text_body,
+            to=[to_email],
+        )
+        msg.attach_alternative(html_body, 'text/html')
+        msg.send()
+        return True, ''
+    except Exception as e:
+        return False, str(e)
 
 
 class OfficialNoticeView(TemplateView):
@@ -113,28 +137,42 @@ def send_notice(request):
         sent_at=now,
     )
 
-    # TODO: 실제 이메일 발송 구현
-    # from django.core.mail import send_mass_mail
-    # messages = [(subject, body, settings.DEFAULT_FROM_EMAIL, [r['email']]) for r in recipients]
-    # send_mass_mail(messages, fail_silently=False)
-
-    # 발송 로그 기록 (수신자별 1건)
-    DispatchLog.objects.bulk_create([
-        DispatchLog(
+    # 수신자별 이메일 발송 + 로그 수집
+    logs = []
+    success_count = 0
+    for r in recipients:
+        ok, err = _send_official_email(r['email'], subject, body)
+        if ok:
+            success_count += 1
+        logs.append(DispatchLog(
             log_type=DispatchLog.TYPE_OFFICIAL,
             channel=DispatchLog.CHANNEL_EMAIL,
             customer=r['customer_obj'],
             official_notice=notice,
             recipient=r['email'],
             subject=subject,
-            status=DispatchLog.STATUS_SUCCESS,  # 실제 발송 구현 후 성공/실패 분기
-            sent_at=now,
-        )
-        for r in recipients
-    ])
+            status=DispatchLog.STATUS_SUCCESS if ok else DispatchLog.STATUS_FAILED,
+            error_message=err,
+            sent_at=now if ok else None,
+        ))
+
+    DispatchLog.objects.bulk_create(logs)
+
+    failed_count = len(recipients) - success_count
+    if success_count == 0:
+        return JsonResponse({
+            'ok': False,
+            'error': f'발송에 실패했습니다. ({failed_count}건 실패)',
+        })
+
+    msg = f'{len(recipients)}명에게 발송 완료.'
+    if failed_count:
+        msg = f'{success_count}명 발송 완료, {failed_count}명 실패.'
 
     return JsonResponse({
         'ok': True,
-        'message': f'{len(recipients)}명에게 공문을 발송했습니다.',
+        'message': msg,
         'notice_id': notice.id,
+        'success_count': success_count,
+        'failed_count': failed_count,
     })
