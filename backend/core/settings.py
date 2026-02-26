@@ -52,16 +52,7 @@ INSTALLED_APPS = [
     "apps.subscriber",
     "apps.logs",
     "apps.slack_app",
-    "apps.layouts",
-    "apps.pages",
     "apps.authentication",
-    "apps.cards",
-    "apps.ui",
-    "apps.extended_ui",
-    "apps.icons",
-    "apps.forms",
-    "apps.form_layouts",
-    "apps.tables",
 ]
 
 MIDDLEWARE = [
