@@ -9,6 +9,7 @@ from django.views.generic import TemplateView
 from web_project import TemplateLayout
 from apps.product.models import Product
 from .models import PatchNote, Feature, Improvement, BugFix, Remark
+from .translation import start_translation
 
 
 class PatchNoteDetailView(TemplateView):
@@ -150,6 +151,9 @@ def patch_note_append(request):
         _create_items(patch_note, _parse_list_html(improvements_html),  Improvement)
         _create_items(patch_note, _parse_list_html(bug_fixes_html),     BugFix)
         _create_items(patch_note, _parse_list_html(special_notes_html), Remark)
+
+        # ── 백그라운드 영문 번역 시작 ──
+        start_translation(patch_note.id)
 
         return JsonResponse({'message': '패치노트가 등록되었습니다.', 'patch_note_id': patch_note.id})
 

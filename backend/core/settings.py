@@ -182,6 +182,10 @@ LOGIN_URL = '/auth/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/auth/login/'
 
+# ── Ollama (내부 AI 번역 서버) ────────────────────────────────────────────────
+OLLAMA_HOST = os.getenv('OLLAMA_HOST', '')
+OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', '')
+
 # ── Slack App ────────────────────────────────────────────────────────────────
 # Slack App 설정: https://api.slack.com/apps 에서 발급
 SLACK_CLIENT_ID = os.getenv('SLACK_CLIENT_ID', '')

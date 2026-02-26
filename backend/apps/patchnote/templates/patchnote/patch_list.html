@@ -52,11 +52,17 @@
             <p class="mb-0 small text-muted mt-1">{{ selected_product.description }}</p>
             {% endif %}
         </div>
-        <!-- 우측: 등록 버튼 -->
-        <button type="button" class="btn btn-primary flex-shrink-0"
-                data-bs-toggle="modal" data-bs-target="#patchAppendModal">
-            <i class="bx bx-plus me-1"></i>패치노트 등록
-        </button>
+        <!-- 우측: 언어 토글 + 등록 버튼 -->
+        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+            <div class="btn-group" role="group" id="lang-toggle">
+                <button type="button" class="btn btn-sm btn-primary active" data-lang="ko">KO</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" data-lang="en">EN</button>
+            </div>
+            <button type="button" class="btn btn-primary flex-shrink-0"
+                    data-bs-toggle="modal" data-bs-target="#patchAppendModal">
+                <i class="bx bx-plus me-1"></i>패치노트 등록
+            </button>
+        </div>
     </div>
     <div class="modal fade" id="patchAppendModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg" role="document">
@@ -197,11 +203,17 @@
                                 {% for item in note.features.all %}
                                     {% if not item.parent %}
                                     <li class="py-1 lh-base">
-                                        <span class="fw-medium">{{ item.content }}</span>
+                                        <span class="fw-medium lang-ko">{{ item.content }}</span>
+                                        <span class="fw-medium lang-en d-none">
+                                            {% if item.content_en %}{{ item.content_en }}{% else %}<span class="text-muted fst-italic">{{ item.content }} <span class="badge bg-label-warning ms-1" style="font-size:0.65rem;">번역 중</span></span>{% endif %}
+                                        </span>
                                         {% if item.children.all %}
                                         <ul class="mt-1 ps-3">
                                             {% for child in item.children.all %}
-                                            <li class="text-muted small py-1">{{ child.content }}</li>
+                                            <li class="text-muted small py-1">
+                                                <span class="lang-ko">{{ child.content }}</span>
+                                                <span class="lang-en d-none">{% if child.content_en %}{{ child.content_en }}{% else %}<span class="fst-italic">{{ child.content }} <span class="badge bg-label-warning" style="font-size:0.6rem;">번역 중</span></span>{% endif %}</span>
+                                            </li>
                                             {% endfor %}
                                         </ul>
                                         {% endif %}
@@ -222,11 +234,17 @@
                                 {% for item in note.improvements.all %}
                                     {% if not item.parent %}
                                     <li class="py-1 lh-base">
-                                        <span class="fw-medium">{{ item.content }}</span>
+                                        <span class="fw-medium lang-ko">{{ item.content }}</span>
+                                        <span class="fw-medium lang-en d-none">
+                                            {% if item.content_en %}{{ item.content_en }}{% else %}<span class="text-muted fst-italic">{{ item.content }} <span class="badge bg-label-warning ms-1" style="font-size:0.65rem;">번역 중</span></span>{% endif %}
+                                        </span>
                                         {% if item.children.all %}
                                         <ul class="mt-1 ps-3">
                                             {% for child in item.children.all %}
-                                            <li class="text-muted small py-1">{{ child.content }}</li>
+                                            <li class="text-muted small py-1">
+                                                <span class="lang-ko">{{ child.content }}</span>
+                                                <span class="lang-en d-none">{% if child.content_en %}{{ child.content_en }}{% else %}<span class="fst-italic">{{ child.content }} <span class="badge bg-label-warning" style="font-size:0.6rem;">번역 중</span></span>{% endif %}</span>
+                                            </li>
                                             {% endfor %}
                                         </ul>
                                         {% endif %}
@@ -247,11 +265,17 @@
                                 {% for item in note.bugfixes.all %}
                                     {% if not item.parent %}
                                     <li class="py-1 lh-base">
-                                        <span class="fw-medium">{{ item.content }}</span>
+                                        <span class="fw-medium lang-ko">{{ item.content }}</span>
+                                        <span class="fw-medium lang-en d-none">
+                                            {% if item.content_en %}{{ item.content_en }}{% else %}<span class="text-muted fst-italic">{{ item.content }} <span class="badge bg-label-warning ms-1" style="font-size:0.65rem;">번역 중</span></span>{% endif %}
+                                        </span>
                                         {% if item.children.all %}
                                         <ul class="mt-1 ps-3">
                                             {% for child in item.children.all %}
-                                            <li class="text-muted small py-1">{{ child.content }}</li>
+                                            <li class="text-muted small py-1">
+                                                <span class="lang-ko">{{ child.content }}</span>
+                                                <span class="lang-en d-none">{% if child.content_en %}{{ child.content_en }}{% else %}<span class="fst-italic">{{ child.content }} <span class="badge bg-label-warning" style="font-size:0.6rem;">번역 중</span></span>{% endif %}</span>
+                                            </li>
                                             {% endfor %}
                                         </ul>
                                         {% endif %}
@@ -272,11 +296,17 @@
                                 {% for item in note.remarks.all %}
                                     {% if not item.parent %}
                                     <li class="py-1 lh-base">
-                                        <span class="fw-medium">{{ item.content }}</span>
+                                        <span class="fw-medium lang-ko">{{ item.content }}</span>
+                                        <span class="fw-medium lang-en d-none">
+                                            {% if item.content_en %}{{ item.content_en }}{% else %}<span class="text-muted fst-italic">{{ item.content }} <span class="badge bg-label-warning ms-1" style="font-size:0.65rem;">번역 중</span></span>{% endif %}
+                                        </span>
                                         {% if item.children.all %}
                                         <ul class="mt-1 ps-3">
                                             {% for child in item.children.all %}
-                                            <li class="text-muted small py-1">{{ child.content }}</li>
+                                            <li class="text-muted small py-1">
+                                                <span class="lang-ko">{{ child.content }}</span>
+                                                <span class="lang-en d-none">{% if child.content_en %}{{ child.content_en }}{% else %}<span class="fst-italic">{{ child.content }} <span class="badge bg-label-warning" style="font-size:0.6rem;">번역 중</span></span>{% endif %}</span>
+                                            </li>
                                             {% endfor %}
                                         </ul>
                                         {% endif %}
@@ -310,15 +340,33 @@
     </div>
 
     <script>
+        // ── 버전 사이드바 스크롤 ──────────────────────────────────────────────────
         document.querySelectorAll('#version-list a').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
                 e.preventDefault();
                 document.querySelector(this.getAttribute('href')).scrollIntoView({
                     behavior: 'smooth'
                 });
-                // 클래스 활성화 교체
                 document.querySelectorAll('#version-list a').forEach(nav => nav.classList.remove('active'));
                 this.classList.add('active');
+            });
+        });
+
+        // ── KO / EN 언어 토글 ────────────────────────────────────────────────────
+        document.querySelectorAll('#lang-toggle button').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const lang = this.dataset.lang;
+
+                // 버튼 활성화 상태 교체
+                document.querySelectorAll('#lang-toggle button').forEach(b => {
+                    b.classList.toggle('btn-primary', b.dataset.lang === lang);
+                    b.classList.toggle('btn-outline-primary', b.dataset.lang !== lang);
+                    b.classList.toggle('active', b.dataset.lang === lang);
+                });
+
+                // 텍스트 표시/숨김
+                document.querySelectorAll('.lang-ko').forEach(el => el.classList.toggle('d-none', lang === 'en'));
+                document.querySelectorAll('.lang-en').forEach(el => el.classList.toggle('d-none', lang === 'ko'));
             });
         });
     </script>
