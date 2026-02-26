@@ -1,0 +1,395 @@
+{% extends layout_path %}
+
+{% load static %}
+{% load i18n %}
+
+{% block title %}제품 관리{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <!-- 페이지 헤더 -->
+  <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+    <div>
+      <h4 class="fw-bold mb-1">
+        <span class="text-muted fw-light">Management /</span> 솔루션 및 제품 관리
+      </h4>
+      <p class="text-muted mb-0 small">등록된 솔루션과 제품을 관리합니다.</p>
+    </div>
+    <div class="d-flex gap-2 flex-shrink-0">
+      <button class="btn btn-outline-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasSolution">
+        <i class="bx bx-layer-plus me-1"></i> 솔루션 추가
+      </button>
+      <button class="btn btn-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasProduct">
+        <i class="bx bx-plus me-1"></i> 제품 추가
+      </button>
+    </div>
+  </div>
+
+  <!-- 통계 카드 -->
+  <div class="row g-4 mb-4">
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-primary">
+              <i class="bx bx-layer fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">전체 솔루션</p>
+            <h4 class="mb-0 fw-bold">{{ solutions|length }}</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-success">
+              <i class="bx bx-cube-alt fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">전체 제품</p>
+            <h4 class="mb-0 fw-bold">{{ total_products }}</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 솔루션별 제품 목록 -->
+  {% for solution in solutions %}
+  <div class="card mb-4">
+    <!-- 솔루션 헤더 -->
+    <div class="card-header d-flex align-items-center justify-content-between py-3">
+      <div class="d-flex align-items-center gap-3">
+        <div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;">
+          <i class="bx {{ solution.icon|default:'bx-layer' }} text-primary" style="font-size:1.4rem;"></i>
+        </div>
+        <div>
+          <h6 class="mb-0 fw-bold">{{ solution.name }}</h6>
+          <small class="text-muted">제품 {{ solution.products.all|length }}개</small>
+        </div>
+      </div>
+      <span class="badge bg-label-primary rounded-pill">{{ solution.name }}</span>
+    </div>
+
+    {% with products=solution.products.all %}
+    {% if products %}
+    <!-- 제품 테이블 -->
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-4" style="width:150px">플랫폼</th>
+            <th style="width:120px">카테고리</th>
+            <th>설명</th>
+            <th style="width:150px">최신 릴리즈</th>
+            <th style="width:80px" class="text-center">관리</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for product in products %}
+          <tr>
+            <td class="ps-4">
+              <div class="d-flex align-items-center gap-2">
+                <i class="bx {{ product.solution.icon|default:'bx-layer' }} text-{{ product.platform_color }}" style="font-size:1.2rem;"></i>
+                <span class="badge bg-label-{{ product.platform_color }} rounded-pill px-3 py-2">
+                  {{ product.get_platform_display }}
+                </span>
+              </div>
+            </td>
+            <td>
+              <span class="badge bg-label-secondary rounded-pill px-2 py-2">
+                {{ product.get_category_display }}
+              </span>
+            </td>
+            <td>
+              <span class="text-body small">{{ product.description|default:"—" }}</span>
+            </td>
+            <td>
+              {% if product.latest_release %}
+              <div class="d-flex align-items-center gap-2">
+                <i class="bx bx-calendar-check text-success"></i>
+                <span class="small fw-medium">{{ product.latest_release|date:"Y.m.d" }}</span>
+              </div>
+              {% else %}
+              <span class="text-muted small">릴리즈 없음</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              <div class="dropdown">
+                <button type="button"
+                  class="btn btn-sm btn-icon btn-text-secondary rounded-circle"
+                  data-bs-toggle="dropdown">
+                  <i class="bx bx-dots-vertical-rounded"></i>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end">
+                  <a class="dropdown-item" href="{% url 'patchnote:product_patch_detail' product.id %}">
+                    <i class="bx bx-file-find me-2 text-primary"></i>패치노트 보기
+                  </a>
+                  <a class="dropdown-item" href="javascript:void(0);">
+                    <i class="bx bx-edit-alt me-2 text-warning"></i>수정
+                  </a>
+                  <div class="dropdown-divider"></div>
+                  <a class="dropdown-item text-danger" href="javascript:void(0);">
+                    <i class="bx bx-trash me-2"></i>삭제
+                  </a>
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% else %}
+    <!-- 제품 없음 상태 -->
+    <div class="card-body py-5 text-center">
+      <div class="avatar avatar-lg mb-3">
+        <span class="avatar-initial rounded-circle bg-label-secondary">
+          <i class="bx bx-package fs-4"></i>
+        </span>
+      </div>
+      <p class="text-muted mb-2 small">등록된 제품이 없습니다.</p>
+      <button class="btn btn-sm btn-outline-primary"
+        data-bs-toggle="offcanvas" data-bs-target="#offcanvasProduct">
+        <i class="bx bx-plus me-1"></i> 제품 추가
+      </button>
+    </div>
+    {% endif %}
+    {% endwith %}
+  </div>
+  {% empty %}
+  <!-- 솔루션 없음 상태 -->
+  <div class="card">
+    <div class="card-body text-center py-5">
+      <div class="avatar avatar-xl mb-3">
+        <span class="avatar-initial rounded-circle bg-label-secondary">
+          <i class="bx bx-layer" style="font-size:2rem;"></i>
+        </span>
+      </div>
+      <h6 class="fw-semibold">등록된 솔루션이 없습니다.</h6>
+      <p class="text-muted small mb-3">솔루션을 추가하여 제품을 관리해 보세요.</p>
+      <button class="btn btn-primary"
+        data-bs-toggle="offcanvas" data-bs-target="#offcanvasSolution">
+        <i class="bx bx-plus me-1"></i> 솔루션 추가
+      </button>
+    </div>
+  </div>
+  {% endfor %}
+
+</div>
+
+<!-- ===== 솔루션 추가 Offcanvas ===== -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasSolution" aria-labelledby="offcanvasSolutionLabel">
+  <div class="offcanvas-header border-bottom">
+    <div>
+      <h5 id="offcanvasSolutionLabel" class="offcanvas-title mb-0">새 솔루션 등록</h5>
+      <small class="text-muted">새로운 솔루션 그룹을 추가합니다.</small>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body">
+    <form action="{% url 'product:create_solution' %}" method="POST">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label class="form-label fw-semibold">솔루션 이름 <span class="text-danger">*</span></label>
+        <input type="text" name="name" class="form-control"
+          placeholder="예: 스마트 팩토리 플랫폼" required autofocus>
+        <div class="form-text">솔루션은 제품들을 묶는 상위 그룹입니다.</div>
+      </div>
+      <!-- 솔루션 아이콘 선택 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold">아이콘</label>
+        <input type="hidden" name="icon" id="solutionIcon" value="bx-layer">
+        <!-- 미리보기 -->
+        <div class="d-flex align-items-center gap-2 mb-2 px-3 py-2 rounded border bg-light" style="width:fit-content;">
+          <i class="bx bx-layer text-primary" id="solutionIconPreviewEl" style="font-size:1.3rem;"></i>
+          <span class="small text-muted" id="solutionIconPreviewText">bx-layer</span>
+        </div>
+        <!-- 아이콘 그리드 -->
+        <div class="border rounded p-2" style="max-height:210px; overflow-y:auto;">
+          <p class="text-muted small mb-2 px-1">기기/플랫폼</p>
+          <div class="d-flex flex-wrap gap-1 mb-2">
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-mobile-alt" title="Mobile" style="width:36px;height:36px;"><i class="bx bx-mobile-alt" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bxl-android" title="Android" style="width:36px;height:36px;"><i class="bx bxl-android" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bxl-apple" title="Apple" style="width:36px;height:36px;"><i class="bx bxl-apple" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-laptop" title="Laptop" style="width:36px;height:36px;"><i class="bx bx-laptop" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-desktop" title="Desktop" style="width:36px;height:36px;"><i class="bx bx-desktop" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-devices" title="Devices" style="width:36px;height:36px;"><i class="bx bx-devices" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-tv" title="TV" style="width:36px;height:36px;"><i class="bx bx-tv" style="font-size:1.15rem;pointer-events:none;"></i></button>
+          </div>
+          <p class="text-muted small mb-2 px-1">서버/클라우드</p>
+          <div class="d-flex flex-wrap gap-1 mb-2">
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-server" title="Server" style="width:36px;height:36px;"><i class="bx bx-server" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-cloud" title="Cloud" style="width:36px;height:36px;"><i class="bx bx-cloud" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-data" title="Data" style="width:36px;height:36px;"><i class="bx bx-data" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-chip" title="Chip" style="width:36px;height:36px;"><i class="bx bx-chip" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-hdd" title="HDD" style="width:36px;height:36px;"><i class="bx bx-hdd" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-transfer" title="Transfer" style="width:36px;height:36px;"><i class="bx bx-transfer" style="font-size:1.15rem;pointer-events:none;"></i></button>
+          </div>
+          <p class="text-muted small mb-2 px-1">웹/네트워크</p>
+          <div class="d-flex flex-wrap gap-1 mb-2">
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-globe" title="Globe" style="width:36px;height:36px;"><i class="bx bx-globe" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-wifi" title="Wifi" style="width:36px;height:36px;"><i class="bx bx-wifi" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-broadcast" title="Broadcast" style="width:36px;height:36px;"><i class="bx bx-broadcast" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-rss" title="RSS" style="width:36px;height:36px;"><i class="bx bx-rss" style="font-size:1.15rem;pointer-events:none;"></i></button>
+          </div>
+          <p class="text-muted small mb-2 px-1">개발/코드</p>
+          <div class="d-flex flex-wrap gap-1 mb-2">
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-code-block" title="Code Block" style="width:36px;height:36px;"><i class="bx bx-code-block" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-code-alt" title="Code" style="width:36px;height:36px;"><i class="bx bx-code-alt" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-terminal" title="Terminal" style="width:36px;height:36px;"><i class="bx bx-terminal" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-git-branch" title="Git" style="width:36px;height:36px;"><i class="bx bx-git-branch" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-package" title="Package" style="width:36px;height:36px;"><i class="bx bx-package" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-extension" title="Extension" style="width:36px;height:36px;"><i class="bx bx-extension" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-plug" title="Plugin" style="width:36px;height:36px;"><i class="bx bx-plug" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-cog" title="Settings" style="width:36px;height:36px;"><i class="bx bx-cog" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-wrench" title="Wrench" style="width:36px;height:36px;"><i class="bx bx-wrench" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0 btn-primary text-white" data-icon="bx-layer" title="Layer" style="width:36px;height:36px;"><i class="bx bx-layer" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-cube-alt" title="Cube" style="width:36px;height:36px;"><i class="bx bx-cube-alt" style="font-size:1.15rem;pointer-events:none;"></i></button>
+          </div>
+          <p class="text-muted small mb-2 px-1">보안/기타</p>
+          <div class="d-flex flex-wrap gap-1">
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-shield" title="Shield" style="width:36px;height:36px;"><i class="bx bx-shield" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-lock" title="Lock" style="width:36px;height:36px;"><i class="bx bx-lock" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-key" title="Key" style="width:36px;height:36px;"><i class="bx bx-key" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-camera" title="Camera" style="width:36px;height:36px;"><i class="bx bx-camera" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-video" title="Video" style="width:36px;height:36px;"><i class="bx bx-video" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-bar-chart-alt-2" title="Chart" style="width:36px;height:36px;"><i class="bx bx-bar-chart-alt-2" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-notification" title="Notification" style="width:36px;height:36px;"><i class="bx bx-notification" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-file-blank" title="File" style="width:36px;height:36px;"><i class="bx bx-file-blank" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-map" title="Map" style="width:36px;height:36px;"><i class="bx bx-map" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            <button type="button" class="sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-user" title="User" style="width:36px;height:36px;"><i class="bx bx-user" style="font-size:1.15rem;pointer-events:none;"></i></button>
+          </div>
+        </div>
+        <div class="form-text">아이콘을 클릭하여 선택하세요.</div>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bx bx-check me-1"></i> 등록
+        </button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="offcanvas">취소</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== 제품 추가 Offcanvas ===== -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasProduct" aria-labelledby="offcanvasProductLabel">
+  <div class="offcanvas-header border-bottom">
+    <div>
+      <h5 id="offcanvasProductLabel" class="offcanvas-title mb-0">새 제품 등록</h5>
+      <small class="text-muted">솔루션에 새 제품을 추가합니다.</small>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body">
+    <form action="{% url 'product:create_product' %}" method="POST">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label class="form-label fw-semibold">솔루션 <span class="text-danger">*</span></label>
+        <select name="solution_id" class="form-select" required>
+          <option value="">솔루션을 선택하세요</option>
+          {% for sol in solutions %}
+          <option value="{{ sol.id }}">{{ sol.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">플랫폼 <span class="text-danger">*</span></label>
+        <select name="platform" class="form-select" required>
+          <option value="">플랫폼을 선택하세요</option>
+          <option value="AOS">Android</option>
+          <option value="IOS">iOS</option>
+          <option value="SERVER">Server</option>
+          <option value="MACOS">macOS</option>
+          <option value="WEB">Web</option>
+          <option value="FLUTTER">Flutter</option>
+        </select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">카테고리 <span class="text-danger">*</span></label>
+        <select name="category" class="form-select" required>
+          <option value="">카테고리를 선택하세요</option>
+          <option value="LIB">Library</option>
+          <option value="PLG">Plugin</option>
+          <option value="BND">Backend</option>
+          <option value="FND">Frontend</option>
+          <option value="MOD">Module</option>
+        </select>
+      </div>
+      <!-- 설명 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold">설명</label>
+        <textarea name="description" class="form-control" rows="3"
+          placeholder="제품에 대한 간단한 설명을 입력하세요."></textarea>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bx bx-check me-1"></i> 등록
+        </button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="offcanvas">취소</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 솔루션 아이콘 피커 JS -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var solOpts      = document.querySelectorAll('.sol-icon-opt');
+  var solHidden    = document.getElementById('solutionIcon');
+  var solPreviewEl = document.getElementById('solutionIconPreviewEl');
+  var solPreviewTx = document.getElementById('solutionIconPreviewText');
+
+  function selectSolIcon(btn) {
+    solOpts.forEach(function (o) {
+      o.classList.remove('btn-primary', 'text-white');
+      o.classList.add('text-muted');
+    });
+    btn.classList.add('btn-primary', 'text-white');
+    btn.classList.remove('text-muted');
+
+    var icon = btn.dataset.icon;
+    solHidden.value      = icon;
+    solPreviewEl.className = 'bx ' + icon + ' text-primary';
+    solPreviewEl.style.fontSize = '1.3rem';
+    solPreviewTx.textContent = icon;
+  }
+
+  // 기본값 (bx-layer) 선택 표시
+  var solDefault = document.querySelector('.sol-icon-opt[data-icon="bx-layer"]');
+  if (solDefault) selectSolIcon(solDefault);
+
+  solOpts.forEach(function (btn) {
+    btn.addEventListener('click', function () { selectSolIcon(this); });
+  });
+});
+</script>
+
+<!-- Django 메시지 → SweetAlert2 토스트 -->
+{% if messages %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  {% for message in messages %}
+  Swal.fire({
+    toast: true,
+    position: 'top-end',
+    icon: '{% if message.level_tag == "error" %}error{% elif message.level_tag == "success" %}success{% else %}info{% endif %}',
+    title: '{{ message }}',
+    showConfirmButton: false,
+    timer: 3500,
+    timerProgressBar: true,
+  });
+  {% endfor %}
+});
+</script>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,373 @@
+{% extends layout_path %}
+
+{% load static %}
+{% load i18n %}
+
+{% block title %}Patch Notes{% endblock %}
+
+{% block vendor_css %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <link rel="stylesheet" href="{% static 'css/ckeditor.css' %}"/>
+    <link rel="stylesheet" href="{% static 'css/swal.css' %}"/>
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+    {{ block.super }}
+    <script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+    <script src="https://cdn.ckeditor.com/ckeditor5/41.0.0/super-build/ckeditor.js"></script>
+    <script src="https://cdn.ckeditor.com/ckeditor5/34.0.0/classic/translations/ko.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="{% static 'js/utils/datepicker.js' %}"></script>
+    <script src="{% static 'js/utils/ckeditor.js' %}"></script>
+    <script src="{% static 'js/utils/append.js' %}"></script>
+
+{% endblock vendor_js %}
+
+{% block page_js %}
+    {{ block.super }}
+    <script src="{% static 'js/patch_note_page.js' %}"></script>
+{% endblock page_js %}
+
+
+{% block content %}
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+        <!-- 좌측: 제품 정보 -->
+        <div>
+            <div class="d-flex align-items-center flex-wrap gap-2">
+                {% if selected_product.solution.icon %}
+                <i class="bx {{ selected_product.solution.icon }} text-{{ selected_product.platform_color }}" style="font-size:1.2rem;"></i>
+                {% endif %}
+                <span class="fw-semibold">{{ selected_product.solution.name }}</span>
+                <span class="text-muted">/</span>
+                <span class="badge bg-label-{{ selected_product.platform_color }} rounded-pill">{{ selected_product.get_platform_display }}</span>
+                <span class="text-muted">/</span>
+                <span class="badge bg-label-secondary rounded-pill">{{ selected_product.get_category_display }}</span>
+            </div>
+            {% if selected_product.description %}
+            <p class="mb-0 small text-muted mt-1">{{ selected_product.description }}</p>
+            {% endif %}
+        </div>
+        <!-- 우측: 언어 토글 + 등록 버튼 -->
+        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+            <div class="btn-group" role="group" id="lang-toggle">
+                <button type="button" class="btn btn-sm btn-primary active" data-lang="ko">KO</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" data-lang="en">EN</button>
+            </div>
+            <button type="button" class="btn btn-primary flex-shrink-0"
+                    data-bs-toggle="modal" data-bs-target="#patchAppendModal">
+                <i class="bx bx-plus me-1"></i>패치노트 등록
+            </button>
+        </div>
+    </div>
+    <div class="modal fade" id="patchAppendModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <form id="appendForm" action="{% url 'patchnote:patch_note_append' %}" method="POST" class="modal-content">
+                {% csrf_token %}
+
+                <input type="hidden" name="product_id" value="{{ selected_product.id }}">
+
+                <div class="modal-header border-bottom pb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar flex-shrink-0 me-3">
+                        <span class="avatar-initial rounded bg-label-primary">
+                            <i class="bx bx-file-blank fs-4"></i>
+                        </span>
+                        </div>
+                        <div>
+                            <h4 class="modal-title mb-0 fw-bold">패치내역 등록</h4>
+                            <small class="text-muted">
+                                <span class="badge bg-label-secondary text-capitalize">{{ selected_product }}</span>
+                                전용 릴리즈 노트를 작성합니다.
+                            </small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label for="patchVersion" class="form-label fw-bold">패치 버전 <span class="text-danger">*</span></label>
+                            <input type="text" name="version" id="patchVersion" class="form-control" placeholder="ex) 26.1.0" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="patchDate" class="form-label fw-bold">배포 날짜 <span class="text-danger">*</span></label>
+                            <input type="text" name="patch_date" id="patchDate" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="card mb-4 shadow-none border">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch" type="checkbox" id="switch-new" data-section="new">
+                                        <label class="form-check-label" for="switch-new">🚀 기능 추가</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch" type="checkbox" id="switch-improve" data-section="improve">
+                                        <label class="form-check-label" for="switch-improve">🛠️ 기능 개선</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch" type="checkbox" id="switch-bug" data-section="bug">
+                                        <label class="form-check-label" for="switch-bug">🐛 버그 수정</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch" type="checkbox" id="switch-note" data-section="note">
+                                        <label class="form-check-label" for="switch-note">📝 특이 사항</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="editor-section-container">
+                        <div id="wrapper-new" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🚀 기능 추가</label>
+                            <textarea id="editor-features" name="new_features"></textarea>
+                        </div>
+                        <div id="wrapper-improve" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🛠️ 기능 개선</label>
+                            <textarea id="editor-improvements" name="improvements"></textarea>
+                        </div>
+                        <div id="wrapper-bug" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🐛 버그 수정</label>
+                            <textarea id="editor-bugfixes" name="bug_fixes"></textarea>
+                        </div>
+                        <div id="wrapper-note" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">📝 특이 사항</label>
+                            <textarea id="editor-remarks" name="special_notes"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary" id="btn-append-patch">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-2 d-none d-md-block">
+            <div class="card sticky-top" style="top: 100px; z-index: 10;">
+                <div class="card-body">
+                    <h6 class="text-muted small text-uppercase mb-3">Versions</h6>
+                    <nav id="version-list" class="nav flex-column nav-pills">
+                        {% for note in patch_notes %}
+                            <a class="nav-link mb-1 {% if forloop.first %}active{% endif %}"
+                               href="#version-{{ note.version|slugify }}">
+                                <i class="bx bx-subdirectory-right me-2"></i> {{ note.version }}
+                            </a>
+                        {% endfor %}
+                    </nav>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="col-md-10">
+            {% for note in patch_notes %}
+                <div id="version-{{ note.version|slugify }}" class="card mb-4 shadow-none border">
+                    <div class="card-header d-flex justify-content-between align-items-center py-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bx bx-tag-alt text-primary"></i>
+                            <h5 class="mb-0 text-primary fw-bold">{{ note.version }}</h5>
+                        </div>
+                        <span class="badge bg-label-secondary fs-small">
+                            <i class="bx bx-calendar me-1"></i>{{ note.release_date|date:"Y년 m월 d일" }}
+                        </span>
+                    </div>
+                    <div class="card-body px-4 py-3">
+
+                        {% if note.features.all %}
+                        <div class="patch-section border-start border-3 border-success ps-3 mb-4">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="fw-bold text-success small text-uppercase">🚀 기능 추가</span>
+                            </div>
+                            <ul class="mb-0 ps-3">
+                                {% for item in note.features.all %}
+                                    {% if not item.parent %}
+                                    <li class="py-1 lh-base">
+                                        <span class="fw-medium lang-ko">{{ item.content }}</span>
+                                        <span class="fw-medium lang-en d-none">
+                                            {% if item.content_en %}{{ item.content_en }}{% else %}<span class="text-muted fst-italic">{{ item.content }} <span class="badge bg-label-warning ms-1" style="font-size:0.65rem;">번역 중</span></span>{% endif %}
+                                        </span>
+                                        {% if item.children.all %}
+                                        <ul class="mt-1 ps-3">
+                                            {% for child in item.children.all %}
+                                            <li class="text-muted small py-1">
+                                                <span class="lang-ko">{{ child.content }}</span>
+                                                <span class="lang-en d-none">{% if child.content_en %}{{ child.content_en }}{% else %}<span class="fst-italic">{{ child.content }} <span class="badge bg-label-warning" style="font-size:0.6rem;">번역 중</span></span>{% endif %}</span>
+                                            </li>
+                                            {% endfor %}
+                                        </ul>
+                                        {% endif %}
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        {% if note.improvements.all %}
+                        {% if note.features.all %}<hr class="my-3 opacity-25">{% endif %}
+                        <div class="patch-section border-start border-3 border-info ps-3 mb-4">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="fw-bold text-info small text-uppercase">🛠️ 기능 개선</span>
+                            </div>
+                            <ul class="mb-0 ps-3">
+                                {% for item in note.improvements.all %}
+                                    {% if not item.parent %}
+                                    <li class="py-1 lh-base">
+                                        <span class="fw-medium lang-ko">{{ item.content }}</span>
+                                        <span class="fw-medium lang-en d-none">
+                                            {% if item.content_en %}{{ item.content_en }}{% else %}<span class="text-muted fst-italic">{{ item.content }} <span class="badge bg-label-warning ms-1" style="font-size:0.65rem;">번역 중</span></span>{% endif %}
+                                        </span>
+                                        {% if item.children.all %}
+                                        <ul class="mt-1 ps-3">
+                                            {% for child in item.children.all %}
+                                            <li class="text-muted small py-1">
+                                                <span class="lang-ko">{{ child.content }}</span>
+                                                <span class="lang-en d-none">{% if child.content_en %}{{ child.content_en }}{% else %}<span class="fst-italic">{{ child.content }} <span class="badge bg-label-warning" style="font-size:0.6rem;">번역 중</span></span>{% endif %}</span>
+                                            </li>
+                                            {% endfor %}
+                                        </ul>
+                                        {% endif %}
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        {% if note.bugfixes.all %}
+                        {% if note.features.all or note.improvements.all %}<hr class="my-3 opacity-25">{% endif %}
+                        <div class="patch-section border-start border-3 border-danger ps-3 mb-4">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="fw-bold text-danger small text-uppercase">🐛 버그 수정</span>
+                            </div>
+                            <ul class="mb-0 ps-3">
+                                {% for item in note.bugfixes.all %}
+                                    {% if not item.parent %}
+                                    <li class="py-1 lh-base">
+                                        <span class="fw-medium lang-ko">{{ item.content }}</span>
+                                        <span class="fw-medium lang-en d-none">
+                                            {% if item.content_en %}{{ item.content_en }}{% else %}<span class="text-muted fst-italic">{{ item.content }} <span class="badge bg-label-warning ms-1" style="font-size:0.65rem;">번역 중</span></span>{% endif %}
+                                        </span>
+                                        {% if item.children.all %}
+                                        <ul class="mt-1 ps-3">
+                                            {% for child in item.children.all %}
+                                            <li class="text-muted small py-1">
+                                                <span class="lang-ko">{{ child.content }}</span>
+                                                <span class="lang-en d-none">{% if child.content_en %}{{ child.content_en }}{% else %}<span class="fst-italic">{{ child.content }} <span class="badge bg-label-warning" style="font-size:0.6rem;">번역 중</span></span>{% endif %}</span>
+                                            </li>
+                                            {% endfor %}
+                                        </ul>
+                                        {% endif %}
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        {% if note.remarks.all %}
+                        {% if note.features.all or note.improvements.all or note.bugfixes.all %}<hr class="my-3 opacity-25">{% endif %}
+                        <div class="patch-section border-start border-3 border-warning ps-3 mb-4">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="fw-bold text-warning small text-uppercase">📝 특이 사항</span>
+                            </div>
+                            <ul class="mb-0 ps-3">
+                                {% for item in note.remarks.all %}
+                                    {% if not item.parent %}
+                                    <li class="py-1 lh-base">
+                                        <span class="fw-medium lang-ko">{{ item.content }}</span>
+                                        <span class="fw-medium lang-en d-none">
+                                            {% if item.content_en %}{{ item.content_en }}{% else %}<span class="text-muted fst-italic">{{ item.content }} <span class="badge bg-label-warning ms-1" style="font-size:0.65rem;">번역 중</span></span>{% endif %}
+                                        </span>
+                                        {% if item.children.all %}
+                                        <ul class="mt-1 ps-3">
+                                            {% for child in item.children.all %}
+                                            <li class="text-muted small py-1">
+                                                <span class="lang-ko">{{ child.content }}</span>
+                                                <span class="lang-en d-none">{% if child.content_en %}{{ child.content_en }}{% else %}<span class="fst-italic">{{ child.content }} <span class="badge bg-label-warning" style="font-size:0.6rem;">번역 중</span></span>{% endif %}</span>
+                                            </li>
+                                            {% endfor %}
+                                        </ul>
+                                        {% endif %}
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                    </div>
+                </div>
+            {% empty %}
+                <div class="card text-center py-5" style="border: 2px dashed #d1d5db !important;">
+                    <div class="card-body">
+                        <div class="mb-3" style="font-size:3rem; opacity:0.25;">📋</div>
+                        <h6 class="fw-semibold mb-1">아직 등록된 패치노트가 없습니다.</h6>
+                        <p class="text-muted small mb-3">
+                            <span class="badge bg-label-{{ selected_product.platform_color }} rounded-pill">{{ selected_product.get_platform_display }}</span>
+                            <span class="badge bg-label-secondary rounded-pill ms-1">{{ selected_product.get_category_display }}</span>
+                            의 첫 번째 릴리즈 노트를 작성해 보세요.
+                        </p>
+                        <button type="button" class="btn btn-primary btn-sm"
+                                data-bs-toggle="modal" data-bs-target="#patchAppendModal">
+                            <i class="bx bx-plus me-1"></i>패치노트 등록
+                        </button>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        // ── 버전 사이드바 스크롤 ──────────────────────────────────────────────────
+        document.querySelectorAll('#version-list a').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+                document.querySelectorAll('#version-list a').forEach(nav => nav.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // ── KO / EN 언어 토글 ────────────────────────────────────────────────────
+        document.querySelectorAll('#lang-toggle button').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const lang = this.dataset.lang;
+
+                // 버튼 활성화 상태 교체
+                document.querySelectorAll('#lang-toggle button').forEach(b => {
+                    b.classList.toggle('btn-primary', b.dataset.lang === lang);
+                    b.classList.toggle('btn-outline-primary', b.dataset.lang !== lang);
+                    b.classList.toggle('active', b.dataset.lang === lang);
+                });
+
+                // 텍스트 표시/숨김
+                document.querySelectorAll('.lang-ko').forEach(el => el.classList.toggle('d-none', lang === 'en'));
+                document.querySelectorAll('.lang-en').forEach(el => el.classList.toggle('d-none', lang === 'ko'));
+            });
+        });
+    </script>
+{% endblock %}

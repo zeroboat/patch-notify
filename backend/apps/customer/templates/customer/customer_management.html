@@ -1,0 +1,434 @@
+{% extends layout_path %}
+
+{% load static %}
+{% load i18n %}
+
+{% block title %}고객사 관리{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <!-- 페이지 헤더 -->
+  <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+    <div>
+      <h4 class="fw-bold mb-1">
+        <span class="text-muted fw-light">Management /</span> 고객사 관리
+      </h4>
+      <p class="text-muted mb-0 small">고객사와 수신 이메일을 관리합니다.</p>
+    </div>
+    <button class="btn btn-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasAddCustomer">
+      <i class="bx bx-plus me-1"></i> 고객사 추가
+    </button>
+  </div>
+
+  <!-- 통계 카드 -->
+  <div class="row g-4 mb-4">
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-primary">
+              <i class="bx bx-buildings fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">전체 고객사</p>
+            <h4 class="mb-0 fw-bold">{{ total_customers }}</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 고객사 목록 -->
+  <div class="card">
+    <div class="card-header">
+      <h5 class="mb-0">고객사 목록</h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">#</th>
+              <th>고객사명</th>
+              <th>구매 솔루션</th>
+              <th>수신 이메일</th>
+              <th class="text-center">관리</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for customer in customers %}
+            <tr>
+              <td class="ps-4 text-muted small">{{ forloop.counter }}</td>
+              <td>
+                <span class="fw-medium">{{ customer.name }}</span>
+              </td>
+              <td>
+                {% for solution in customer.solutions.all %}
+                <span class="badge bg-label-primary me-1 mb-1">
+                  <i class="bx bx-{{ solution.icon|default:'bx-layer' }} me-1"></i>{{ solution.name }}
+                </span>
+                {% empty %}
+                <span class="text-muted small">없음</span>
+                {% endfor %}
+              </td>
+              <td>
+                {% with email_list=customer.emails.all email_count=customer.emails.count %}
+                {% if email_count == 0 %}
+                <span class="text-muted small">없음</span>
+                {% else %}
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+                    <i class="bx bx-envelope me-1"></i>{{ email_count }}개
+                  </button>
+                  <ul class="dropdown-menu shadow-sm" style="min-width: 260px;">
+                    {% for email in email_list %}
+                    <li class="dropdown-item-text px-3 py-1">
+                      <div class="small">
+                        {% if email.name %}<span class="fw-semibold">{{ email.name }}</span><br><span class="text-muted">{{ email.email }}</span>{% else %}<span>{{ email.email }}</span>{% endif %}
+                      </div>
+                    </li>
+                    {% if not forloop.last %}<li><hr class="dropdown-divider my-1"></li>{% endif %}
+                    {% endfor %}
+                  </ul>
+                </div>
+                {% endif %}
+                {% endwith %}
+              </td>
+              <td class="text-center">
+                <div class="d-flex justify-content-center gap-1">
+                  <!-- 편집 버튼 -->
+                  <button class="btn btn-sm btn-icon btn-text-primary edit-customer-btn"
+                          data-customer-id="{{ customer.id }}"
+                          data-customer-name="{{ customer.name }}"
+                          data-solution-ids="[{% for s in customer.solutions.all %}{{ s.id }}{% if not forloop.last %},{% endif %}{% endfor %}]"
+                          title="편집">
+                    <i class="bx bx-edit-alt"></i>
+                  </button>
+                  <!-- 삭제 버튼 -->
+                  <button class="btn btn-sm btn-icon btn-text-danger delete-customer-btn"
+                          data-customer-id="{{ customer.id }}"
+                          data-customer-name="{{ customer.name }}"
+                          title="삭제">
+                    <i class="bx bx-trash"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="5" class="text-center py-5 text-muted">
+                <i class="bx bx-buildings fs-2 d-block mb-2"></i>
+                등록된 고객사가 없습니다.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 고객사 추가 Offcanvas -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasAddCustomer">
+  <div class="offcanvas-header border-bottom">
+    <h5 class="offcanvas-title">고객사 추가</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body">
+    <form method="post" action="{% url 'customer:create_customer' %}">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label class="form-label fw-medium">고객사명 <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" name="name" placeholder="고객사명을 입력하세요" required>
+      </div>
+      <div class="d-grid mt-4">
+        <button type="submit" class="btn btn-primary">
+          <i class="bx bx-save me-1"></i> 저장
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 고객사 편집 Offcanvas -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasEditCustomer" style="width: 420px;">
+  <div class="offcanvas-header border-bottom">
+    <h5 class="offcanvas-title">고객사 편집</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body d-flex flex-column gap-4">
+
+    <!-- 고객사명 -->
+    <div>
+      <label class="form-label fw-semibold">고객사명</label>
+      <input type="text" class="form-control" id="editCustomerName">
+    </div>
+
+    <!-- 구매 솔루션 -->
+    <div>
+      <label class="form-label fw-semibold">구매 솔루션</label>
+      <div class="d-flex flex-column gap-2">
+        {% for solution in solutions %}
+        <div class="form-check">
+          <input class="form-check-input solution-checkbox"
+                 type="checkbox"
+                 id="sol_{{ solution.id }}"
+                 value="{{ solution.id }}">
+          <label class="form-check-label" for="sol_{{ solution.id }}">
+            <i class="bx bx-{{ solution.icon|default:'bx-layer' }} me-1"></i>{{ solution.name }}
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- 수신 이메일 -->
+    <div>
+      <label class="form-label fw-semibold">수신 이메일</label>
+      <div id="editEmailList" class="d-flex flex-column gap-1 mb-2"></div>
+      <!-- 이메일 추가 인라인 폼 -->
+      <div class="input-group input-group-sm">
+        <input type="text" class="form-control" id="newEmailName" placeholder="담당자명">
+        <input type="email" class="form-control" id="newEmailAddr" placeholder="이메일 *">
+        <button class="btn btn-outline-primary" type="button" id="btnAddEmail">
+          <i class="bx bx-plus"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- 저장 버튼 -->
+    <div class="mt-auto">
+      <div class="d-grid">
+        <button class="btn btn-primary" id="btnSaveCustomer">
+          <i class="bx bx-save me-1"></i> 저장
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Django → JS 데이터 브릿지 -->
+<script id="customerEmailData" type="application/json">
+{
+  {% for customer in customers %}
+  "{{ customer.id }}": [
+    {% for email in customer.emails.all %}
+    {"id": {{ email.id }}, "email": "{{ email.email }}", "name": "{{ email.name|default:'' }}"}{% if not forloop.last %},{% endif %}
+    {% endfor %}
+  ]{% if not forloop.last %},{% endif %}
+  {% endfor %}
+}
+</script>
+
+<script id="djangoMessages" type="application/json">
+[{% for message in messages %}{"level": "{{ message.level_tag }}", "text": "{{ message }}"}{% if not forloop.last %},{% endif %}{% endfor %}]
+</script>
+
+{% endblock %}
+
+{% block page_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const CSRF_TOKEN = '{{ csrf_token }}';
+  const UPDATE_URL   = '{% url "customer:update_customer" %}';
+  const DELETE_URL   = '{% url "customer:delete_customer" %}';
+  const ADD_EMAIL_URL    = '{% url "customer:add_email" %}';
+  const DELETE_EMAIL_URL = '{% url "customer:delete_email" %}';
+
+  // 서버에서 전달된 이메일 데이터
+  const emailData = JSON.parse(document.getElementById('customerEmailData').textContent);
+
+  let currentCustomerId = null;
+  const editOffcanvas = new bootstrap.Offcanvas(document.getElementById('offcanvasEditCustomer'));
+
+  // ── 편집 Offcanvas 열기 ──────────────────────────────────────
+  document.querySelectorAll('.edit-customer-btn').forEach(btn => {
+    btn.addEventListener('click', function () {
+      currentCustomerId = this.dataset.customerId;
+      const name       = this.dataset.customerName;
+      const solutionIds = JSON.parse(this.dataset.solutionIds);
+
+      // 고객사명 세팅
+      document.getElementById('editCustomerName').value = name;
+
+      // 솔루션 체크박스 초기화
+      document.querySelectorAll('.solution-checkbox').forEach(cb => {
+        cb.checked = solutionIds.includes(parseInt(cb.value));
+      });
+
+      // 이메일 목록 렌더링
+      renderEmailList(currentCustomerId);
+
+      // 인라인 이메일 입력 초기화
+      document.getElementById('newEmailName').value = '';
+      document.getElementById('newEmailAddr').value = '';
+
+      editOffcanvas.show();
+    });
+  });
+
+  // ── 이메일 목록 렌더링 ───────────────────────────────────────
+  function renderEmailList(customerId) {
+    const list = document.getElementById('editEmailList');
+    list.innerHTML = '';
+    const emails = emailData[customerId] || [];
+    emails.forEach(em => {
+      const row = document.createElement('div');
+      row.className = 'd-flex align-items-center justify-content-between gap-2 border rounded px-2 py-1';
+      row.dataset.emailId = em.id;
+      row.innerHTML = `
+        <span class="small text-truncate">
+          ${em.name ? '<strong>' + em.name + '</strong> &lt;' + em.email + '&gt;' : em.email}
+        </span>
+        <button type="button" class="btn btn-sm btn-icon btn-text-danger p-0 del-email-inline"
+                data-email-id="${em.id}" data-email="${em.email}">
+          <i class="bx bx-x"></i>
+        </button>`;
+      list.appendChild(row);
+    });
+    // 인라인 삭제 이벤트
+    list.querySelectorAll('.del-email-inline').forEach(btn => {
+      btn.addEventListener('click', function () {
+        deleteEmail(this.dataset.emailId, this.dataset.email, currentCustomerId);
+      });
+    });
+  }
+
+  // ── 이메일 인라인 추가 ───────────────────────────────────────
+  document.getElementById('btnAddEmail').addEventListener('click', function () {
+    const email = document.getElementById('newEmailAddr').value.trim();
+    const name  = document.getElementById('newEmailName').value.trim();
+    if (!email) {
+      Swal.fire({ icon: 'warning', title: '이메일을 입력해주세요.', timer: 1500, showConfirmButton: false });
+      return;
+    }
+    fetch(ADD_EMAIL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
+      body: new URLSearchParams({ customer_id: currentCustomerId, email, name })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        Swal.fire({ icon: 'error', title: data.error, timer: 2000, showConfirmButton: false });
+      } else {
+        // emailData 갱신 후 재렌더링
+        if (!emailData[currentCustomerId]) emailData[currentCustomerId] = [];
+        emailData[currentCustomerId].push({ id: data.email_id, email, name: name || '' });
+        renderEmailList(currentCustomerId);
+        document.getElementById('newEmailName').value = '';
+        document.getElementById('newEmailAddr').value = '';
+      }
+    });
+  });
+
+  // ── 이메일 삭제 ──────────────────────────────────────────────
+  function deleteEmail(emailId, emailAddr, customerId) {
+    Swal.fire({
+      title: '이메일 삭제',
+      text: `${emailAddr}을 삭제하시겠습니까?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '삭제',
+      cancelButtonText: '취소',
+      confirmButtonColor: '#ff3e1d',
+    }).then(result => {
+      if (!result.isConfirmed) return;
+      fetch(DELETE_EMAIL_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
+        body: new URLSearchParams({ email_id: emailId })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          Swal.fire({ icon: 'error', title: data.error, timer: 2000, showConfirmButton: false });
+        } else {
+          // emailData에서 제거
+          emailData[customerId] = (emailData[customerId] || []).filter(e => e.id != emailId);
+          renderEmailList(customerId);
+        }
+      });
+    });
+  }
+
+  // ── 고객사 저장 (이름 + 구독 솔루션) ────────────────────────
+  document.getElementById('btnSaveCustomer').addEventListener('click', function () {
+    const name = document.getElementById('editCustomerName').value.trim();
+    if (!name) {
+      Swal.fire({ icon: 'warning', title: '고객사명을 입력해주세요.', timer: 1500, showConfirmButton: false });
+      return;
+    }
+    const selectedSolutions = [...document.querySelectorAll('.solution-checkbox:checked')].map(cb => cb.value);
+    const body = new URLSearchParams({ customer_id: currentCustomerId, name });
+    selectedSolutions.forEach(id => body.append('solution_ids', id));
+
+    fetch(UPDATE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
+      body
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        Swal.fire({ icon: 'error', title: data.error, timer: 2000, showConfirmButton: false });
+      } else {
+        editOffcanvas.hide();
+        Swal.fire({ icon: 'success', title: data.message, timer: 1500, showConfirmButton: false })
+          .then(() => location.reload());
+      }
+    });
+  });
+
+  // ── 고객사 삭제 ──────────────────────────────────────────────
+  document.querySelectorAll('.delete-customer-btn').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const customerId   = this.dataset.customerId;
+      const customerName = this.dataset.customerName;
+      Swal.fire({
+        title: '고객사 삭제',
+        text: `"${customerName}"을 삭제하시겠습니까? 관련 이메일도 모두 삭제됩니다.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '삭제',
+        cancelButtonText: '취소',
+        confirmButtonColor: '#ff3e1d',
+      }).then(result => {
+        if (!result.isConfirmed) return;
+        fetch(DELETE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
+          body: new URLSearchParams({ customer_id: customerId })
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) {
+            Swal.fire({ icon: 'error', title: data.error, timer: 2000, showConfirmButton: false });
+          } else {
+            Swal.fire({ icon: 'success', title: data.message, timer: 1500, showConfirmButton: false })
+              .then(() => location.reload());
+          }
+        });
+      });
+    });
+  });
+
+  // ── Django messages → SweetAlert 토스트 ─────────────────────
+  const djangoMessages = JSON.parse(document.getElementById('djangoMessages').textContent);
+  djangoMessages.forEach(msg => {
+    Swal.fire({
+      toast: true, position: 'top-end',
+      icon: msg.level === 'error' ? 'error' : msg.level === 'success' ? 'success' : 'info',
+      title: msg.text,
+      showConfirmButton: false, timer: 3500, timerProgressBar: true,
+    });
+  });
+
+}); // DOMContentLoaded
+</script>
+{% endblock %}

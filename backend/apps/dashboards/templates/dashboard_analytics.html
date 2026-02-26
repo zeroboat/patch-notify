@@ -1,0 +1,225 @@
+{% extends layout_path %}
+
+{% load static %}
+{% load i18n %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <!-- 페이지 헤더 -->
+  <div class="mb-4">
+    <h4 class="fw-bold mb-1">대시보드</h4>
+    <p class="text-muted mb-0 small">{{ current_month }} 현황</p>
+  </div>
+
+  <!-- ── 요약 카드 ─────────────────────────────────────── -->
+  <div class="row g-4 mb-4">
+
+    <!-- 전체 고객사 -->
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-primary">
+              <i class="bx bx-buildings fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">전체 고객사</p>
+            <h4 class="mb-0 fw-bold">{{ total_customers }}</h4>
+          </div>
+        </div>
+        <div class="card-footer pt-0 pb-3 px-4">
+          <a href="{% url 'customer:customer_management' %}" class="small text-primary">관리 페이지 →</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 전체 솔루션 -->
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-success">
+              <i class="bx bx-layer fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">전체 솔루션</p>
+            <h4 class="mb-0 fw-bold">{{ total_solutions }}</h4>
+          </div>
+        </div>
+        <div class="card-footer pt-0 pb-3 px-4">
+          <a href="{% url 'product:product_management' %}" class="small text-success">관리 페이지 →</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 이번 달 패치노트 -->
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-info">
+              <i class="bx bx-file fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">이번 달 패치노트</p>
+            <h4 class="mb-0 fw-bold">{{ monthly_patches }}</h4>
+          </div>
+        </div>
+        <div class="card-footer pt-0 pb-3 px-4">
+          <span class="small text-muted">{{ current_month }} 등록 기준</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 이메일 미등록 고객사 -->
+    <div class="col-6 col-xl-3">
+      <div class="card h-100 {% if no_email_count > 0 %}border border-warning{% endif %}">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded {% if no_email_count > 0 %}bg-label-warning{% else %}bg-label-secondary{% endif %}">
+              <i class="bx bx-envelope-open fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">이메일 미등록</p>
+            <h4 class="mb-0 fw-bold {% if no_email_count > 0 %}text-warning{% endif %}">{{ no_email_count }}</h4>
+          </div>
+        </div>
+        <div class="card-footer pt-0 pb-3 px-4">
+          {% if no_email_count > 0 %}
+          <span class="small text-warning"><i class="bx bx-error-circle me-1"></i>공문 발송 누락 주의</span>
+          {% else %}
+          <span class="small text-muted">모든 고객사 이메일 등록됨</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── 중간 섹션 ─────────────────────────────────────── -->
+  <div class="row g-4 mb-4">
+
+    <!-- 솔루션별 고객사 현황 -->
+    <div class="col-12 col-xl-5">
+      <div class="card h-100">
+        <div class="card-header">
+          <h5 class="mb-0">솔루션별 고객사 현황</h5>
+        </div>
+        <div class="card-body">
+          {% if solutions_with_customers %}
+          <div class="d-flex flex-column gap-3">
+            {% for solution in solutions_with_customers %}
+            {% with count=solution.customers.count %}
+            <div>
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <div class="d-flex align-items-center gap-2">
+                  <i class="bx bx-{{ solution.icon|default:'bx-layer' }} text-primary"></i>
+                  <span class="fw-medium small">{{ solution.name }}</span>
+                </div>
+                <span class="badge bg-label-primary">{{ count }}개사</span>
+              </div>
+              <div class="progress" style="height: 6px;">
+                {% if total_customers > 0 %}
+                <div class="progress-bar bg-primary" style="width: {% widthratio count total_customers 100 %}%"></div>
+                {% else %}
+                <div class="progress-bar bg-primary" style="width: 0%"></div>
+                {% endif %}
+              </div>
+            </div>
+            {% endwith %}
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="text-center py-5 text-muted">
+            <i class="bx bx-layer fs-2 d-block mb-2"></i>
+            등록된 솔루션이 없습니다.
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- 최근 패치노트 -->
+    <div class="col-12 col-xl-7">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">최근 패치노트</h5>
+        </div>
+        <div class="card-body p-0">
+          {% if recent_patches %}
+          <ul class="list-group list-group-flush">
+            {% for patch in recent_patches %}
+            <li class="list-group-item px-4 py-3">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="bx bx-{{ patch.product.solution.icon|default:'bx-layer' }} text-primary small"></i>
+                    <span class="small text-muted">{{ patch.product.solution.name }}</span>
+                    <span class="text-muted small">·</span>
+                    <span class="small text-muted">{{ patch.product.get_platform_display }}</span>
+                  </div>
+                  <div class="fw-semibold">v{{ patch.version }}</div>
+                </div>
+                <span class="badge bg-label-secondary">{{ patch.release_date|date:"Y.m.d" }}</span>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <div class="text-center py-5 text-muted">
+            <i class="bx bx-file fs-2 d-block mb-2"></i>
+            등록된 패치노트가 없습니다.
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── 이메일 미등록 고객사 ───────────────────────────── -->
+  {% if no_email_customers %}
+  <div class="row">
+    <div class="col-12">
+      <div class="card border border-warning">
+        <div class="card-header d-flex align-items-center gap-2">
+          <i class="bx bx-error text-warning fs-5"></i>
+          <h5 class="mb-0">이메일 미등록 고객사</h5>
+          <span class="badge bg-warning ms-1">{{ no_email_count }}</span>
+          <span class="text-muted small ms-2">— 공문 발송 시 이 고객사는 수신에서 제외됩니다.</span>
+        </div>
+        <div class="card-body p-0">
+          <ul class="list-group list-group-flush">
+            {% for customer in no_email_customers %}
+            <li class="list-group-item px-4 py-2 d-flex justify-content-between align-items-center">
+              <div class="d-flex align-items-center gap-3">
+                <span class="fw-medium">{{ customer.name }}</span>
+                <div>
+                  {% for solution in customer.solutions.all %}
+                  <span class="badge bg-label-secondary me-1">{{ solution.name }}</span>
+                  {% empty %}
+                  <span class="text-muted small">구매 솔루션 없음</span>
+                  {% endfor %}
+                </div>
+              </div>
+              <a href="{% url 'customer:customer_management' %}" class="btn btn-sm btn-outline-warning">
+                <i class="bx bx-envelope-plus me-1"></i>이메일 등록
+              </a>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
