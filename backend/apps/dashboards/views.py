@@ -1,3 +1,4 @@
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import TemplateView
 from django.utils import timezone
 from web_project import TemplateLayout
@@ -7,7 +8,7 @@ from apps.patchnote.models import PatchNote
 from apps.customer.models import Customer
 
 
-class DashboardsView(TemplateView):
+class DashboardsView(LoginRequiredMixin, TemplateView):
     template_name = "dashboard_analytics.html"
 
     def get_context_data(self, **kwargs):

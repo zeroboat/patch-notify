@@ -3,11 +3,14 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
 
 from web_project import TemplateLayout
+from apps.base.mixins import RoleRequiredMixin, role_required
 from apps.customer.models import Customer
 from .models import Subscription
 
 
-class SubscriberManagementView(TemplateView):
+class SubscriberManagementView(RoleRequiredMixin, TemplateView):
+    """Admin + SE: 구독 관리"""
+    allowed_roles = ['se']
     template_name = "subscriber/subscriber_management.html"
 
     def get_context_data(self, **kwargs):
@@ -42,8 +45,9 @@ class SubscriberManagementView(TemplateView):
 
 
 @require_GET
+@role_required('se')
 def get_customer_subscriptions(request, customer_id):
-    """AJAX: 특정 고객사의 구매 솔루션 목록 + 기존 구독 설정 반환"""
+    """Admin+SE AJAX: 특정 고객사의 구매 솔루션 목록 + 기존 구독 설정 반환"""
     try:
         customer = Customer.objects.prefetch_related('solutions').get(pk=customer_id)
     except Customer.DoesNotExist:
@@ -86,8 +90,9 @@ def get_customer_subscriptions(request, customer_id):
 
 
 @require_POST
+@role_required('se')
 def save_customer_subscription(request):
-    """AJAX: 고객사+솔루션 단위 Gmail/Slack 구독 저장"""
+    """Admin+SE AJAX: 고객사+솔루션 단위 Gmail/Slack 구독 저장"""
     customer_id = request.POST.get('customer_id')
     solution_id = request.POST.get('solution_id')
 

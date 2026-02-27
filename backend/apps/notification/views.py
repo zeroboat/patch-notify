@@ -9,6 +9,7 @@ from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
 from web_project import TemplateLayout
+from apps.base.mixins import RoleRequiredMixin, role_required
 from apps.product.models import Solution
 from apps.customer.models import Customer, CustomerEmail
 from apps.logs.models import DispatchLog
@@ -36,7 +37,9 @@ def _send_official_email(to_email, subject, body_html):
         return False, str(e)
 
 
-class OfficialNoticeView(TemplateView):
+class OfficialNoticeView(RoleRequiredMixin, TemplateView):
+    """Admin 전용: 공문 작성 및 발송"""
+    allowed_roles = []
     template_name = "notification/official_notice.html"
 
     def get_context_data(self, **kwargs):
@@ -59,8 +62,9 @@ class OfficialNoticeView(TemplateView):
 
 
 @require_POST
+@role_required()
 def get_recipients_preview(request):
-    """AJAX: 선택된 솔루션의 수신자 목록 반환"""
+    """Admin 전용 AJAX: 선택된 솔루션의 수신자 목록 반환"""
     solution_ids = request.POST.getlist('solution_ids[]')
 
     if not solution_ids:
@@ -87,8 +91,9 @@ def get_recipients_preview(request):
 
 
 @require_POST
+@role_required()
 def send_notice(request):
-    """공문 발송"""
+    """Admin 전용: 공문 발송"""
     subject = request.POST.get('subject', '').strip()
     body = request.POST.get('body', '').strip()
     send_mode = request.POST.get('send_mode', 'direct')
