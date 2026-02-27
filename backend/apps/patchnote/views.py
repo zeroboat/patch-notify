@@ -1,18 +1,20 @@
 import html as html_module
 from html.parser import HTMLParser
 
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
 from web_project import TemplateLayout
+from apps.base.mixins import role_required
 from apps.product.models import Product
 from .models import PatchNote, Feature, Improvement, BugFix, Remark
 from .translation import start_translation
 
 
-class PatchNoteDetailView(TemplateView):
+class PatchNoteDetailView(LoginRequiredMixin, TemplateView):
     template_name = "patchnote/patch_list.html"
 
     def get_context_data(self, **kwargs):
@@ -109,6 +111,7 @@ def _create_items(patch_note, items, model_class):
 # ──────────────────────────────────────────────
 
 @require_POST
+@role_required('dev')
 def patch_note_append(request):
     try:
         product_id  = request.POST.get('product_id', '').strip()

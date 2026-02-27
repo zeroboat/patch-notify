@@ -7,7 +7,7 @@
 
 {% block page_css %}
   {{ block.super }}
-  <link rel="stylesheet" href="{% static  'vendor/css/pages/page-auth.css' %}">
+  <link rel="stylesheet" href="{% static 'vendor/css/pages/page-auth.css' %}">
 {% endblock page_css %}
 
 {% block content %}
@@ -25,35 +25,51 @@
               </a>
             </div>
             <!-- /Logo -->
-            <h4 class="mb-1">Adventure starts here 🚀</h4>
-            <p class="mb-6">Make your app management easy and fun!</p>
+            <h4 class="mb-1">계정 만들기</h4>
+            <p class="mb-4 text-muted small">가입 후 관리자가 역할(Dev/SE)을 부여합니다.</p>
 
-            <form id="formAuthentication" class="mb-6" action="{% url 'index' %}">
+            {% if errors %}
+            <div class="alert alert-danger py-2">
+              <ul class="mb-0 ps-3">
+                {% for err in errors %}
+                <li>{{ err }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            {% endif %}
+
+            <form id="formAuthentication" class="mb-6" action="{% url 'auth-register-basic' %}" method="POST">
               {% csrf_token %}
-              <div class="mb-6">
+              <div class="mb-4">
                 <label for="username" class="form-label">Username</label>
-                <input type="text" class="form-control" id="username" name="username" placeholder="Enter your username" autofocus="autofocus"/>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="username"
+                  name="username"
+                  placeholder="Enter your username"
+                  value="{{ form_data.username|default:'' }}"
+                  autofocus
+                />
               </div>
-              <div class="mb-6">
+              <div class="mb-4">
                 <label for="email" class="form-label">Email</label>
-                <input type="text" class="form-control" id="email" name="email" placeholder="Enter your email"/>
+                <input
+                  type="email"
+                  class="form-control"
+                  id="email"
+                  name="email"
+                  placeholder="Enter your email"
+                  value="{{ form_data.email|default:'' }}"
+                />
               </div>
-              <div class="form-password-toggle">
+              <div class="mb-6 form-password-toggle">
                 <label class="form-label" for="password">Password</label>
                 <div class="input-group input-group-merge">
-                  <input type="password" id="password" class="form-control" name="password" placeholder="&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;" aria-describedby="password"/>
+                  <input type="password" id="password" class="form-control" name="password" placeholder="············" aria-describedby="password"/>
                   <span class="input-group-text cursor-pointer">
                     <i class="icon-base bx bx-hide"></i>
                   </span>
-                </div>
-              </div>
-              <div class="my-7">
-                <div class="form-check mb-0">
-                  <input class="form-check-input" type="checkbox" id="terms-conditions" name="terms"/>
-                  <label class="form-check-label" for="terms-conditions">
-                    I agree to
-                    <a href="javascript:void(0);">privacy policy & terms</a>
-                  </label>
                 </div>
               </div>
               <button class="btn btn-primary d-grid w-100">Sign up</button>
@@ -67,7 +83,7 @@
             </p>
           </div>
         </div>
-        <!-- Register Card -->
+        <!-- /Register Card -->
       </div>
     </div>
   </div>

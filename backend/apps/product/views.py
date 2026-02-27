@@ -2,11 +2,15 @@ from django.shortcuts import redirect
 from django.views.generic import TemplateView
 from django.contrib import messages
 from django.db.models import Max, Prefetch
+
 from web_project import TemplateLayout
+from apps.base.mixins import RoleRequiredMixin, role_required
 from .models import Product, Solution
 
 
-class ProductManagementView(TemplateView):
+class ProductManagementView(RoleRequiredMixin, TemplateView):
+    """Admin 전용: 제품/솔루션 관리"""
+    allowed_roles = []
     template_name = "product/product_management.html"
 
     def get_context_data(self, **kwargs):
@@ -30,6 +34,7 @@ class ProductManagementView(TemplateView):
         return context
 
 
+@role_required()
 def create_solution(request):
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
@@ -42,6 +47,7 @@ def create_solution(request):
     return redirect('product:product_management')
 
 
+@role_required()
 def create_product(request):
     if request.method == 'POST':
         solution_id = request.POST.get('solution_id')

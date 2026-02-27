@@ -2,11 +2,14 @@ from django.views.generic import TemplateView
 from django.core.paginator import Paginator
 
 from web_project import TemplateLayout
+from apps.base.mixins import RoleRequiredMixin
 from apps.customer.models import Customer
 from .models import DispatchLog
 
 
-class DispatchLogView(TemplateView):
+class DispatchLogView(RoleRequiredMixin, TemplateView):
+    """Admin + SE: 발송 로그 조회"""
+    allowed_roles = ['se']
     template_name = "logs/dispatch_log.html"
 
     def get_context_data(self, **kwargs):

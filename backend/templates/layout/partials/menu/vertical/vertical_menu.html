@@ -1,5 +1,4 @@
 <aside id="layout-menu" class="layout-menu menu-vertical menu bg-menu-theme">
-    <!-- ! Hide app brand if navbar-full -->
     {% if not navbar_full %}
         <div class="app-brand demo">
             <a href="{% url 'index' %}" class="app-brand-link">
@@ -15,7 +14,6 @@
         </div>
     {% endif %}
 
-
     <div class="menu-inner-shadow"></div>
 
     <ul class="menu-inner py-1">
@@ -29,12 +27,15 @@
                 <div class="text-truncate">Dashboards</div>
             </a>
         </li>
+
+        {% if user_role == 'admin' %}
         <li class="menu-item {% if 'management' in request.path %}active open{% endif %}">
             <a href="{% url 'product:product_management' %}" class="menu-link">
-                <i class="menu-icon icon-base bx bx-home-smile"></i>
+                <i class="menu-icon icon-base bx bx-cube-alt"></i>
                 <div class="text-truncate">Product Management</div>
             </a>
         </li>
+        {% endif %}
 
         <li class="menu-header small text-uppercase">
             <span class="menu-header-text">Patch Notes</span>
@@ -62,12 +63,17 @@
         <li class="menu-header small text-uppercase">
             <span class="menu-header-text">Notification</span>
         </li>
+
+        {% if user_role == 'admin' %}
         <li class="menu-item {% if 'official_notice' in request.path %}active{% endif %}">
             <a href="{% url 'notification:official_notice' %}" class="menu-link">
-                <i class="menu-icon icon-base bx bx-collection"></i>
+                <i class="menu-icon icon-base bx bx-mail-send"></i>
                 <div class="text-truncate">Official Notice</div>
             </a>
         </li>
+        {% endif %}
+
+        {% if user_role == 'admin' or user_role == 'se' %}
         <li class="menu-item {% if '/customer/' in request.path %}active{% endif %}">
             <a href="{% url 'customer:customer_management' %}" class="menu-link">
                 <i class="menu-icon icon-base bx bx-buildings"></i>
@@ -86,7 +92,8 @@
                 <div class="text-truncate">Logs</div>
             </a>
         </li>
-    </ul>
+        {% endif %}
 
+    </ul>
 
 </aside>

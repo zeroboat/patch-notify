@@ -5,11 +5,14 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
 from web_project import TemplateLayout
+from apps.base.mixins import RoleRequiredMixin, role_required
 from .models import Customer, CustomerEmail
 from apps.product.models import Solution
 
 
-class CustomerManagementView(TemplateView):
+class CustomerManagementView(RoleRequiredMixin, TemplateView):
+    """Admin + SE: 고객사 관리"""
+    allowed_roles = ['se']
     template_name = "customer/customer_management.html"
 
     def get_context_data(self, **kwargs):
@@ -24,6 +27,7 @@ class CustomerManagementView(TemplateView):
         return context
 
 
+@role_required('se')
 def create_customer(request):
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
@@ -36,6 +40,7 @@ def create_customer(request):
 
 
 @require_POST
+@role_required('se')
 def add_email(request):
     customer_id = request.POST.get('customer_id')
     email = request.POST.get('email', '').strip()
@@ -58,6 +63,7 @@ def add_email(request):
 
 
 @require_POST
+@role_required('se')
 def delete_email(request):
     email_id = request.POST.get('email_id')
     try:
@@ -70,6 +76,7 @@ def delete_email(request):
 
 
 @require_POST
+@role_required('se')
 def delete_customer(request):
     customer_id = request.POST.get('customer_id')
     try:
@@ -82,6 +89,7 @@ def delete_customer(request):
 
 
 @require_POST
+@role_required('se')
 def update_customer(request):
     customer_id = request.POST.get('customer_id')
     name = request.POST.get('name', '').strip()

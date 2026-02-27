@@ -82,6 +82,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.my_setting",
                 "core.context_processors.environment",
+                "core.context_processors.user_role",
                 "apps.product.context_processors.sidebar_menu",
             ],
             "libraries": {
