@@ -1,6 +1,6 @@
 services:
   db:
-    name: patch-db
+    container_name: patch-db
     image: postgres:18-alpine
     environment:
       POSTGRES_DB: ${DB_NAME:-patchnotify}
@@ -18,9 +18,9 @@ services:
       retries: 5
 
   backend:
-    name: patch-web
+    container_name: patch-web
     build: ./backend
-    command: gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 2
+    command: sh -c "python manage.py migrate --noinput && gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 2"
     ports:
       - "8000:8000"
     env_file: .env
