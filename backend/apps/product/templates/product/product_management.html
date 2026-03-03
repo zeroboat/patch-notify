@@ -74,7 +74,13 @@
           <small class="text-muted">제품 {{ solution.products.all|length }}개</small>
         </div>
       </div>
-      <span class="badge bg-label-primary rounded-pill">{{ solution.name }}</span>
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-label-primary rounded-pill">{{ solution.name }}</span>
+        <button class="btn btn-sm btn-icon btn-label-danger btn-delete-solution"
+                data-id="{{ solution.id }}" data-name="{{ solution.name }}" title="솔루션 삭제">
+          <i class="bx bx-trash"></i>
+        </button>
+      </div>
     </div>
 
     {% with products=solution.products.all %}
@@ -131,11 +137,18 @@
                   <a class="dropdown-item" href="{% url 'patchnote:product_patch_detail' product.id %}">
                     <i class="bx bx-file-find me-2 text-primary"></i>패치노트 보기
                   </a>
-                  <a class="dropdown-item" href="javascript:void(0);">
+                  <a class="dropdown-item btn-edit-product" href="javascript:void(0);"
+                     data-id="{{ product.id }}"
+                     data-platform="{{ product.platform }}"
+                     data-category="{{ product.category }}"
+                     data-description="{{ product.description|default:'' }}">
                     <i class="bx bx-edit-alt me-2 text-warning"></i>수정
                   </a>
                   <div class="dropdown-divider"></div>
-                  <a class="dropdown-item text-danger" href="javascript:void(0);">
+                  <a class="dropdown-item text-danger btn-delete-product"
+                     href="javascript:void(0);"
+                     data-id="{{ product.id }}"
+                     data-name="{{ product.get_platform_display }} / {{ product.get_category_display }}">
                     <i class="bx bx-trash me-2"></i>삭제
                   </a>
                 </div>
@@ -367,6 +380,147 @@
     </form>
   </div>
 </div>
+
+<!-- 제품 수정 모달 -->
+<div class="modal fade" id="productEditModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-md" role="document">
+    <form id="productEditForm" action="{% url 'product:update_product' %}" method="POST" class="modal-content">
+      {% csrf_token %}
+      <input type="hidden" name="product_id" id="editProductId">
+      <div class="modal-header border-bottom pb-3">
+        <h5 class="modal-title fw-bold">제품 수정</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">플랫폼 <span class="text-danger">*</span></label>
+          <select name="platform" id="editProductPlatform" class="form-select" required>
+            <option value="AOS">Android</option>
+            <option value="IOS">iOS</option>
+            <option value="SERVER">Server</option>
+            <option value="MACOS">macOS</option>
+            <option value="WEB">Web</option>
+            <option value="FLUTTER">Flutter</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">카테고리 <span class="text-danger">*</span></label>
+          <select name="category" id="editProductCategory" class="form-select" required>
+            <option value="LIB">Library</option>
+            <option value="PLG">Plugin</option>
+            <option value="BND">Backend</option>
+            <option value="FND">Frontend</option>
+            <option value="MOD">Module</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">설명</label>
+          <textarea name="description" id="editProductDescription" class="form-control" rows="3"
+            placeholder="제품에 대한 간단한 설명을 입력하세요."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">취소</button>
+        <button type="submit" class="btn btn-warning" id="btn-update-product">저장</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 제품/솔루션 삭제 JS -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+  async function doDelete(url, body, successMsg) {
+    const fd = new FormData();
+    fd.append('csrfmiddlewaretoken', csrfToken);
+    for (const [k, v] of Object.entries(body)) fd.append(k, v);
+
+    try {
+      const res = await fetch(url, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (res.ok) {
+        await Swal.fire({ icon: 'success', title: '삭제 완료', text: data.message, timer: 1500, showConfirmButton: false });
+        location.reload();
+      } else {
+        Swal.fire('삭제 불가', data.error, 'error');
+      }
+    } catch (e) {
+      Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
+    }
+  }
+
+  // 제품 수정 모달 열기
+  document.querySelectorAll('.btn-edit-product').forEach(btn => {
+    btn.addEventListener('click', function () {
+      document.getElementById('editProductId').value       = this.dataset.id;
+      document.getElementById('editProductPlatform').value  = this.dataset.platform;
+      document.getElementById('editProductCategory').value  = this.dataset.category;
+      document.getElementById('editProductDescription').value = this.dataset.description;
+      new bootstrap.Modal(document.getElementById('productEditModal')).show();
+    });
+  });
+
+  // 제품 수정 폼 제출
+  document.getElementById('productEditForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-update-product');
+    btn.disabled = true;
+    const fd = new FormData(this);
+    try {
+      const res = await fetch(this.action, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (res.ok) {
+        await Swal.fire({ icon: 'success', title: '수정 완료', text: data.message, timer: 1500, showConfirmButton: false });
+        location.reload();
+      } else {
+        Swal.fire('오류', data.error, 'error');
+      }
+    } catch (e) {
+      Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // 제품 삭제
+  document.querySelectorAll('.btn-delete-product').forEach(btn => {
+    btn.addEventListener('click', async function () {
+      const result = await Swal.fire({
+        title: '제품 삭제',
+        text: `"${this.dataset.name}" 제품과 모든 패치노트가 삭제됩니다. 계속하시겠습니까?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '삭제',
+        cancelButtonText: '취소',
+        confirmButtonColor: '#d33',
+      });
+      if (result.isConfirmed) {
+        await doDelete('{% url "product:delete_product" %}', { product_id: this.dataset.id });
+      }
+    });
+  });
+
+  // 솔루션 삭제
+  document.querySelectorAll('.btn-delete-solution').forEach(btn => {
+    btn.addEventListener('click', async function () {
+      const result = await Swal.fire({
+        title: '솔루션 삭제',
+        text: `"${this.dataset.name}" 솔루션을 삭제하시겠습니까? (제품이 있으면 삭제되지 않습니다)`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '삭제',
+        cancelButtonText: '취소',
+        confirmButtonColor: '#d33',
+      });
+      if (result.isConfirmed) {
+        await doDelete('{% url "product:delete_solution" %}', { solution_id: this.dataset.id });
+      }
+    });
+  });
+});
+</script>
 
 <!-- 솔루션 아이콘 피커 JS -->
 <script>
