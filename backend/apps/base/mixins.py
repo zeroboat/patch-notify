@@ -5,7 +5,9 @@ from functools import wraps
 
 
 def get_user_role(user):
-    """사용자의 역할을 반환. 프로필이 없으면 'se' 반환."""
+    """사용자의 역할을 반환. Django superuser는 항상 admin. 프로필이 없으면 'se' 반환."""
+    if user.is_superuser:
+        return 'admin'
     try:
         return user.profile.role
     except AttributeError:
