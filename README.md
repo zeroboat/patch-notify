@@ -8,8 +8,9 @@
 
 | 기능 | 설명 |
 |------|------|
-| **패치노트 관리** | 제품별 버전/기능추가/기능개선/버그수정/특이사항 등록 |
-| **영문 자동 번역** | 패치노트 등록 시 내부 Ollama AI 서버로 한→영 번역 (백그라운드) |
+| **로그인 / 권한 관리** | Admin · Dev · SE 3단계 역할 기반 접근 제어 (RBAC) |
+| **패치노트 관리** | 제품별 버전/기능추가/기능개선/버그수정/특이사항 등록·수정·삭제 |
+| **영문 자동 번역** | 패치노트 등록·수정 시 내부 Ollama AI 서버로 한→영 번역 (백그라운드) |
 | **고객사 관리** | 고객사 정보 및 솔루션 구독 현황 관리 |
 | **구독 관리** | 고객사별 Gmail / Slack 채널 구독 설정 (주기, 최대 건수) |
 | **공문 발송** | 솔루션 선택 또는 직접 입력 방식으로 Gmail 공문 발송 |
@@ -18,10 +19,24 @@
 
 ---
 
+## 역할별 권한
+
+| 역할 | 패치노트 | 고객사/구독 | 공문 발송 | 제품 관리 |
+|------|----------|------------|----------|----------|
+| **Admin** | 읽기/쓰기/수정/삭제 | ✅ | ✅ | ✅ |
+| **Dev** | 읽기/쓰기/수정/삭제 | ❌ | ❌ | ❌ |
+| **SE** | 읽기 전용 | ✅ | ❌ | ❌ |
+
+- 최초 배포 후 `.env`의 `DJANGO_SUPERUSER_*`로 생성된 계정은 자동으로 **Admin** 권한을 가집니다.
+- 이후 일반 회원가입 계정의 기본 역할은 **SE**이며, Django Admin(`/admin/`)에서 역할을 변경할 수 있습니다.
+
+---
+
 ## 기술 스택
 
-- **Backend** Django 6.0.1 (Python)
-- **Database** PostgreSQL 16 (로컬 개발: SQLite)
+- **Backend** Django 6.0.2 (Python 3.12)
+- **Database** PostgreSQL 18
+- **Static Files** WhiteNoise (Gunicorn 환경에서 static 서빙)
 - **Email** Gmail SMTP (`EmailMultiAlternatives`)
 - **Slack** slack-bolt (OAuth 2.0, Home Tab, Block Kit)
 - **AI 번역** Ollama (내부 서버, `/api/generate`)
@@ -35,14 +50,16 @@
 patch-notify/
 ├── backend/
 │   ├── apps/
-│   │   ├── patchnote/       # 패치노트 등록 및 조회, 영문 번역
+│   │   ├── authentication/  # 로그인, 회원가입, 역할(UserProfile)
+│   │   ├── base/            # 공통 믹스인 (RoleRequiredMixin, role_required)
+│   │   ├── patchnote/       # 패치노트 등록·수정·삭제, 영문 번역
 │   │   ├── product/         # 솔루션 / 제품 관리
 │   │   ├── customer/        # 고객사 관리
 │   │   ├── notification/    # 공문 작성 및 Gmail 발송
 │   │   ├── subscriber/      # 고객사별 구독 설정 (Gmail / Slack)
 │   │   ├── slack_app/       # Slack 앱 OAuth, Home Tab, 이벤트 처리
 │   │   └── logs/            # 발송 로그 조회
-│   ├── core/                # settings, urls
+│   ├── core/                # settings, urls, context_processors
 │   └── requirements.txt
 ├── docker-compose.yml
 ├── .env.example
@@ -56,16 +73,24 @@ patch-notify/
 ### 1. 환경변수 설정
 
 ```bash
-cp .env.example dev.env
+cp .env.example .env
 ```
 
-`dev.env`를 열어 아래 항목을 채워주세요.
+`.env`를 열어 아래 항목을 채워주세요.
 
 ```env
 SECRET_KEY=...
 
-# PostgreSQL (미입력 시 SQLite 사용)
-DB_HOST=
+# 접속 허용 호스트 (localhost/127.0.0.1은 자동 포함)
+ALLOWED_HOSTS=192.168.0.100,yourdomain.com
+
+# 초기 관리자 계정 (최초 컨테이너 기동 시 자동 생성)
+DJANGO_SUPERUSER_USERNAME=admin
+DJANGO_SUPERUSER_EMAIL=admin@yourcompany.com
+DJANGO_SUPERUSER_PASSWORD=강력한패스워드!
+
+# PostgreSQL
+DB_HOST=db
 DB_NAME=patchnotify
 DB_USER=patchuser
 DB_PASSWORD=...
@@ -82,12 +107,31 @@ GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
 SLACK_CLIENT_ID=...
 SLACK_CLIENT_SECRET=...
 SLACK_SIGNING_SECRET=...
-SLACK_REDIRECT_URI=http://localhost:8000/slack/oauth/callback/
+SLACK_REDIRECT_URI=https://yourdomain.com/slack/oauth/callback/
 ```
 
-### 2. 로컬 실행
+### 2. Docker 실행
 
 ```bash
+docker compose up --build -d
+```
+
+컨테이너 기동 시 아래 작업이 자동으로 수행됩니다.
+
+1. DB 마이그레이션 (`migrate --noinput`)
+2. 초기 관리자 계정 생성 (이미 존재하면 무시)
+3. Gunicorn 서버 기동
+
+로그 확인:
+```bash
+docker compose logs -f backend
+```
+
+### 3. 로컬 개발 실행
+
+```bash
+cp .env.example dev.env   # dev.env 값 채우기
+
 cd backend
 python -m venv .venv
 source .venv/bin/activate      # Windows: .venv\Scripts\activate
@@ -96,16 +140,6 @@ pip install -r requirements.txt
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
-```
-
-### 3. Docker 실행
-
-```bash
-# .env 파일 준비 (docker-compose는 .env를 읽음)
-cp .env.example .env
-# .env 값 채우기
-
-docker compose up --build
 ```
 
 ---
