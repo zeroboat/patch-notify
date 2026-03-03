@@ -1,5 +1,6 @@
 services:
   db:
+    name: patch-db
     image: postgres:18-alpine
     environment:
       POSTGRES_DB: ${DB_NAME:-patchnotify}
@@ -17,6 +18,7 @@ services:
       retries: 5
 
   backend:
+    name: patch-web
     build: ./backend
     command: gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 2
     ports:
