@@ -52,8 +52,13 @@
             <p class="mb-0 small text-muted mt-1">{{ selected_product.description }}</p>
             {% endif %}
         </div>
-        <!-- 우측: 언어 토글 + 등록 버튼 -->
+        <!-- 우측: 검색 + 언어 토글 + 등록 버튼 -->
         <div class="d-flex align-items-center gap-2 flex-shrink-0">
+            <div class="input-group input-group-sm" style="width:200px;">
+                <span class="input-group-text bg-transparent border-end-0"><i class="bx bx-search text-muted"></i></span>
+                <input type="text" id="patchSearchInput" class="form-control border-start-0 ps-0"
+                       placeholder="버전 / 내용 검색">
+            </div>
             <div class="btn-group" role="group" id="lang-toggle">
                 <button type="button" class="btn btn-sm btn-primary active" data-lang="ko">KO</button>
                 <button type="button" class="btn btn-sm btn-outline-primary" data-lang="en">EN</button>
@@ -452,6 +457,25 @@
     </div>
 
     <script>
+        // ── 패치노트 검색 필터 ────────────────────────────────────────────────────
+        document.getElementById('patchSearchInput').addEventListener('input', function () {
+            const q = this.value.trim().toLowerCase();
+            const cards = document.querySelectorAll('#version-list a, .col-md-10 > [id^="version-"]');
+
+            document.querySelectorAll('.col-md-10 > [id^="version-"]').forEach(card => {
+                const text = card.innerText.toLowerCase();
+                const match = !q || text.includes(q);
+                card.style.display = match ? '' : 'none';
+            });
+
+            // 사이드바 링크도 동기화
+            document.querySelectorAll('#version-list a').forEach(link => {
+                const targetId = link.getAttribute('href').replace('#', '');
+                const card = document.getElementById(targetId);
+                link.style.display = (!card || card.style.display === 'none') ? 'none' : '';
+            });
+        });
+
         // ── 버전 사이드바 스크롤 ──────────────────────────────────────────────────
         document.querySelectorAll('#version-list a').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
