@@ -10,10 +10,12 @@ class UserProfile(BaseModel):
     ROLE_ADMIN = 'admin'
     ROLE_DEV = 'dev'
     ROLE_SE = 'se'
+    ROLE_GUEST = 'guest'
     ROLE_CHOICES = [
         (ROLE_ADMIN, 'Admin'),
         (ROLE_DEV, 'Dev'),
         (ROLE_SE, 'SE'),
+        (ROLE_GUEST, 'Guest'),
     ]
 
     user = models.OneToOneField(
@@ -25,7 +27,7 @@ class UserProfile(BaseModel):
     role = models.CharField(
         max_length=10,
         choices=ROLE_CHOICES,
-        default=ROLE_SE,
+        default=ROLE_GUEST,
         verbose_name='역할',
     )
 
@@ -39,6 +41,6 @@ class UserProfile(BaseModel):
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
-    """신규 User 생성 시 UserProfile 자동 생성 (기본 역할: SE)"""
+    """신규 User 생성 시 UserProfile 자동 생성 (기본 역할: Guest)"""
     if created:
         UserProfile.objects.get_or_create(user=instance)
