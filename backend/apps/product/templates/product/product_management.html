@@ -427,6 +427,18 @@
   </div>
 </div>
 
+<!-- Django 메시지 데이터 (JS 린터 오류 방지용 HTML 방식) -->
+{% if messages %}
+<div id="django-messages" hidden>
+  {% for message in messages %}
+  <span data-level="{{ message.level_tag }}" data-text="{{ message|escapejs }}"></span>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endblock content %}
+
+{% block page_js %}
 <!-- 제품/솔루션 삭제 JS -->
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -556,22 +568,21 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <!-- Django 메시지 → SweetAlert2 토스트 -->
-{% if messages %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  {% for message in messages %}
-  Swal.fire({
-    toast: true,
-    position: 'top-end',
-    icon: '{% if message.level_tag == "error" %}error{% elif message.level_tag == "success" %}success{% else %}info{% endif %}',
-    title: '{{ message }}',
-    showConfirmButton: false,
-    timer: 3500,
-    timerProgressBar: true,
+  document.querySelectorAll('#django-messages span').forEach(function (el) {
+    const level = el.dataset.level;
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: level === 'error' ? 'error' : level === 'success' ? 'success' : 'info',
+      title: el.dataset.text,
+      showConfirmButton: false,
+      timer: 3500,
+      timerProgressBar: true,
+    });
   });
-  {% endfor %}
 });
 </script>
-{% endif %}
 
-{% endblock %}
+{% endblock page_js %}
