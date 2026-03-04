@@ -32,6 +32,12 @@ DEBUG = True
 
 _extra_hosts = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "").split(",") if h.strip()]
 ALLOWED_HOSTS = ["localhost", "127.0.0.1"] + _extra_hosts
+
+# Django 4.0+: Origin 헤더 검증 — ALLOWED_HOSTS 와 동일하게 설정
+CSRF_TRUSTED_ORIGINS = (
+    [f"http://{h}" for h in ALLOWED_HOSTS]
+    + [f"https://{h}" for h in ALLOWED_HOSTS]
+)
 ENVIRONMENT = os.environ.get("DJANGO_ENVIRONMENT", default="local")
 
 
