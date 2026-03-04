@@ -38,8 +38,8 @@
 - **Backend** Django 6.0.2 (Python 3.12)
 - **Database** PostgreSQL 18
 - **Static Files** WhiteNoise (Gunicorn 환경에서 static 서빙)
-- **Email** Gmail SMTP (`EmailMultiAlternatives`)
-- **Slack** slack-bolt (OAuth 2.0, Home Tab, Block Kit)
+- **Email** Gmail SMTP (`EmailMultiAlternatives`):추후 작업 진행 예정
+- **Slack** slack-bolt (OAuth 2.0, Home Tab, Block Kit):추후 작업 진행 예정
 - **AI 번역** Ollama (내부 서버, `/api/generate`)
 - **배포** Docker Compose (backend + db)
 
