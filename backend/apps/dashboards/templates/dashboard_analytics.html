@@ -120,7 +120,7 @@
             <div>
               <div class="d-flex justify-content-between align-items-center mb-1">
                 <div class="d-flex align-items-center gap-2">
-                  <i class="bx bx-{{ solution.icon|default:'bx-layer' }} text-primary"></i>
+                  <i class="bx {{ solution.icon|default:'bx-layer' }} text-primary"></i>
                   <span class="fw-medium small">{{ solution.name }}</span>
                 </div>
                 <span class="badge bg-label-primary">{{ count }}개사</span>
@@ -160,7 +160,7 @@
               <div class="d-flex justify-content-between align-items-start">
                 <div>
                   <div class="d-flex align-items-center gap-2 mb-1">
-                    <i class="bx bx-{{ patch.product.solution.icon|default:'bx-layer' }} text-primary small"></i>
+                    <i class="bx {{ patch.product.solution.icon|default:'bx-layer' }} text-primary small"></i>
                     <span class="small text-muted">{{ patch.product.solution.name }}</span>
                     <span class="text-muted small">·</span>
                     <span class="small text-muted">{{ patch.product.get_platform_display }}</span>

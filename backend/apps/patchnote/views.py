@@ -1,5 +1,4 @@
-import html as html_module
-from html.parser import HTMLParser
+import re
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
@@ -25,10 +24,7 @@ class PatchNoteDetailView(LoginRequiredMixin, TemplateView):
         product = get_object_or_404(Product, id=product_id)
 
         patch_notes = PatchNote.objects.filter(product=product).prefetch_related(
-            'features__children',
-            'improvements__children',
-            'bugfixes__children',
-            'remarks__children'
+            'features', 'improvements', 'bugfixes', 'remarks'
         ).order_by('-release_date', '-version')
 
         context.update({
@@ -39,71 +35,29 @@ class PatchNoteDetailView(LoginRequiredMixin, TemplateView):
 
 
 # ──────────────────────────────────────────────
-# CKEditor HTML → (text, depth) 파서
+# 헬퍼: 섹션 HTML 저장 / 조회
 # ──────────────────────────────────────────────
 
-class _ListItemParser(HTMLParser):
-    """CKEditor <ul><li> HTML을 (text, depth) 목록으로 파싱"""
-
-    def __init__(self):
-        super().__init__()
-        self.items = []
-        self._stack = []   # {'text_parts': [], 'depth': int, 'capture': bool}
-        self._depth = 0
-
-    def handle_starttag(self, tag, _attrs):
-        if tag in ('ul', 'ol'):
-            self._depth += 1
-            # 중첩 리스트 진입 시 부모 <li> 텍스트 캡처 중단
-            if self._stack:
-                self._stack[-1]['capture'] = False
-        elif tag == 'li':
-            self._stack.append({'text_parts': [], 'depth': self._depth, 'capture': True})
-
-    def handle_endtag(self, tag):
-        if tag in ('ul', 'ol'):
-            self._depth -= 1
-        elif tag == 'li':
-            if self._stack:
-                item = self._stack.pop()
-                text = html_module.unescape(''.join(item['text_parts']))
-                text = text.replace('\xa0', ' ').strip()
-                if text:
-                    self.items.append({'text': text, 'depth': item['depth']})
-
-    def handle_data(self, data):
-        if self._stack and self._stack[-1]['capture']:
-            self._stack[-1]['text_parts'].append(data)
+def _save_section(patch_note, html, model_class):
+    """CKEditor HTML을 섹션당 1개 레코드로 저장 (실제 텍스트 없으면 건너뜀)"""
+    html = (html or '').strip()
+    if not html:
+        return
+    # <p> 태그 제거 (내용은 유지)
+    html = re.sub(r'<p[^>]*>', '', html)
+    html = re.sub(r'</p>', '', html)
+    html = html.strip()
+    # 태그 제거 후 텍스트가 없으면 저장 안 함 (CKEditor 빈 출력: <p>&nbsp;</p> 등)
+    text_only = re.sub(r'<[^>]+>', '', html).replace('\xa0', '').strip()
+    if not text_only:
+        return
+    model_class.objects.create(patch_note=patch_note, content=html, order=0)
 
 
-def _parse_list_html(html_content):
-    """CKEditor HTML 문자열 → [{'text': str, 'depth': int}] 반환"""
-    if not html_content or not html_content.strip():
-        return []
-    parser = _ListItemParser()
-    parser.feed(html_content)
-    return parser.items
-
-
-def _create_items(patch_note, items, model_class):
-    """파싱된 항목을 계층 구조로 DB에 저장 (depth 1 = 부모, depth 2+ = 자식)"""
-    last_parent = None
-    for order, item in enumerate(items):
-        if item['depth'] == 1:
-            obj = model_class.objects.create(
-                patch_note=patch_note,
-                content=item['text'],
-                order=order,
-                parent=None,
-            )
-            last_parent = obj
-        else:
-            model_class.objects.create(
-                patch_note=patch_note,
-                content=item['text'],
-                order=order,
-                parent=last_parent,
-            )
+def _get_section_html(manager):
+    """섹션의 저장된 HTML 반환 (수정 모달용)"""
+    obj = manager.filter(parent__isnull=True).order_by('order', 'id').first()
+    return obj.content if obj else ''
 
 
 # ──────────────────────────────────────────────
@@ -123,7 +77,6 @@ def patch_note_append(request):
         bug_fixes_html     = request.POST.get('bug_fixes', '')
         special_notes_html = request.POST.get('special_notes', '')
 
-        # ── 필수 값 검증 ──
         if not product_id:
             return JsonResponse({'error': '제품 정보가 누락되었습니다.'}, status=400)
         if not version:
@@ -131,13 +84,11 @@ def patch_note_append(request):
         if not patch_date:
             return JsonResponse({'error': '배포 날짜를 입력해주세요.'}, status=400)
 
-        # ── 제품 조회 ──
         try:
             product = Product.objects.get(id=product_id)
         except Product.DoesNotExist:
             return JsonResponse({'error': '제품을 찾을 수 없습니다.'}, status=400)
 
-        # ── PatchNote 생성 (중복 버전 차단) ──
         patch_note, created = PatchNote.objects.get_or_create(
             product=product,
             version=version,
@@ -149,46 +100,17 @@ def patch_note_append(request):
                 status=400,
             )
 
-        # ── 각 섹션 파싱 & 저장 ──
-        _create_items(patch_note, _parse_list_html(new_features_html),  Feature)
-        _create_items(patch_note, _parse_list_html(improvements_html),  Improvement)
-        _create_items(patch_note, _parse_list_html(bug_fixes_html),     BugFix)
-        _create_items(patch_note, _parse_list_html(special_notes_html), Remark)
+        _save_section(patch_note, new_features_html,  Feature)
+        _save_section(patch_note, improvements_html,  Improvement)
+        _save_section(patch_note, bug_fixes_html,     BugFix)
+        _save_section(patch_note, special_notes_html, Remark)
 
-        # ── 백그라운드 영문 번역 시작 ──
         start_translation(patch_note.id)
 
         return JsonResponse({'message': '패치노트가 등록되었습니다.', 'patch_note_id': patch_note.id})
 
     except Exception as e:
         return JsonResponse({'error': f'서버 오류: {str(e)}'}, status=500)
-
-
-# ──────────────────────────────────────────────
-# 헬퍼: DB 아이템 → CKEditor HTML
-# ──────────────────────────────────────────────
-
-def _items_to_html(manager):
-    """DB RelatedManager (parent/children FK tree) -> CKEditor <ul> HTML string"""
-    parents = list(
-        manager.filter(parent__isnull=True)
-        .prefetch_related('children')
-        .order_by('order', 'id')
-    )
-    if not parents:
-        return ''
-    parts = ['<ul>']
-    for parent in parents:
-        parts.append(f'<li>{html_module.escape(parent.content)}')
-        children = list(parent.children.all().order_by('order', 'id'))
-        if children:
-            parts.append('<ul>')
-            for child in children:
-                parts.append(f'<li>{html_module.escape(child.content)}</li>')
-            parts.append('</ul>')
-        parts.append('</li>')
-    parts.append('</ul>')
-    return ''.join(parts)
 
 
 # ──────────────────────────────────────────────
@@ -200,10 +122,7 @@ def _items_to_html(manager):
 def get_patch_note_data(request, patch_note_id):
     try:
         note = PatchNote.objects.prefetch_related(
-            'features__children',
-            'improvements__children',
-            'bugfixes__children',
-            'remarks__children',
+            'features', 'improvements', 'bugfixes', 'remarks',
         ).get(id=patch_note_id)
     except PatchNote.DoesNotExist:
         return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
@@ -212,10 +131,10 @@ def get_patch_note_data(request, patch_note_id):
         'id': note.id,
         'version': note.version,
         'release_date': str(note.release_date),
-        'features_html': _items_to_html(note.features),
-        'improvements_html': _items_to_html(note.improvements),
-        'bugfixes_html': _items_to_html(note.bugfixes),
-        'remarks_html': _items_to_html(note.remarks),
+        'features_html':     _get_section_html(note.features),
+        'improvements_html': _get_section_html(note.improvements),
+        'bugfixes_html':     _get_section_html(note.bugfixes),
+        'remarks_html':      _get_section_html(note.remarks),
     })
 
 
@@ -227,9 +146,9 @@ def get_patch_note_data(request, patch_note_id):
 @role_required('dev')
 def patch_note_update(request):
     try:
-        patch_note_id   = request.POST.get('patch_note_id', '').strip()
-        version         = request.POST.get('version', '').strip()
-        patch_date      = request.POST.get('patch_date', '').strip()
+        patch_note_id      = request.POST.get('patch_note_id', '').strip()
+        version            = request.POST.get('version', '').strip()
+        patch_date         = request.POST.get('patch_date', '').strip()
 
         new_features_html  = request.POST.get('new_features', '')
         improvements_html  = request.POST.get('improvements', '')
@@ -248,7 +167,6 @@ def patch_note_update(request):
         except PatchNote.DoesNotExist:
             return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
 
-        # 동일 제품에서 버전 중복 체크 (자기 자신 제외)
         if PatchNote.objects.filter(product=note.product, version=version).exclude(id=note.id).exists():
             return JsonResponse({'error': f'버전 {version}은 이미 등록되어 있습니다.'}, status=400)
 
@@ -256,16 +174,15 @@ def patch_note_update(request):
         note.release_date = patch_date
         note.save()
 
-        # 기존 항목 전체 삭제 후 재생성
         note.features.all().delete()
         note.improvements.all().delete()
         note.bugfixes.all().delete()
         note.remarks.all().delete()
 
-        _create_items(note, _parse_list_html(new_features_html),  Feature)
-        _create_items(note, _parse_list_html(improvements_html),  Improvement)
-        _create_items(note, _parse_list_html(bug_fixes_html),     BugFix)
-        _create_items(note, _parse_list_html(special_notes_html), Remark)
+        _save_section(note, new_features_html,  Feature)
+        _save_section(note, improvements_html,  Improvement)
+        _save_section(note, bug_fixes_html,     BugFix)
+        _save_section(note, special_notes_html, Remark)
 
         start_translation(note.id)
 
