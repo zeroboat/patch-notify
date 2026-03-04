@@ -15,9 +15,7 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 _PROMPT_TEMPLATE = (
-    "You are a technical translator. "
-    "Translate the following Korean IT patch note item into natural English. "
-    "Return only the translated text, no explanations.\n\n"
+    "아래 내용은 HTML 형식이야. HTML 태그와 속성은 수정하지 말고 원문 그대로 유지하면서 한글 텍스트만 영어로 번역해줘.\n\n"
     "{text}"
 )
 

@@ -311,128 +311,68 @@
                     </div>
                     <div class="card-body px-4 py-3">
 
-                        {% if note.features.all %}
+                        {% with feat=note.features.first %}
+                        {% if feat %}
                         <div class="patch-section border-start border-3 border-success ps-3 mb-4">
                             <div class="d-flex align-items-center gap-2 mb-2">
                                 <span class="fw-bold text-success small text-uppercase">🚀 기능 추가</span>
                             </div>
-                            <ul class="mb-0 ps-3">
-                                {% for item in note.features.all %}
-                                    {% if not item.parent %}
-                                    <li class="py-1 lh-base">
-                                        <span class="fw-medium lang-ko">{{ item.content }}</span>
-                                        <span class="fw-medium lang-en d-none">
-                                            {% if item.content_en %}{{ item.content_en }}{% else %}<span class="text-muted fst-italic">{{ item.content }} <span class="badge bg-label-warning ms-1" style="font-size:0.65rem;">번역 중</span></span>{% endif %}
-                                        </span>
-                                        {% if item.children.all %}
-                                        <ul class="mt-1 ps-3">
-                                            {% for child in item.children.all %}
-                                            <li class="text-muted small py-1">
-                                                <span class="lang-ko">{{ child.content }}</span>
-                                                <span class="lang-en d-none">{% if child.content_en %}{{ child.content_en }}{% else %}<span class="fst-italic">{{ child.content }} <span class="badge bg-label-warning" style="font-size:0.6rem;">번역 중</span></span>{% endif %}</span>
-                                            </li>
-                                            {% endfor %}
-                                        </ul>
-                                        {% endif %}
-                                    </li>
-                                    {% endif %}
-                                {% endfor %}
-                            </ul>
+                            <div class="patch-html-body lang-ko">{{ feat.content|safe }}</div>
+                            <div class="patch-html-body lang-en d-none">
+                                {% if feat.content_en %}{{ feat.content_en|safe }}
+                                {% else %}{{ feat.content|safe }}<span class="badge bg-label-warning ms-2" style="font-size:0.65rem;">번역 중</span>{% endif %}
+                            </div>
                         </div>
                         {% endif %}
+                        {% endwith %}
 
-                        {% if note.improvements.all %}
-                        {% if note.features.all %}<hr class="my-3 opacity-25">{% endif %}
+                        {% with impr=note.improvements.first %}
+                        {% if impr %}
+                        {% if note.features.exists %}<hr class="my-3 opacity-25">{% endif %}
                         <div class="patch-section border-start border-3 border-info ps-3 mb-4">
                             <div class="d-flex align-items-center gap-2 mb-2">
                                 <span class="fw-bold text-info small text-uppercase">🛠️ 기능 개선</span>
                             </div>
-                            <ul class="mb-0 ps-3">
-                                {% for item in note.improvements.all %}
-                                    {% if not item.parent %}
-                                    <li class="py-1 lh-base">
-                                        <span class="fw-medium lang-ko">{{ item.content }}</span>
-                                        <span class="fw-medium lang-en d-none">
-                                            {% if item.content_en %}{{ item.content_en }}{% else %}<span class="text-muted fst-italic">{{ item.content }} <span class="badge bg-label-warning ms-1" style="font-size:0.65rem;">번역 중</span></span>{% endif %}
-                                        </span>
-                                        {% if item.children.all %}
-                                        <ul class="mt-1 ps-3">
-                                            {% for child in item.children.all %}
-                                            <li class="text-muted small py-1">
-                                                <span class="lang-ko">{{ child.content }}</span>
-                                                <span class="lang-en d-none">{% if child.content_en %}{{ child.content_en }}{% else %}<span class="fst-italic">{{ child.content }} <span class="badge bg-label-warning" style="font-size:0.6rem;">번역 중</span></span>{% endif %}</span>
-                                            </li>
-                                            {% endfor %}
-                                        </ul>
-                                        {% endif %}
-                                    </li>
-                                    {% endif %}
-                                {% endfor %}
-                            </ul>
+                            <div class="patch-html-body lang-ko">{{ impr.content|safe }}</div>
+                            <div class="patch-html-body lang-en d-none">
+                                {% if impr.content_en %}{{ impr.content_en|safe }}
+                                {% else %}{{ impr.content|safe }}<span class="badge bg-label-warning ms-2" style="font-size:0.65rem;">번역 중</span>{% endif %}
+                            </div>
                         </div>
                         {% endif %}
+                        {% endwith %}
 
-                        {% if note.bugfixes.all %}
-                        {% if note.features.all or note.improvements.all %}<hr class="my-3 opacity-25">{% endif %}
+                        {% with bugf=note.bugfixes.first %}
+                        {% if bugf %}
+                        {% if note.features.exists or note.improvements.exists %}<hr class="my-3 opacity-25">{% endif %}
                         <div class="patch-section border-start border-3 border-danger ps-3 mb-4">
                             <div class="d-flex align-items-center gap-2 mb-2">
                                 <span class="fw-bold text-danger small text-uppercase">🐛 버그 수정</span>
                             </div>
-                            <ul class="mb-0 ps-3">
-                                {% for item in note.bugfixes.all %}
-                                    {% if not item.parent %}
-                                    <li class="py-1 lh-base">
-                                        <span class="fw-medium lang-ko">{{ item.content }}</span>
-                                        <span class="fw-medium lang-en d-none">
-                                            {% if item.content_en %}{{ item.content_en }}{% else %}<span class="text-muted fst-italic">{{ item.content }} <span class="badge bg-label-warning ms-1" style="font-size:0.65rem;">번역 중</span></span>{% endif %}
-                                        </span>
-                                        {% if item.children.all %}
-                                        <ul class="mt-1 ps-3">
-                                            {% for child in item.children.all %}
-                                            <li class="text-muted small py-1">
-                                                <span class="lang-ko">{{ child.content }}</span>
-                                                <span class="lang-en d-none">{% if child.content_en %}{{ child.content_en }}{% else %}<span class="fst-italic">{{ child.content }} <span class="badge bg-label-warning" style="font-size:0.6rem;">번역 중</span></span>{% endif %}</span>
-                                            </li>
-                                            {% endfor %}
-                                        </ul>
-                                        {% endif %}
-                                    </li>
-                                    {% endif %}
-                                {% endfor %}
-                            </ul>
+                            <div class="patch-html-body lang-ko">{{ bugf.content|safe }}</div>
+                            <div class="patch-html-body lang-en d-none">
+                                {% if bugf.content_en %}{{ bugf.content_en|safe }}
+                                {% else %}{{ bugf.content|safe }}<span class="badge bg-label-warning ms-2" style="font-size:0.65rem;">번역 중</span>{% endif %}
+                            </div>
                         </div>
                         {% endif %}
+                        {% endwith %}
 
-                        {% if note.remarks.all %}
-                        {% if note.features.all or note.improvements.all or note.bugfixes.all %}<hr class="my-3 opacity-25">{% endif %}
+                        {% with remk=note.remarks.first %}
+                        {% if remk %}
+                        {% if note.features.exists or note.improvements.exists or note.bugfixes.exists %}<hr class="my-3 opacity-25">{% endif %}
                         <div class="patch-section border-start border-3 border-warning ps-3 mb-4">
                             <div class="d-flex align-items-center gap-2 mb-2">
                                 <span class="fw-bold text-warning small text-uppercase">📝 특이 사항</span>
                             </div>
-                            <ul class="mb-0 ps-3">
-                                {% for item in note.remarks.all %}
-                                    {% if not item.parent %}
-                                    <li class="py-1 lh-base">
-                                        <span class="fw-medium lang-ko">{{ item.content }}</span>
-                                        <span class="fw-medium lang-en d-none">
-                                            {% if item.content_en %}{{ item.content_en }}{% else %}<span class="text-muted fst-italic">{{ item.content }} <span class="badge bg-label-warning ms-1" style="font-size:0.65rem;">번역 중</span></span>{% endif %}
-                                        </span>
-                                        {% if item.children.all %}
-                                        <ul class="mt-1 ps-3">
-                                            {% for child in item.children.all %}
-                                            <li class="text-muted small py-1">
-                                                <span class="lang-ko">{{ child.content }}</span>
-                                                <span class="lang-en d-none">{% if child.content_en %}{{ child.content_en }}{% else %}<span class="fst-italic">{{ child.content }} <span class="badge bg-label-warning" style="font-size:0.6rem;">번역 중</span></span>{% endif %}</span>
-                                            </li>
-                                            {% endfor %}
-                                        </ul>
-                                        {% endif %}
-                                    </li>
-                                    {% endif %}
-                                {% endfor %}
-                            </ul>
+                            <div class="patch-html-body lang-ko">{{ remk.content|safe }}</div>
+                            <div class="patch-html-body lang-en d-none">
+                                {% if remk.content_en %}{{ remk.content_en|safe }}
+                                {% else %}{{ remk.content|safe }}<span class="badge bg-label-warning ms-2" style="font-size:0.65rem;">번역 중</span>{% endif %}
+                            </div>
                         </div>
                         {% endif %}
+                        {% endwith %}
 
                     </div>
                 </div>
