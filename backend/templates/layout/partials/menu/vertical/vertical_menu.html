@@ -60,6 +60,7 @@
             </li>
         {% endfor %}
 
+        {% if user_role != 'guest' %}
         <li class="menu-header small text-uppercase">
             <span class="menu-header-text">Notification</span>
         </li>
@@ -93,6 +94,7 @@
             </a>
         </li>
         {% endif %}
+        {% endif %}{# end user_role != 'guest' #}
 
     </ul>
 
