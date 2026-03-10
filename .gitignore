@@ -276,3 +276,5 @@ pyrightconfig.json
 test*
 test/*
 *.env
+
+patchnote-converter/

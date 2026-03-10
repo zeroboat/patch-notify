@@ -43,12 +43,14 @@ def _save_section(patch_note, html, model_class):
     html = (html or '').strip()
     if not html:
         return
+    # 내용이 없는 <p> 태그 먼저 제거 (<p>&nbsp;</p>, <p><br></p> 등)
+    html = re.sub(r'<p[^>]*>(\s|&nbsp;|<br\s*/?>)*</p>', '', html)
     # <p> 태그 제거 (내용은 유지)
     html = re.sub(r'<p[^>]*>', '', html)
     html = re.sub(r'</p>', '', html)
     html = html.strip()
-    # 태그 제거 후 텍스트가 없으면 저장 안 함 (CKEditor 빈 출력: <p>&nbsp;</p> 등)
-    text_only = re.sub(r'<[^>]+>', '', html).replace('\xa0', '').strip()
+    # 태그 제거 후 텍스트가 없으면 저장 안 함 (&nbsp; 엔티티 문자열도 함께 처리)
+    text_only = re.sub(r'<[^>]+>', '', html).replace('\xa0', '').replace('&nbsp;', '').strip()
     if not text_only:
         return
     model_class.objects.create(patch_note=patch_note, content=html, order=0)
@@ -67,6 +69,7 @@ def _get_section_html(manager):
 @require_POST
 @role_required('dev')
 def patch_note_append(request):
+    print(request.POST)  # 디버깅용 로그
     try:
         product_id  = request.POST.get('product_id', '').strip()
         version     = request.POST.get('version', '').strip()
