@@ -267,16 +267,16 @@
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-md-2 d-none d-md-block">
+    <div class="row flex-nowrap">
+        <div class="d-none d-md-block flex-shrink-0" style="width: 170px;">
             <div class="card sticky-top" style="top: 100px; z-index: 10;">
-                <div class="card-body">
-                    <h6 class="text-muted small text-uppercase mb-3">Versions</h6>
-                    <nav id="version-list" class="nav flex-column nav-pills">
+                <div class="card-body px-0 py-3">
+                    <h6 class="text-muted small text-uppercase mb-3 ps-2">Versions</h6>
+                    <nav id="version-list" class="nav flex-column nav-pills" style="max-height: calc(100vh - 200px); overflow-y: auto;">
                         {% for note in patch_notes %}
-                            <a class="nav-link mb-1 {% if forloop.first %}active{% endif %}"
+                            <a class="nav-link mb-0 py-1 ps-2 pe-1 text-start small {% if forloop.first %}active{% endif %}"
                                href="#version-{{ note.version|slugify }}">
-                                <i class="bx bx-subdirectory-right me-2"></i> {{ note.version }}
+                                - {{ note.version }}
                             </a>
                         {% endfor %}
                     </nav>
@@ -284,8 +284,7 @@
             </div>
         </div>
 
-
-        <div class="col-md-10">
+        <div class="col">
             {% for note in patch_notes %}
                 <div id="version-{{ note.version|slugify }}" class="card mb-4 shadow-none border">
                     <div class="card-header d-flex justify-content-between align-items-center py-3">
@@ -400,9 +399,7 @@
         // ── 패치노트 검색 필터 ────────────────────────────────────────────────────
         document.getElementById('patchSearchInput').addEventListener('input', function () {
             const q = this.value.trim().toLowerCase();
-            const cards = document.querySelectorAll('#version-list a, .col-md-10 > [id^="version-"]');
-
-            document.querySelectorAll('.col-md-10 > [id^="version-"]').forEach(card => {
+            document.querySelectorAll('.col > [id^="version-"]').forEach(card => {
                 const text = card.innerText.toLowerCase();
                 const match = !q || text.includes(q);
                 card.style.display = match ? '' : 'none';
@@ -612,5 +609,22 @@
                 }
             });
         });
+    </script>
+
+    <!-- 최상단 이동 버튼 -->
+    <button id="btn-scroll-top" class="btn btn-primary btn-icon rounded-circle shadow"
+            style="position:fixed; bottom:2rem; right:2rem; display:none; z-index:1090; width:42px; height:42px;">
+        <i class="bx bx-chevron-up"></i>
+    </button>
+    <script>
+    (function() {
+        const btn = document.getElementById('btn-scroll-top');
+        window.addEventListener('scroll', function() {
+            btn.style.display = window.scrollY > 300 ? '' : 'none';
+        });
+        btn.addEventListener('click', function() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    })();
     </script>
 {% endblock %}
