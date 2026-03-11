@@ -12,10 +12,10 @@ async function initCKEditor(selector) {
 
             // 핵심: 코드 블록과 자동 포맷 플러그인을 로드합니다.
             plugins: [
-                'Essentials', 'Paragraph', 'Bold', 'Link', 'Code', 'List', 'Autoformat'
+                'Essentials', 'Paragraph', 'Bold', 'Link', 'Code', 'CodeBlock', 'List', 'Autoformat'
             ],
             initialData: '<ul><li>&nbsp;</li></ul>',
-            placeholder: '패치 내용을 작성해 주세요. \n ( Ctrl + B : Bold, - + Space : Bullet, ` 코드 ` : Inline Code)'
+            placeholder: '패치 내용을 작성해 주세요.\n( Ctrl+B: Bold  |  - + Space: Bullet  |  `코드`: Inline Code  |  ``` + Enter: Code Block )'
         });
 
         return editor;

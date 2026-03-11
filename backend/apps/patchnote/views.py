@@ -44,9 +44,9 @@ def _save_section(patch_note, html, model_class):
     if not html:
         return
     # 내용이 없는 <p> 태그 먼저 제거 (<p>&nbsp;</p>, <p><br></p> 등)
-    html = re.sub(r'<p[^>]*>(\s|&nbsp;|<br\s*/?>)*</p>', '', html)
-    # <p> 태그 제거 (내용은 유지)
-    html = re.sub(r'<p[^>]*>', '', html)
+    html = re.sub(r'<p(?=\s|>)[^>]*>(\s|&nbsp;|<br\s*/?>)*</p>', '', html)
+    # <p> 태그 제거 (내용은 유지, <pre> 등은 건드리지 않음)
+    html = re.sub(r'<p(?=\s|>)[^>]*>', '', html)
     html = re.sub(r'</p>', '', html)
     html = html.strip()
     # 태그 제거 후 텍스트가 없으면 저장 안 함 (&nbsp; 엔티티 문자열도 함께 처리)

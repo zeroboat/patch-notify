@@ -36,3 +36,34 @@
 .editor-wrapper {
     margin-top: 2rem !important;
 }
+
+/* ── 코드 블록 스타일 (에디터 내 + 패치노트 렌더링) ─────────────────── */
+.ck-editor__editable pre,
+.patch-html-body pre {
+    background: #1e1e2e;
+    border-radius: 0.375rem;
+    padding: 1rem 1.25rem;
+    margin: 0.75rem 0;
+    overflow-x: auto;
+}
+
+.ck-editor__editable pre code,
+.patch-html-body pre code {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.875rem;
+    color: #cdd6f4;
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+}
+
+/* 인라인 코드 */
+.ck-editor__editable code:not(pre code),
+.patch-html-body code:not(pre code) {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.85em;
+    color: #d63384;
+    background: rgba(214, 51, 132, 0.08);
+    padding: 0.15em 0.4em;
+    border-radius: 0.25rem;
+}
