@@ -7,9 +7,10 @@ from django.views.generic import TemplateView
 
 from web_project import TemplateLayout
 from apps.base.mixins import RoleRequiredMixin, role_required
+from apps.patchnote.models import PatchNote
 from apps.product.models import Product
 from .models import NotionPageMapping
-from .services import sync_product
+from .services import sync_product, push_patch_note_to_notion
 
 logger = logging.getLogger(__name__)
 
@@ -141,3 +142,33 @@ def notion_sync(request):
     except Exception as e:
         logger.exception(f'Notion 동기화 실패 (product_id={product_id})')
         return JsonResponse({'error': f'동기화 실패: {str(e)}'}, status=500)
+
+
+# ──────────────────────────────────────────────
+# Notion Push API (DB → Notion)
+# ──────────────────────────────────────────────
+
+@require_POST
+@role_required('dev')
+def notion_push(request):
+    """특정 패치노트를 Notion에 push"""
+    if not settings.NOTION_ENABLED:
+        return JsonResponse({'error': 'Notion 연동이 비활성화되어 있습니다.'}, status=400)
+
+    patch_note_id = request.POST.get('patch_note_id', '').strip()
+    is_new = request.POST.get('is_new', 'true').lower() in ('true', '1', 'yes')
+
+    if not patch_note_id:
+        return JsonResponse({'error': '패치노트 ID가 누락되었습니다.'}, status=400)
+
+    try:
+        patch_note = PatchNote.objects.select_related('product').get(id=patch_note_id)
+    except PatchNote.DoesNotExist:
+        return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
+
+    try:
+        push_patch_note_to_notion(patch_note, is_new=is_new)
+        return JsonResponse({'message': f'v{patch_note.version} Notion push 완료'})
+    except Exception as e:
+        logger.exception(f'Notion push 실패 (patch_note_id={patch_note_id})')
+        return JsonResponse({'error': f'Push 실패: {str(e)}'}, status=500)

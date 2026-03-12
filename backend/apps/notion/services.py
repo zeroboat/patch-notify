@@ -15,7 +15,7 @@ from .models import NotionPageMapping
 
 logger = logging.getLogger(__name__)
 
-NOTION_API_VERSION = '2025-09-03'
+NOTION_API_VERSION = '2026-03-11'
 
 # ──────────────────────────────────────────────
 # 섹션명 → 키 매핑
@@ -100,6 +100,7 @@ def _clean_notion_md(md: str) -> str:
     md = '\n'.join(lines)
 
     md = md.replace('<br>', '\n')
+    md = md.replace('&nbsp;', ' ')
     md = re.sub(r'^<span[^>]*>(.*?)</span>', r'# \1', md, count=1)
     md = re.sub(r'<span[^>]*>(.*?)</span>', r'\1', md)
 
@@ -119,7 +120,7 @@ def _clean_notion_md(md: str) -> str:
     def replace_code_open(m):
         return f'```{lang_map.get(m.group(1), m.group(1))}\n'
     md = re.sub(
-        r'^`{{1,3}}(' + '|'.join(re.escape(k) for k in lang_map) + r')\n',
+        r'^`{1,3}(' + '|'.join(re.escape(k) for k in lang_map) + r')\n',
         replace_code_open, md, flags=re.MULTILINE,
     )
     md = re.sub(r'^`{1,2}$', '```', md, flags=re.MULTILINE)
@@ -273,7 +274,7 @@ def parse_md_to_patch_notes(md: str) -> list[dict]:
         date_match = re.search(r'(?:RELEASE\s+)?DATE\s*:\s*(\d{4}-\d{2}-\d{2})', block)
         patch_date = date_match.group(1) if date_match else ''
 
-        code_match = re.search(r'```\n(.*?)```', block, re.DOTALL)
+        code_match = re.search(r'```[^\n]*\n(.*?)```', block, re.DOTALL)
         sections = _parse_code_block(code_match.group(1)) if code_match else {
             'new_features': '', 'improvements': '', 'bug_fixes': ''
         }
@@ -383,3 +384,226 @@ def sync_product(mapping: NotionPageMapping, version: str = None) -> dict:
         _save_section(patch_note, note_data.get('special_notes'), en.get('special_notes'), Remark)
 
     return stats
+
+
+# ──────────────────────────────────────────────
+# 6. HTML → Markdown 역변환
+# ──────────────────────────────────────────────
+
+def _html_to_md_inline(html: str) -> str:
+    """인라인 HTML 태그를 마크다운으로 역변환"""
+    # <strong> → **
+    html = re.sub(r'<strong>(.*?)</strong>', r'**\1**', html)
+    # <code> (인라인) → `
+    html = re.sub(r'<code>(.*?)</code>', r'`\1`', html)
+    # <a href="url">text</a> → [text](url)
+    html = re.sub(r'<a\s+href="([^"]*)"[^>]*>(.*?)</a>', r'[\2](\1)', html)
+    return html
+
+
+def _html_to_md_bullets(html: str, indent: int = 0) -> str:
+    """<ul><li> 구조를 마크다운 bullet 리스트로 역변환"""
+    if not html or not html.strip():
+        return ''
+
+    lines = []
+    prefix = '  ' * indent
+
+    # <pre><code>...</code></pre> 블록을 플레이스홀더로 보호
+    code_blocks = []
+    def save_code(m):
+        code_blocks.append(m.group(1))
+        return f'__CODE_BLOCK_{len(code_blocks) - 1}__'
+    html = re.sub(r'<pre><code[^>]*>([\s\S]*?)</code></pre>', save_code, html)
+
+    # 중첩 <ul>을 분리하기 위해 단계별 처리
+    # 먼저 최외곽 <ul> 제거
+    inner = re.sub(r'^<ul>([\s\S]*)</ul>$', r'\1', html.strip())
+
+    # <li> 단위로 분리 (중첩 고려)
+    items = _split_li_items(inner)
+
+    for item_html in items:
+        # 하위 <ul> 분리
+        sub_match = re.search(r'<ul>([\s\S]*)</ul>', item_html)
+        if sub_match:
+            text_part = item_html[:sub_match.start()].strip()
+            sub_html = '<ul>' + sub_match.group(1) + '</ul>'
+        else:
+            text_part = item_html.strip()
+            sub_html = ''
+
+        # 코드 블록 플레이스홀더 복원 (bullet 텍스트 내)
+        for idx, code in enumerate(code_blocks):
+            placeholder = f'__CODE_BLOCK_{idx}__'
+            if placeholder in text_part:
+                text_part = text_part.replace(placeholder, '')
+                # 코드 블록은 bullet 아래에 별도 줄로
+                text_md = _html_to_md_inline(text_part)
+                lines.append(f'{prefix}- {text_md}')
+                lines.append(f'{prefix}  ```')
+                for code_line in code.strip().split('\n'):
+                    lines.append(f'{prefix}  {code_line}')
+                lines.append(f'{prefix}  ```')
+                if sub_html:
+                    lines.append(_html_to_md_bullets(sub_html, indent + 1))
+                break
+        else:
+            text_md = _html_to_md_inline(text_part)
+            if text_md.strip():
+                lines.append(f'{prefix}- {text_md}')
+            if sub_html:
+                lines.append(_html_to_md_bullets(sub_html, indent + 1))
+
+    return '\n'.join(lines)
+
+
+def _split_li_items(inner_html: str) -> list[str]:
+    """<li>...</li> 항목을 중첩 태그를 고려하여 분리"""
+    items = []
+    depth = 0
+    current = []
+    # <li> 와 </li> 기준으로 분리
+    parts = re.split(r'(</?li>|</?ul>)', inner_html)
+
+    in_item = False
+    for part in parts:
+        if part == '<li>':
+            if depth == 0:
+                in_item = True
+                current = []
+            else:
+                current.append(part)
+            depth += 1
+        elif part == '</li>':
+            depth -= 1
+            if depth == 0:
+                items.append(''.join(current))
+                in_item = False
+            else:
+                current.append(part)
+        elif in_item:
+            current.append(part)
+
+    return items
+
+
+def _section_to_md_bullets(manager) -> str:
+    """DB 섹션 매니저에서 HTML을 가져와 MD bullet로 변환"""
+    obj = manager.filter(parent__isnull=True).order_by('order', 'id').first()
+    if not obj or not obj.content.strip():
+        return '- N/A'
+    return _html_to_md_bullets(obj.content) or '- N/A'
+
+
+def patch_note_to_md(patch_note: PatchNote) -> str:
+    """PatchNote 인스턴스를 Notion 원본 MD 형식으로 변환 (push용)"""
+    features_md = _section_to_md_bullets(patch_note.features)
+    improvements_md = _section_to_md_bullets(patch_note.improvements)
+    bugfixes_md = _section_to_md_bullets(patch_note.bugfixes)
+    remarks_md = _section_to_md_bullets(patch_note.remarks)
+
+    # remarks 각 줄에 탭 프리픽스
+    remarks_tabbed = '\n'.join(
+        '\t\t' + line if line.strip() else line
+        for line in remarks_md.split('\n')
+    )
+
+    lines = [
+        f'\t\t## <span color="green_bg">{patch_note.version} </span>',
+        f'\t\tDATE : {patch_note.release_date}',
+        '\t\t**\\[*Patch notes*\\]**',
+        '\t\t```plain text',
+        '기능 추가',
+        features_md,
+        '',
+        '기능 개선',
+        improvements_md,
+        '',
+        '버그 수정',
+        bugfixes_md,
+        '\t\t```',
+        '\t\t**\\[*Remarks*\\]**',
+        remarks_tabbed,
+        '\t\t<empty-block/>',
+        '\t\t---',
+    ]
+    return '\n'.join(lines)
+
+
+# ──────────────────────────────────────────────
+# 7. Notion에 패치노트 Push
+# ──────────────────────────────────────────────
+
+def _notion_update_markdown(page_id: str, payload: dict):
+    """Notion Markdown API에 PATCH 요청"""
+    url = f'https://api.notion.com/v1/pages/{page_id}/markdown'
+    res = requests.patch(url, headers=_get_notion_headers(), json=payload, timeout=30)
+    res.raise_for_status()
+    return res.json()
+
+
+def push_patch_note_to_notion(patch_note: PatchNote, is_new: bool = True) -> dict:
+    """
+    패치노트를 Notion 페이지에 push한다.
+
+    Args:
+        patch_note: PatchNote 인스턴스
+        is_new: True면 insert_content, False면 update_content (기존 버전 수정)
+
+    Returns:
+        Notion API 응답
+    """
+    if not settings.NOTION_ENABLED or not settings.NOTION_TOKEN:
+        raise ValueError('Notion 연동이 비활성화되어 있습니다.')
+
+    try:
+        mapping = NotionPageMapping.objects.get(product=patch_note.product)
+    except NotionPageMapping.DoesNotExist:
+        raise ValueError('해당 제품의 Notion 매핑 정보가 없습니다.')
+
+    md_content = patch_note_to_md(patch_note)
+
+    if is_new:
+        # 새 버전: 앵커 텍스트를 찾아서 앵커 + 새 콘텐츠로 교체 (insert 효과)
+        anchor = '# 지원중인 버전'
+        payload = {
+            'type': 'update_content',
+            'update_content': {
+                'content_updates': [
+                    {
+                        'old_str': anchor,
+                        'new_str': anchor + '\n' + md_content,
+                    }
+                ],
+            },
+        }
+    else:
+        # 기존 버전 수정: search & replace
+        current_md = fetch_page_markdown(mapping.page_id_ko)
+        version = patch_note.version
+
+        # Notion 원본 형식에서 버전 블록 추출 (탭, span 태그 포함)
+        pattern = re.compile(
+            rf'(\t*##\s+(?:<span[^>]*>)?{re.escape(version)}\s*(?:</span>)?[\s\S]*?)(---\s*\n|(?=\t*##\s)|$)'
+        )
+        match = pattern.search(current_md)
+        if not match:
+            raise ValueError(f'Notion 페이지에서 버전 {version}을 찾을 수 없습니다.')
+
+        old_block = match.group(0).rstrip()
+        payload = {
+            'type': 'update_content',
+            'update_content': {
+                'content_updates': [
+                    {
+                        'old_str': old_block,
+                        'new_str': md_content,
+                    }
+                ],
+            },
+        }
+
+    result = _notion_update_markdown(mapping.page_id_ko, payload)
+    logger.info(f'Notion push 완료: {patch_note.product} v{patch_note.version} ({"insert" if is_new else "update"})')
+    return result

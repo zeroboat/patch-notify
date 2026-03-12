@@ -5,6 +5,7 @@ from .views import (
     update_mapping,
     delete_mapping,
     notion_sync,
+    notion_push,
 )
 
 app_name = 'notion'
@@ -15,4 +16,5 @@ urlpatterns = [
     path('mapping/update/', update_mapping, name='update_mapping'),
     path('mapping/delete/', delete_mapping, name='delete_mapping'),
     path('sync/', notion_sync, name='notion_sync'),
+    path('push/', notion_push, name='notion_push'),
 ]
