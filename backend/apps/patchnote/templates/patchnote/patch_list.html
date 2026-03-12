@@ -309,6 +309,12 @@
                             <h5 class="mb-0 text-primary fw-bold">{{ note.version }}</h5>
                         </div>
                         <div class="d-flex align-items-center gap-2">
+                            <span id="translation-badge-{{ note.id }}"
+                                  class="badge {% if note.translation_status == 'done' %}bg-label-success{% elif note.translation_status == 'translating' or note.translation_status == 'pending' %}bg-label-warning{% elif note.translation_status == 'failed' %}bg-label-danger{% else %}bg-label-secondary{% endif %} fs-small"
+                                  title="번역 상태">
+                                <i class="bx {% if note.translation_status == 'done' %}bx-check{% elif note.translation_status == 'translating' or note.translation_status == 'pending' %}bx-loader-alt bx-spin{% elif note.translation_status == 'failed' %}bx-x{% else %}bx-minus{% endif %} me-1"></i>
+                                {% if note.translation_status == 'done' %}번역 완료{% elif note.translation_status == 'translating' %}번역 중{% elif note.translation_status == 'pending' %}번역 대기{% elif note.translation_status == 'failed' %}번역 실패{% else %}번역 없음{% endif %}
+                            </span>
                             <span class="badge bg-label-secondary fs-small">
                                 <i class="bx bx-calendar me-1"></i>{{ note.release_date|date:"Y년 m월 d일" }}
                             </span>
@@ -625,6 +631,50 @@
                 }
             });
         });
+    </script>
+
+    <script>
+    // ── 번역 상태 폴링 ────────────────────────────────────────────────────
+    function pollTranslationStatus(noteId) {
+        const badge = document.getElementById(`translation-badge-${noteId}`);
+        if (!badge) return;
+
+        const STATUS_MAP = {
+            pending:     { cls: 'bg-label-warning',   icon: 'bx-loader-alt bx-spin', text: '번역 대기' },
+            translating: { cls: 'bg-label-warning',   icon: 'bx-loader-alt bx-spin', text: '번역 중' },
+            done:        { cls: 'bg-label-success',   icon: 'bx-check',              text: '번역 완료' },
+            failed:      { cls: 'bg-label-danger',    icon: 'bx-x',                  text: '번역 실패' },
+            skipped:     { cls: 'bg-label-secondary', icon: 'bx-minus',              text: '번역 없음' },
+        };
+
+        const interval = setInterval(async () => {
+            try {
+                const res = await fetch(`/patchnote/translation-status/${noteId}/`);
+                if (!res.ok) return;
+                const data = await res.json();
+                const info = STATUS_MAP[data.status];
+                if (!info) return;
+
+                badge.className = `badge ${info.cls} fs-small`;
+                badge.innerHTML = `<i class="bx ${info.icon} me-1"></i>${info.text}`;
+
+                if (['done', 'failed', 'skipped'].includes(data.status)) {
+                    clearInterval(interval);
+                }
+            } catch (e) {
+                clearInterval(interval);
+            }
+        }, 3000);
+    }
+
+    // 페이지 로드 시 진행 중인 번역이 있으면 폴링 시작
+    document.querySelectorAll('[id^="translation-badge-"]').forEach(badge => {
+        const text = badge.textContent.trim();
+        if (text.includes('번역 대기') || text.includes('번역 중')) {
+            const noteId = badge.id.replace('translation-badge-', '');
+            pollTranslationStatus(noteId);
+        }
+    });
     </script>
 
     <!-- 최상단 이동 버튼 -->

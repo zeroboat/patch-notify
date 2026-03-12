@@ -123,6 +123,8 @@ def patch_note_append(request):
         _save_section(patch_note, bug_fixes_html,     BugFix)
         _save_section(patch_note, special_notes_html, Remark)
 
+        patch_note.translation_status = PatchNote.TRANSLATION_PENDING
+        patch_note.save(update_fields=["translation_status", "updated_at"])
         start_translation(patch_note.id)
         _push_to_notion_safe(patch_note, is_new=True)
 
@@ -203,6 +205,8 @@ def patch_note_update(request):
         _save_section(note, bug_fixes_html,     BugFix)
         _save_section(note, special_notes_html, Remark)
 
+        note.translation_status = PatchNote.TRANSLATION_PENDING
+        note.save(update_fields=["translation_status", "updated_at"])
         start_translation(note.id)
         _push_to_notion_safe(note, is_new=False)
 
@@ -235,3 +239,21 @@ def patch_note_delete(request):
 
     except Exception as e:
         return JsonResponse({'error': f'서버 오류: {str(e)}'}, status=500)
+
+
+# ──────────────────────────────────────────────
+# 번역 상태 확인 API
+# ──────────────────────────────────────────────
+
+@require_GET
+@role_required('dev')
+def translation_status(request, patch_note_id):
+    try:
+        note = PatchNote.objects.get(id=patch_note_id)
+    except PatchNote.DoesNotExist:
+        return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
+
+    return JsonResponse({
+        'patch_note_id': note.id,
+        'status': note.translation_status,
+    })
