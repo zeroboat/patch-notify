@@ -2,9 +2,28 @@ from django.db import models
 from apps.base.models import BaseModel
 class PatchNote(BaseModel):
     """패치노트 메인 모델"""
+    TRANSLATION_PENDING     = 'pending'
+    TRANSLATION_TRANSLATING = 'translating'
+    TRANSLATION_DONE        = 'done'
+    TRANSLATION_FAILED      = 'failed'
+    TRANSLATION_SKIPPED     = 'skipped'
+    TRANSLATION_STATUS_CHOICES = [
+        ('pending',     'Pending'),
+        ('translating', 'Translating'),
+        ('done',        'Done'),
+        ('failed',      'Failed'),
+        ('skipped',     'Skipped'),
+    ]
+
     product = models.ForeignKey('product.Product', on_delete=models.CASCADE, related_name='patch_notes', verbose_name="제품")
     version = models.CharField(max_length=30, verbose_name="버전")
     release_date = models.DateField(verbose_name="배포일")
+    translation_status = models.CharField(
+        max_length=15,
+        choices=TRANSLATION_STATUS_CHOICES,
+        default='skipped',
+        verbose_name="번역 상태",
+    )
 
     class Meta:
         verbose_name = "패치노트"

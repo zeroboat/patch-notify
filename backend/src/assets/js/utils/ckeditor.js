@@ -15,7 +15,7 @@ async function initCKEditor(selector) {
                 'Essentials', 'Paragraph', 'Bold', 'Link', 'Code', 'CodeBlock', 'List', 'Autoformat'
             ],
             initialData: '<ul><li>&nbsp;</li></ul>',
-            placeholder: '패치 내용을 작성해 주세요.\n( Ctrl+B: Bold  |  - + Space: Bullet  |  `코드`: Inline Code  |  ``` + Enter: Code Block )'
+            placeholder: '패치 내용을 작성해 주세요.'
         });
 
         return editor;

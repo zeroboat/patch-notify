@@ -1,5 +1,7 @@
+import logging
 import re
 
+from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -11,6 +13,19 @@ from apps.base.mixins import role_required
 from apps.product.models import Product
 from .models import PatchNote, Feature, Improvement, BugFix, Remark
 from .translation import start_translation
+
+logger = logging.getLogger(__name__)
+
+
+def _push_to_notion_safe(patch_note, is_new=True):
+    """Notion push를 시도하되, 실패해도 DB 저장에는 영향 없게 처리"""
+    if not settings.NOTION_ENABLED:
+        return
+    try:
+        from apps.notion.services import push_patch_note_to_notion
+        push_patch_note_to_notion(patch_note, is_new=is_new)
+    except Exception as e:
+        logger.warning(f'Notion push 실패 (v{patch_note.version}): {e}')
 
 
 class PatchNoteDetailView(LoginRequiredMixin, TemplateView):
@@ -108,7 +123,10 @@ def patch_note_append(request):
         _save_section(patch_note, bug_fixes_html,     BugFix)
         _save_section(patch_note, special_notes_html, Remark)
 
+        patch_note.translation_status = PatchNote.TRANSLATION_PENDING
+        patch_note.save(update_fields=["translation_status", "updated_at"])
         start_translation(patch_note.id)
+        _push_to_notion_safe(patch_note, is_new=True)
 
         return JsonResponse({'message': '패치노트가 등록되었습니다.', 'patch_note_id': patch_note.id})
 
@@ -187,7 +205,10 @@ def patch_note_update(request):
         _save_section(note, bug_fixes_html,     BugFix)
         _save_section(note, special_notes_html, Remark)
 
+        note.translation_status = PatchNote.TRANSLATION_PENDING
+        note.save(update_fields=["translation_status", "updated_at"])
         start_translation(note.id)
+        _push_to_notion_safe(note, is_new=False)
 
         return JsonResponse({'message': '패치노트가 수정되었습니다.', 'patch_note_id': note.id})
 
@@ -218,3 +239,21 @@ def patch_note_delete(request):
 
     except Exception as e:
         return JsonResponse({'error': f'서버 오류: {str(e)}'}, status=500)
+
+
+# ──────────────────────────────────────────────
+# 번역 상태 확인 API
+# ──────────────────────────────────────────────
+
+@require_GET
+@role_required('dev')
+def translation_status(request, patch_note_id):
+    try:
+        note = PatchNote.objects.get(id=patch_note_id)
+    except PatchNote.DoesNotExist:
+        return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
+
+    return JsonResponse({
+        'patch_note_id': note.id,
+        'status': note.translation_status,
+    })

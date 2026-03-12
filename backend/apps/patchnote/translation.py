@@ -91,21 +91,40 @@ def _run_translation(patch_note_id: int):
 
         if not to_translate:
             logger.info("패치노트 %s 번역할 항목 없음", patch_note_id)
+            patch_note.translation_status = PatchNote.TRANSLATION_SKIPPED
+            patch_note.save(update_fields=["translation_status", "updated_at"])
             return
 
+        # 번역 시작
+        patch_note.translation_status = PatchNote.TRANSLATION_TRANSLATING
+        patch_note.save(update_fields=["translation_status", "updated_at"])
+
         translated = _call_ollama_batch(to_translate)
+
+        if not translated:
+            patch_note.translation_status = PatchNote.TRANSLATION_FAILED
+            patch_note.save(update_fields=["translation_status", "updated_at"])
+            return
 
         for key, (_, obj) in section_map.items():
             if obj is not None and key in translated and translated[key]:
                 obj.content_en = translated[key]
                 obj.save(update_fields=["content_en", "updated_at"])
 
+        patch_note.translation_status = PatchNote.TRANSLATION_DONE
+        patch_note.save(update_fields=["translation_status", "updated_at"])
         logger.info("패치노트 %s 영문 번역 완료 (섹션: %s)", patch_note_id, list(translated.keys()))
 
     except PatchNote.DoesNotExist:
         logger.error("번역 대상 패치노트를 찾을 수 없습니다: id=%s", patch_note_id)
     except Exception as exc:
         logger.error("패치노트 %s 번역 중 오류: %s", patch_note_id, exc)
+        try:
+            PatchNote.objects.filter(id=patch_note_id).update(
+                translation_status=PatchNote.TRANSLATION_FAILED
+            )
+        except Exception:
+            pass
 
 
 def start_translation(patch_note_id: int):
