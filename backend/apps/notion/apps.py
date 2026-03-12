@@ -1,0 +1,7 @@
+from django.apps import AppConfig
+
+
+class NotionConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.notion'
+    verbose_name = 'Notion 연동'

@@ -29,12 +29,20 @@
         </li>
 
         {% if user_role == 'admin' %}
-        <li class="menu-item {% if 'management' in request.path %}active open{% endif %}">
+        <li class="menu-item {% if 'product/management' in request.path %}active open{% endif %}">
             <a href="{% url 'product:product_management' %}" class="menu-link">
                 <i class="menu-icon icon-base bx bx-cube-alt"></i>
                 <div class="text-truncate">Product Management</div>
             </a>
         </li>
+        {% if MY_SETTING.NOTION_ENABLED %}
+        <li class="menu-item {% if '/notion/' in request.path %}active open{% endif %}">
+            <a href="{% url 'notion:notion_management' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-link"></i>
+                <div class="text-truncate">Notion Integration</div>
+            </a>
+        </li>
+        {% endif %}
         {% endif %}
 
         <li class="menu-header small text-uppercase">

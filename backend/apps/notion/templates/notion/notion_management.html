@@ -1,0 +1,342 @@
+{% extends layout_path %}
+
+{% load static %}
+{% load i18n %}
+
+{% block title %}Notion 연동 관리{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <!-- 페이지 헤더 -->
+  <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+    <div>
+      <h4 class="fw-bold mb-1">
+        <span class="text-muted fw-light">Management /</span> Notion 연동
+      </h4>
+      <p class="text-muted mb-0 small">제품별 Notion 페이지 매핑을 관리하고, 패치노트를 동기화합니다.</p>
+    </div>
+    <button class="btn btn-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasMapping">
+      <i class="bx bx-plus me-1"></i> 매핑 추가
+    </button>
+  </div>
+
+  <!-- 통계 카드 -->
+  <div class="row g-4 mb-4">
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-primary">
+              <i class="bx bx-link fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">매핑된 제품</p>
+            <h4 class="mb-0 fw-bold">{{ mappings|length }}</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-warning">
+              <i class="bx bx-cube-alt fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">미매핑 제품</p>
+            <h4 class="mb-0 fw-bold">{{ unmapped_count }}</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 매핑 목록 -->
+  {% if mappings %}
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-4">제품</th>
+            <th>한국어 페이지 ID</th>
+            <th>영문 페이지 ID</th>
+            <th style="width:150px">최종 수정</th>
+            <th style="width:160px" class="text-center">관리</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in mappings %}
+          <tr>
+            <td class="ps-4">
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-label-{{ m.product.platform_color }} rounded-pill px-2 py-1">
+                  {{ m.product.get_platform_display }}
+                </span>
+                <span class="fw-medium">{{ m.product.solution.name }}</span>
+                <span class="text-muted small">{{ m.product.get_category_display }}</span>
+              </div>
+            </td>
+            <td>
+              <code class="small">{{ m.page_id_ko }}</code>
+            </td>
+            <td>
+              {% if m.page_id_en %}
+              <code class="small">{{ m.page_id_en }}</code>
+              {% else %}
+              <span class="text-muted small">-</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="small text-muted">{{ m.updated_at|date:"Y.m.d H:i" }}</span>
+            </td>
+            <td class="text-center">
+              <div class="d-flex justify-content-center gap-1">
+                <button class="btn btn-sm btn-label-primary btn-sync"
+                        data-product-id="{{ m.product.id }}"
+                        data-product-name="{{ m.product }}"
+                        title="Notion 동기화">
+                  <i class="bx bx-refresh me-1"></i>Sync
+                </button>
+                <button class="btn btn-sm btn-icon btn-label-warning btn-edit-mapping"
+                        data-id="{{ m.id }}"
+                        data-product-id="{{ m.product.id }}"
+                        data-page-ko="{{ m.page_id_ko }}"
+                        data-page-en="{{ m.page_id_en }}"
+                        title="수정">
+                  <i class="bx bx-edit-alt"></i>
+                </button>
+                <button class="btn btn-sm btn-icon btn-label-danger btn-delete-mapping"
+                        data-id="{{ m.id }}"
+                        data-product-name="{{ m.product }}"
+                        title="삭제">
+                  <i class="bx bx-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="card">
+    <div class="card-body text-center py-5">
+      <div class="avatar avatar-xl mb-3">
+        <span class="avatar-initial rounded-circle bg-label-secondary">
+          <i class="bx bx-link" style="font-size:2rem;"></i>
+        </span>
+      </div>
+      <h6 class="fw-semibold">등록된 Notion 매핑이 없습니다.</h6>
+      <p class="text-muted small mb-3">제품과 Notion 페이지를 연결해 보세요.</p>
+      <button class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#offcanvasMapping">
+        <i class="bx bx-plus me-1"></i> 매핑 추가
+      </button>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- ===== 매핑 추가 Offcanvas ===== -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasMapping">
+  <div class="offcanvas-header border-bottom">
+    <div>
+      <h5 class="offcanvas-title mb-0">Notion 매핑 추가</h5>
+      <small class="text-muted">제품과 Notion 페이지를 연결합니다.</small>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body">
+    <form id="formCreateMapping" method="POST">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label class="form-label fw-semibold">제품 <span class="text-danger">*</span></label>
+        <select name="product_id" class="form-select" required>
+          <option value="">제품을 선택하세요</option>
+          {% for p in unmapped_products %}
+          <option value="{{ p.id }}">{{ p.solution.name }} - {{ p.get_platform_display }} {{ p.get_category_display }}</option>
+          {% endfor %}
+        </select>
+        {% if not unmapped_products %}
+        <div class="form-text text-warning">매핑되지 않은 제품이 없습니다.</div>
+        {% endif %}
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">한국어 페이지 ID <span class="text-danger">*</span></label>
+        <input type="text" name="page_id_ko" class="form-control" placeholder="예: 6a284271-1bfb-4228-99e5-c4752487411e" required>
+        <div class="form-text">Notion 페이지 URL의 마지막 32자리 또는 UUID 형식</div>
+      </div>
+      <div class="mb-4">
+        <label class="form-label fw-semibold">영문 페이지 ID</label>
+        <input type="text" name="page_id_en" class="form-control" placeholder="영문 패치노트 페이지 ID (선택)">
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><i class="bx bx-check me-1"></i> 등록</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="offcanvas">취소</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== 매핑 수정 모달 ===== -->
+<div class="modal fade" id="editMappingModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-md">
+    <form id="formEditMapping" method="POST" class="modal-content">
+      {% csrf_token %}
+      <input type="hidden" name="mapping_id" id="editMappingId">
+      <div class="modal-header border-bottom pb-3">
+        <h5 class="modal-title fw-bold">매핑 수정</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">한국어 페이지 ID <span class="text-danger">*</span></label>
+          <input type="text" name="page_id_ko" id="editPageKo" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">영문 페이지 ID</label>
+          <input type="text" name="page_id_en" id="editPageEn" class="form-control">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">취소</button>
+        <button type="submit" class="btn btn-warning">저장</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock content %}
+
+{% block page_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+  // 매핑 추가
+  document.getElementById('formCreateMapping').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const fd = new FormData(this);
+    try {
+      const res = await fetch("{% url 'notion:create_mapping' %}", { method: 'POST', body: fd });
+      const data = await res.json();
+      if (res.ok) {
+        await Swal.fire({ icon: 'success', title: '등록 완료', text: data.message, timer: 1500, showConfirmButton: false });
+        location.reload();
+      } else {
+        Swal.fire('오류', data.error, 'error');
+      }
+    } catch (e) { Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error'); }
+  });
+
+  // 매핑 수정 모달 열기
+  document.querySelectorAll('.btn-edit-mapping').forEach(btn => {
+    btn.addEventListener('click', function () {
+      document.getElementById('editMappingId').value = this.dataset.id;
+      document.getElementById('editPageKo').value = this.dataset.pageKo;
+      document.getElementById('editPageEn').value = this.dataset.pageEn;
+      new bootstrap.Modal(document.getElementById('editMappingModal')).show();
+    });
+  });
+
+  // 매핑 수정 제출
+  document.getElementById('formEditMapping').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const fd = new FormData(this);
+    try {
+      const res = await fetch("{% url 'notion:update_mapping' %}", { method: 'POST', body: fd });
+      const data = await res.json();
+      if (res.ok) {
+        await Swal.fire({ icon: 'success', title: '수정 완료', text: data.message, timer: 1500, showConfirmButton: false });
+        location.reload();
+      } else {
+        Swal.fire('오류', data.error, 'error');
+      }
+    } catch (e) { Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error'); }
+  });
+
+  // 매핑 삭제
+  document.querySelectorAll('.btn-delete-mapping').forEach(btn => {
+    btn.addEventListener('click', async function () {
+      const result = await Swal.fire({
+        title: '매핑 삭제',
+        text: `"${this.dataset.productName}" 매핑을 삭제하시겠습니까?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '삭제',
+        cancelButtonText: '취소',
+        confirmButtonColor: '#d33',
+      });
+      if (result.isConfirmed) {
+        const fd = new FormData();
+        fd.append('csrfmiddlewaretoken', csrfToken);
+        fd.append('mapping_id', this.dataset.id);
+        try {
+          const res = await fetch("{% url 'notion:delete_mapping' %}", { method: 'POST', body: fd });
+          const data = await res.json();
+          if (res.ok) {
+            await Swal.fire({ icon: 'success', title: '삭제 완료', text: data.message, timer: 1500, showConfirmButton: false });
+            location.reload();
+          } else {
+            Swal.fire('삭제 불가', data.error, 'error');
+          }
+        } catch (e) { Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error'); }
+      }
+    });
+  });
+
+  // Notion 동기화
+  document.querySelectorAll('.btn-sync').forEach(btn => {
+    btn.addEventListener('click', async function () {
+      const productId = this.dataset.productId;
+      const productName = this.dataset.productName;
+      const syncBtn = this;
+
+      const result = await Swal.fire({
+        title: 'Notion 동기화',
+        text: `"${productName}"의 패치노트를 Notion에서 가져옵니다. 기존 데이터가 갱신됩니다.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '동기화',
+        cancelButtonText: '취소',
+      });
+      if (!result.isConfirmed) return;
+
+      syncBtn.disabled = true;
+      syncBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sync...';
+
+      const fd = new FormData();
+      fd.append('csrfmiddlewaretoken', csrfToken);
+      fd.append('product_id', productId);
+
+      try {
+        const res = await fetch("{% url 'notion:notion_sync' %}", { method: 'POST', body: fd });
+        const data = await res.json();
+        if (res.ok) {
+          await Swal.fire({
+            icon: 'success',
+            title: '동기화 완료',
+            html: `신규: <strong>${data.created}</strong> / 갱신: <strong>${data.updated}</strong> / 건너뜀: <strong>${data.skipped}</strong>`,
+            timer: 3000,
+            showConfirmButton: true,
+          });
+        } else {
+          Swal.fire('동기화 실패', data.error, 'error');
+        }
+      } catch (e) {
+        Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
+      } finally {
+        syncBtn.disabled = false;
+        syncBtn.innerHTML = '<i class="bx bx-refresh me-1"></i>Sync';
+      }
+    });
+  });
+});
+</script>
+{% endblock page_js %}

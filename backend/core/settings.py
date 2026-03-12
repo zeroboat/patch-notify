@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "apps.logs",
     "apps.slack_app",
     "apps.authentication",
+    "apps.notion",
 ]
 
 MIDDLEWARE = [
@@ -202,3 +203,7 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.getenv('GMAIL_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('GMAIL_APP_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('GMAIL_USER', '')
+
+# ── Notion ─────────────────────────────────────────────────────────────────
+NOTION_ENABLED = os.getenv('NOTION_ENABLED', 'false').lower() in ('true', '1', 'yes')
+NOTION_TOKEN = os.getenv('NOTION_TOKEN', '')

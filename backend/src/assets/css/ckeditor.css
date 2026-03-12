@@ -57,6 +57,11 @@
     border-radius: 0;
 }
 
+/* 최상위 li 간격 (하위 ul 내부는 제외) */
+.patch-html-body > ul > li + li {
+    margin-top: 0.6rem;
+}
+
 /* 인라인 코드 */
 .ck-editor__editable code:not(pre code),
 .patch-html-body code:not(pre code) {

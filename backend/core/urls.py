@@ -26,6 +26,7 @@ urlpatterns = [
     path("subscriber/", include(("apps.subscriber.urls", "subscriber"), namespace="subscriber")),
     path("logs/", include(("apps.logs.urls", "logs"), namespace="logs")),
     path("slack/", include(("apps.slack_app.urls", "slack_app"), namespace="slack_app")),
+    path("notion/", include(("apps.notion.urls", "notion"), namespace="notion")),
 
     path("", include("apps.dashboards.urls")),
     path("", include("apps.authentication.urls")),
