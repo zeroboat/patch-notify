@@ -172,8 +172,19 @@ def notion_push(request):
         return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
 
     try:
-        push_patch_note_to_notion(patch_note, is_new=is_new)
-        return JsonResponse({'message': f'v{patch_note.version} Notion push 완료'})
+        result = push_patch_note_to_notion(patch_note, is_new=is_new)
+        en_status = result.get('en_status', 'skipped')
+        en_reason = result.get('en_reason', '')
+        msg = f'v{patch_note.version} Notion push 완료 (KO: ✅'
+        if en_status == 'success':
+            msg += ', EN: ✅)'
+        elif en_status == 'failed':
+            msg += f', EN: ❌ {en_reason})'
+        else:
+            msg += f', EN: 건너뜀 — {en_reason})'
+        return JsonResponse({'message': msg})
     except Exception as e:
         logger.exception(f'Notion push 실패 (patch_note_id={patch_note_id})')
         return JsonResponse({'error': f'Push 실패: {str(e)}'}, status=500)
+
+
