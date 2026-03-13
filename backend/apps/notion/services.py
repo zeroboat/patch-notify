@@ -26,22 +26,33 @@ NOTION_API_VERSION = '2026-03-11'
 # ──────────────────────────────────────────────
 
 SECTION_MAP = {
+    # 한국어
     '기능 추가': 'new_features',
     '기능 개선': 'improvements',
     '버그 수정': 'bug_fixes',
+    '기능 수정': 'improvements',
+    '기타': 'improvements',
+    '보안 개선': 'improvements',
+    '가이드': 'improvements',
+    '기능 개선 및 변경 사항': 'improvements',
+    '변경 사항': 'improvements',
+    '버그 수': 'bug_fixes',               # 오타 (버그 수정)
+    # 영문 표준
     'Feature Additions': 'new_features',
     'Feature Improvements': 'improvements',
     'Bug Fixes': 'bug_fixes',
+    # 영문 변형
     'Added features': 'new_features',
     'Added Features': 'new_features',
     'New Features': 'new_features',
-    'New Feactures': 'new_features',
+    'New Feactures': 'new_features',       # 오타
+    'Feature Addition': 'new_features',    # 단수형
+    'Feature Improvement': 'improvements', # 단수형
     'Improved Features': 'improvements',
-    'Feature improvement': 'improvements',
     'Improvements': 'improvements',
     'Enhancements': 'improvements',
     'Bug fixes': 'bug_fixes',
-    'Bug Fixeds': 'bug_fixes',
+    'Bug Fixeds': 'bug_fixes',             # 오타
 }
 
 
@@ -201,7 +212,10 @@ def _md_inline_to_html(text: str) -> str:
                 seg = re.sub(r'\[([^\]]+)\]\((https?://[^)]+)\)', r'<a href="\2">\1</a>', seg)
                 segs[j] = seg
         parts[i] = ''.join(segs)
-    return ''.join(parts)
+    result = ''.join(parts)
+    # bold가 code 경계에서 끊겨 잔존하는 ** 제거 (정상 bold는 이미 <strong> 변환됨)
+    result = re.sub(r'\*{2,}', '', result)
+    return result
 
 
 def _get_indent(line: str) -> int:
@@ -263,7 +277,7 @@ def _parse_bullets(lines: list[str]) -> list:
 
 
 def _items_to_html(items: list) -> str:
-    filtered = [i for i in items if i['text'].strip().upper() != 'N/A' and i['text'].strip()]
+    filtered = [i for i in items if re.sub(r'[*`_~]+', '', i['text']).strip().upper() != 'N/A' and i['text'].strip()]
     if not filtered:
         return ''
     parts = []

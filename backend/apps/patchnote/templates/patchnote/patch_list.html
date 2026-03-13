@@ -333,7 +333,7 @@
                     <div class="card-body px-4 py-3">
 
                         {% with feat=note.features.first %}
-                        {% if feat %}
+                        {% if feat and feat.content %}
                         <div class="patch-section border-start border-3 border-success ps-3 mb-4">
                             <div class="d-flex align-items-center gap-2 mb-2">
                                 <span class="fw-bold text-success small text-uppercase">🚀 기능 추가</span>
@@ -348,7 +348,7 @@
                         {% endwith %}
 
                         {% with impr=note.improvements.first %}
-                        {% if impr %}
+                        {% if impr and impr.content %}
                         {% if note.features.exists %}<hr class="my-3 opacity-25">{% endif %}
                         <div class="patch-section border-start border-3 border-info ps-3 mb-4">
                             <div class="d-flex align-items-center gap-2 mb-2">
@@ -364,7 +364,7 @@
                         {% endwith %}
 
                         {% with bugf=note.bugfixes.first %}
-                        {% if bugf %}
+                        {% if bugf and bugf.content %}
                         {% if note.features.exists or note.improvements.exists %}<hr class="my-3 opacity-25">{% endif %}
                         <div class="patch-section border-start border-3 border-danger ps-3 mb-4">
                             <div class="d-flex align-items-center gap-2 mb-2">
@@ -380,7 +380,7 @@
                         {% endwith %}
 
                         {% with remk=note.remarks.first %}
-                        {% if remk %}
+                        {% if remk and remk.content %}
                         {% if note.features.exists or note.improvements.exists or note.bugfixes.exists %}<hr class="my-3 opacity-25">{% endif %}
                         <div class="patch-section border-start border-3 border-warning ps-3 mb-4">
                             <div class="d-flex align-items-center gap-2 mb-2">

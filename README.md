@@ -10,6 +10,7 @@
 |------|------|
 | **로그인 / 권한 관리** | Admin · Dev · SE · Guest 4단계 역할 기반 접근 제어 (RBAC) |
 | **패치노트 관리** | 제품별 버전/기능추가/기능개선/버그수정/특이사항 등록·수정·삭제 |
+| **Notion 동기화** | Notion Markdown API 기반 패치노트 자동 동기화 (변경 감지 + 파일 캐싱) |
 | **영문 자동 번역** | 패치노트 등록·수정 시 내부 Ollama AI 서버로 한→영 번역 (백그라운드) |
 | **고객사 관리** | 고객사 정보 및 솔루션 구독 현황 관리 |
 | **구독 관리** | 고객사별 Gmail / Slack 채널 구독 설정 (주기, 최대 건수) |
@@ -41,7 +42,34 @@
 - **Email** Gmail SMTP (`EmailMultiAlternatives`)
 - **Slack** slack-bolt (OAuth 2.0, Home Tab, Block Kit)
 - **AI 번역** Ollama (내부 서버, `/api/generate`)
-- **배포** Docker Compose (backend + db)
+- **Notion 연동** Notion Markdown API 기반 패치노트 자동 동기화
+- **배포** Docker Compose (backend + db + notion_md volume)
+
+---
+
+## Notion 동기화
+
+Notion 페이지에 작성된 패치노트를 자동으로 가져와 DB에 저장합니다.
+
+### 동작 방식
+
+1. **메타데이터 변경 감지** — Notion 페이지의 `last_edited_time`과 DB에 저장된 타임스탬프를 비교하여 변경 여부 판단
+2. **Markdown 파일 캐싱** — Notion Markdown API로 받아온 원본을 Docker volume(`notion_md_data`)에 파일로 저장, 파일 내용 비교로 불필요한 DB 업데이트 방지
+3. **파싱 → DB upsert** — 마크다운을 버전별로 분리 후 기능추가/기능개선/버그수정/특이사항으로 분류하여 저장
+
+### 지원 카테고리 매핑
+
+Notion 페이지에서 사용되는 다양한 섹션명을 3개 카테고리로 매핑합니다.
+
+| DB 카테고리 | 매핑되는 섹션명 |
+|------------|----------------|
+| **기능 추가** (Feature) | 기능 추가, Feature Additions, Added Features, New Features, Feature Addition |
+| **기능 개선** (Improvement) | 기능 개선, 기능 수정, 기타, 보안 개선, 가이드, 변경 사항, Feature Improvements, Improvements, Enhancements |
+| **버그 수정** (BugFix) | 버그 수정, Bug Fixes, Bug fixes |
+
+### 강제 동기화
+
+동기화 API 호출 시 `force=true` 파라미터를 전달하면 변경 감지를 무시하고 전체 데이터를 갱신합니다.
 
 ---
 
@@ -59,9 +87,12 @@ patch-notify/
 │   │   ├── notification/    # 공문 작성 및 Gmail 발송
 │   │   ├── subscriber/      # 고객사별 구독 설정 (Gmail / Slack)
 │   │   ├── slack_app/       # Slack 앱 OAuth, Home Tab, 이벤트 처리
+│   │   ├── notion/          # Notion 페이지 매핑 및 동기화
 │   │   └── logs/            # 발송 로그 조회
 │   ├── core/                # settings, urls, context_processors
+│   ├── notion_md/           # Notion MD 파일 캐시 (Docker volume)
 │   └── requirements.txt
+├── patchnote-converter/     # 독립 실행용 패치노트 파서
 ├── docker-compose.yml
 ├── .env.example
 └── dev.env                  # 로컬 개발용 환경변수 (gitignore)
@@ -122,6 +153,8 @@ docker compose up --build -d
 1. DB 마이그레이션 (`migrate --noinput`)
 2. 초기 관리자 계정 생성 (이미 존재하면 무시)
 3. Gunicorn 서버 기동
+
+> Notion MD 파일은 `notion_md_data` Docker volume에 영속 저장되므로 컨테이너 재시작 시에도 캐시가 유지됩니다.
 
 로그 확인:
 ```bash
