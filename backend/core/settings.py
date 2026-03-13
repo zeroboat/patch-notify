@@ -207,3 +207,4 @@ DEFAULT_FROM_EMAIL = os.getenv('GMAIL_USER', '')
 # ── Notion ─────────────────────────────────────────────────────────────────
 NOTION_ENABLED = os.getenv('NOTION_ENABLED', 'false').lower() in ('true', '1', 'yes')
 NOTION_TOKEN = os.getenv('NOTION_TOKEN', '')
+NOTION_MD_DIR = Path(os.getenv('NOTION_MD_DIR', BASE_DIR / 'notion_md'))

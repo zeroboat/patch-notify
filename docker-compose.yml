@@ -24,9 +24,12 @@ services:
     ports:
       - "8000:8000"
     env_file: .env
+    volumes:
+      - notion_md_data:/app/notion_md
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   postgres_data:
+  notion_md_data:

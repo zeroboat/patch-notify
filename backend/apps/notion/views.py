@@ -135,9 +135,14 @@ def notion_sync(request):
     except NotionPageMapping.DoesNotExist:
         return JsonResponse({'error': '해당 제품의 Notion 매핑 정보가 없습니다.'}, status=404)
 
+    force = request.POST.get('force', '').lower() in ('true', '1', 'yes')
+
     try:
-        stats = sync_product(mapping, version=version)
-        msg = f'동기화 완료 — 신규: {stats["created"]}, 갱신: {stats["updated"]}, 건너뜀: {stats["skipped"]}'
+        stats = sync_product(mapping, version=version, force=force)
+        if stats.get('unchanged'):
+            msg = '변경사항 없음 — 동기화 스킵'
+        else:
+            msg = f'동기화 완료 — 신규: {stats["created"]}, 갱신: {stats["updated"]}, 건너뜀: {stats["skipped"]}'
         return JsonResponse({'message': msg, **stats})
     except Exception as e:
         logger.exception(f'Notion 동기화 실패 (product_id={product_id})')
