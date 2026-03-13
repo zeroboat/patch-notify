@@ -278,3 +278,6 @@ test/*
 *.env
 
 patchnote-converter/
+
+# Notion MD cache (Docker volume)
+notion_md/

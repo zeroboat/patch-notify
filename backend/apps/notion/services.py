@@ -1,14 +1,18 @@
 """
 Notion 페이지에서 패치노트를 가져와 DB에 동기화하는 서비스 모듈
 
-흐름: Notion API → Markdown → HTML 파싱 → DB upsert
+흐름: Notion API → Markdown 파일 저장 → HTML 파싱 → DB upsert
+변경 감지: Notion last_edited_time과 저장된 MD 파일 비교
 """
 
 import re
 import logging
+from datetime import datetime
+from pathlib import Path
 
 import requests
 from django.conf import settings
+from django.utils import timezone
 
 from apps.patchnote.models import PatchNote, Feature, Improvement, BugFix, Remark
 from .models import NotionPageMapping
@@ -53,6 +57,14 @@ def _get_notion_headers():
     }
 
 
+def fetch_page_metadata(page_id: str) -> dict:
+    """Notion 페이지 메타데이터를 가져온다 (last_edited_time 등)."""
+    url = f'https://api.notion.com/v1/pages/{page_id}'
+    res = requests.get(url, headers=_get_notion_headers(), timeout=30)
+    res.raise_for_status()
+    return res.json()
+
+
 def fetch_page_markdown(page_id: str) -> str:
     """Notion 페이지 ID로 마크다운을 가져온다."""
     url = f'https://api.notion.com/v1/pages/{page_id}/markdown'
@@ -63,6 +75,47 @@ def fetch_page_markdown(page_id: str) -> str:
     if isinstance(md, dict):
         md = md.get('markdown', '')
     return md
+
+
+# ──────────────────────────────────────────────
+# 1-1. MD 파일 저장/로드
+# ──────────────────────────────────────────────
+
+def _get_md_dir(product) -> Path:
+    """제품별 MD 저장 디렉토리"""
+    solution_name = product.solution.name.replace(' ', '_')
+    return Path(settings.NOTION_MD_DIR) / solution_name
+
+
+def _get_md_filename(product, lang: str = 'ko') -> str:
+    """파일명 생성: {Platform}_{Category}[_en].md"""
+    platform = product.get_platform_display().replace(' ', '_')
+    category = product.get_category_display().replace(' ', '_')
+    suffix = '_en' if lang == 'en' else ''
+    return f'{platform}_{category}{suffix}.md'
+
+
+def _save_md_file(product, md_content: str, lang: str = 'ko') -> Path:
+    """cleaned MD를 파일로 저장"""
+    md_dir = _get_md_dir(product)
+    md_dir.mkdir(parents=True, exist_ok=True)
+    file_path = md_dir / _get_md_filename(product, lang)
+    file_path.write_text(md_content, encoding='utf-8')
+    logger.info('MD 파일 저장: %s', file_path)
+    return file_path
+
+
+def _load_md_file(product, lang: str = 'ko') -> str | None:
+    """저장된 MD 파일 로드 (없으면 None)"""
+    file_path = _get_md_dir(product) / _get_md_filename(product, lang)
+    if file_path.exists():
+        return file_path.read_text(encoding='utf-8')
+    return None
+
+
+def _parse_notion_datetime(iso_str: str) -> datetime:
+    """Notion ISO 8601 문자열을 datetime으로 변환"""
+    return datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
 
 
 # ──────────────────────────────────────────────
@@ -245,7 +298,7 @@ def _parse_code_block(code: str) -> dict:
 
 
 def _parse_remarks(block: str) -> str:
-    match = re.search(r'\*\[\*Remarks\*\]\*\*\n(.*?)$', block, re.DOTALL)
+    match = re.search(r'\*{2,3}\[?\*?Remarks\*?\]?\*{2,3}\n(.*?)$', block, re.DOTALL)
     if not match:
         return ''
     raw = match.group(1)
@@ -316,36 +369,121 @@ def _save_section(patch_note, html_ko, html_en, model_class):
 # 5. 메인 동기화 함수
 # ──────────────────────────────────────────────
 
-def sync_product(mapping: NotionPageMapping, version: str = None) -> dict:
+def _check_page_changed(mapping, page_id: str, lang: str) -> tuple[bool, datetime | None]:
+    """
+    Notion 페이지가 마지막 동기화 이후 변경되었는지 확인.
+    Returns: (changed: bool, last_edited: datetime | None)
+    """
+    try:
+        meta = fetch_page_metadata(page_id)
+        last_edited = _parse_notion_datetime(meta['last_edited_time'])
+    except Exception as e:
+        logger.warning('페이지 메타데이터 조회 실패 (%s): %s', page_id, e)
+        return True, None  # 확인 불가 → 변경된 것으로 간주
+
+    stored = mapping.notion_last_edited_ko if lang == 'ko' else mapping.notion_last_edited_en
+    if stored and last_edited <= stored:
+        logger.info('변경 없음 (%s %s): last_edited=%s, stored=%s', mapping.product, lang, last_edited, stored)
+        return False, last_edited
+
+    return True, last_edited
+
+
+def _fetch_and_save_md(mapping, page_id: str, lang: str) -> tuple[str, bool]:
+    """
+    Notion에서 MD를 가져와 정리 후 파일 저장.
+    저장된 파일과 내용이 동일하면 스킵.
+    Returns: (cleaned_md, content_changed)
+    """
+    raw_md = fetch_page_markdown(page_id)
+    cleaned_md = _clean_notion_md(raw_md)
+
+    # 기존 파일과 비교
+    existing = _load_md_file(mapping.product, lang)
+    if existing == cleaned_md:
+        logger.info('MD 내용 동일 (%s %s) — 파일 스킵', mapping.product, lang)
+        return cleaned_md, False
+
+    _save_md_file(mapping.product, cleaned_md, lang)
+    return cleaned_md, True
+
+
+def sync_product(mapping: NotionPageMapping, version: str = None, force: bool = False) -> dict:
     """
     특정 Product의 Notion 페이지를 동기화한다.
 
     Args:
         mapping: NotionPageMapping 인스턴스
         version: 특정 버전만 동기화 (None이면 전체)
+        force: True면 변경 감지 무시하고 강제 동기화
 
     Returns:
-        {'created': int, 'updated': int, 'skipped': int}
+        {'created': int, 'updated': int, 'skipped': int, 'unchanged': bool}
     """
     product = mapping.product
-    stats = {'created': 0, 'updated': 0, 'skipped': 0}
+    stats = {'created': 0, 'updated': 0, 'skipped': 0, 'unchanged': False}
 
-    # 한국어 MD 가져오기
-    md_ko = fetch_page_markdown(mapping.page_id_ko)
-    md_ko = _clean_notion_md(md_ko)
+    # ── 한국어 페이지 변경 감지 ──
+    ko_changed = True
+    ko_last_edited = None
+    if not force:
+        ko_changed, ko_last_edited = _check_page_changed(mapping, mapping.page_id_ko, 'ko')
+
+    en_changed = False
+    en_last_edited = None
+    if mapping.page_id_en and not force:
+        en_changed, en_last_edited = _check_page_changed(mapping, mapping.page_id_en, 'en')
+
+    if not force and not ko_changed and not en_changed:
+        stats['unchanged'] = True
+        return stats
+
+    # ── 한국어 MD 가져오기 & 파일 저장 ──
+    if force or ko_changed:
+        md_ko, ko_content_changed = _fetch_and_save_md(mapping, mapping.page_id_ko, 'ko')
+    else:
+        # 메타데이터상 변경 없지만 영문이 변경됨 → 기존 파일에서 로드
+        md_ko = _load_md_file(product, 'ko')
+        if not md_ko:
+            md_ko, ko_content_changed = _fetch_and_save_md(mapping, mapping.page_id_ko, 'ko')
+        else:
+            ko_content_changed = False
+
     notes_ko = parse_md_to_patch_notes(md_ko)
+    logger.info('%s 파싱된 버전 수: %d', product, len(notes_ko))
 
-    # 영문 MD (있으면)
+    # ── 영문 MD (있으면) ──
     notes_en_by_version = {}
+    en_content_changed = False
     if mapping.page_id_en:
         try:
-            md_en = fetch_page_markdown(mapping.page_id_en)
-            md_en = _clean_notion_md(md_en)
-            for note in parse_md_to_patch_notes(md_en):
-                notes_en_by_version[note['version']] = note
-        except Exception as e:
-            logger.warning(f'영문 페이지 로드 실패 ({mapping.page_id_en}): {e}')
+            if force or en_changed:
+                md_en, en_content_changed = _fetch_and_save_md(mapping, mapping.page_id_en, 'en')
+            else:
+                md_en = _load_md_file(product, 'en')
+                if not md_en:
+                    md_en, en_content_changed = _fetch_and_save_md(mapping, mapping.page_id_en, 'en')
 
+            if md_en:
+                for note in parse_md_to_patch_notes(md_en):
+                    notes_en_by_version[note['version']] = note
+        except Exception as e:
+            logger.warning('영문 페이지 로드 실패 (%s): %s', mapping.page_id_en, e)
+
+    # ── 파일 내용도 동일하면 DB 업데이트 스킵 ──
+    if not force and not ko_content_changed and not en_content_changed:
+        logger.info('%s MD 파일 내용 변경 없음 — DB 업데이트 스킵', product)
+        # last_edited 타임스탬프만 갱신
+        if ko_last_edited:
+            mapping.notion_last_edited_ko = ko_last_edited
+        if en_last_edited:
+            mapping.notion_last_edited_en = en_last_edited
+        mapping.last_synced_at = timezone.now()
+        mapping.save(update_fields=['notion_last_edited_ko', 'notion_last_edited_en', 'last_synced_at'])
+        stats['unchanged'] = True
+        return stats
+
+    # ── DB upsert ──
     for note_data in notes_ko:
         v = note_data.get('version', '').strip()
         patch_date = note_data.get('patch_date', '').strip()
@@ -354,7 +492,6 @@ def sync_product(mapping: NotionPageMapping, version: str = None) -> dict:
             stats['skipped'] += 1
             continue
 
-        # 특정 버전 필터
         if version and v != version:
             continue
 
@@ -367,7 +504,6 @@ def sync_product(mapping: NotionPageMapping, version: str = None) -> dict:
         )
 
         if not created:
-            # 기존 데이터 삭제 후 재등록
             patch_note.release_date = patch_date
             patch_note.save()
             patch_note.features.all().delete()
@@ -382,6 +518,20 @@ def sync_product(mapping: NotionPageMapping, version: str = None) -> dict:
         _save_section(patch_note, note_data.get('improvements'), en.get('improvements'), Improvement)
         _save_section(patch_note, note_data.get('bug_fixes'), en.get('bug_fixes'), BugFix)
         _save_section(patch_note, note_data.get('special_notes'), en.get('special_notes'), Remark)
+
+        if en:
+            patch_note.translation_status = 'done'
+        else:
+            patch_note.translation_status = 'skipped'
+        patch_note.save(update_fields=['translation_status', 'updated_at'])
+
+    # ── 동기화 타임스탬프 갱신 ──
+    if ko_last_edited:
+        mapping.notion_last_edited_ko = ko_last_edited
+    if en_last_edited:
+        mapping.notion_last_edited_en = en_last_edited
+    mapping.last_synced_at = timezone.now()
+    mapping.save(update_fields=['notion_last_edited_ko', 'notion_last_edited_en', 'last_synced_at'])
 
     return stats
 

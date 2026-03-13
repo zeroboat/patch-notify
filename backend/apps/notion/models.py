@@ -12,6 +12,9 @@ class NotionPageMapping(BaseModel):
     )
     page_id_ko = models.CharField(max_length=100, verbose_name="한국어 페이지 ID")
     page_id_en = models.CharField(max_length=100, verbose_name="영문 페이지 ID", blank=True, default='')
+    notion_last_edited_ko = models.DateTimeField(null=True, blank=True, verbose_name="Notion 한국어 최종 수정일")
+    notion_last_edited_en = models.DateTimeField(null=True, blank=True, verbose_name="Notion 영문 최종 수정일")
+    last_synced_at = models.DateTimeField(null=True, blank=True, verbose_name="마지막 동기화 일시")
 
     class Meta:
         verbose_name = "Notion 페이지 매핑"
