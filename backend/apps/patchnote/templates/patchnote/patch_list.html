@@ -319,6 +319,10 @@
                                 <i class="bx bx-calendar me-1"></i>{{ note.release_date|date:"Y년 m월 d일" }}
                             </span>
                             {% if user_role == 'admin' or user_role == 'dev' %}
+                            <button class="btn btn-sm btn-icon btn-label-success btn-push-notion"
+                                    data-id="{{ note.id }}" data-version="{{ note.version }}" title="Notion Push">
+                                <i class="bx bx-upload"></i>
+                            </button>
                             <button class="btn btn-sm btn-icon btn-label-primary btn-edit-note"
                                     data-id="{{ note.id }}" title="수정">
                                 <i class="bx bx-edit"></i>
@@ -631,6 +635,106 @@
                 }
             });
         });
+    </script>
+
+    <!-- ===== Notion Push 모달 ===== -->
+    <div class="modal fade" id="notionPushModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header border-bottom py-3">
+                    <h6 class="modal-title fw-bold mb-0">
+                        <i class="bx bx-upload me-1 text-success"></i>Notion Push
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted mb-3">
+                        <strong id="pushVersion"></strong> 을 Notion에 Push합니다.
+                    </p>
+                    <input type="hidden" id="pushNoteId">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Push 모드</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="notionPushMode" id="notionPushInsert" value="true" checked>
+                                <label class="form-check-label small" for="notionPushInsert">
+                                    <strong>Insert</strong>
+                                    <span class="text-muted d-block" style="font-size:0.75rem;">새 버전 삽입</span>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="notionPushMode" id="notionPushUpdate" value="false">
+                                <label class="form-check-label small" for="notionPushUpdate">
+                                    <strong>Update</strong>
+                                    <span class="text-muted d-block" style="font-size:0.75rem;">기존 내용 교체</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="notionPushResult" class="d-none"></div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-label-secondary" data-bs-dismiss="modal">닫기</button>
+                    <button type="button" id="btnNotionPush" class="btn btn-sm btn-success">
+                        <i class="bx bx-upload me-1"></i>Push
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ── Notion Push ────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', function () {
+        const pushModalEl = document.getElementById('notionPushModal');
+        if (!pushModalEl) return;
+        const pushModal = new bootstrap.Modal(pushModalEl);
+
+        document.querySelectorAll('.btn-push-notion').forEach(btn => {
+            btn.addEventListener('click', function () {
+                document.getElementById('pushNoteId').value = this.dataset.id;
+                document.getElementById('pushVersion').textContent = 'v' + this.dataset.version;
+                document.getElementById('notionPushResult').classList.add('d-none');
+                document.getElementById('btnNotionPush').disabled = false;
+                document.getElementById('notionPushInsert').checked = true;
+                pushModal.show();
+            });
+        });
+
+        document.getElementById('btnNotionPush').addEventListener('click', async function () {
+            const btn = this;
+            const noteId = document.getElementById('pushNoteId').value;
+            const isNew = document.querySelector('input[name="notionPushMode"]:checked').value;
+            const resultEl = document.getElementById('notionPushResult');
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Push...';
+            resultEl.classList.add('d-none');
+
+            const fd = new FormData();
+            fd.append('csrfmiddlewaretoken', csrfToken);
+            fd.append('patch_note_id', noteId);
+            fd.append('is_new', isNew);
+
+            try {
+                const res = await fetch("{% url 'notion:notion_push' %}", { method: 'POST', body: fd });
+                const data = await res.json();
+                resultEl.classList.remove('d-none');
+                if (res.ok) {
+                    resultEl.innerHTML = `<div class="alert alert-success mb-0 py-2 small">${data.message}</div>`;
+                } else {
+                    resultEl.innerHTML = `<div class="alert alert-danger mb-0 py-2 small">${data.error}</div>`;
+                }
+            } catch (e) {
+                resultEl.classList.remove('d-none');
+                resultEl.innerHTML = '<div class="alert alert-danger mb-0 py-2 small">네트워크 오류</div>';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bx bx-upload me-1"></i>Push';
+            }
+        });
+    });
     </script>
 
     <script>
