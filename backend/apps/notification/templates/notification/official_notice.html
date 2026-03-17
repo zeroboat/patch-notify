@@ -127,6 +127,9 @@
           <button type="button" class="btn btn-label-secondary" id="btnReset">
             <i class="bx bx-reset me-1"></i>초기화
           </button>
+          <button type="button" class="btn btn-label-info" id="btnPreview">
+            <i class="bx bx-show me-1"></i>미리보기
+          </button>
           <button type="submit" class="btn btn-primary px-5" id="btnSend">
             <i class="bx bx-send me-1"></i>발송하기
           </button>
@@ -141,6 +144,27 @@
 <style>
   .ck-editor__editable { min-height: 420px; }
 </style>
+
+<!-- 이메일 미리보기 모달 -->
+<div class="modal fade" id="emailPreviewModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bx bx-envelope me-2"></i>이메일 미리보기</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0" style="height:70vh;overflow:hidden;position:relative;">
+        <div id="previewSpinner" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#fff;z-index:10;">
+          <div class="spinner-border text-primary"></div>
+        </div>
+        <iframe id="previewFrame" style="width:100%;height:100%;border:none;display:block;visibility:hidden;"></iframe>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block page_js %}
@@ -274,6 +298,38 @@ document.addEventListener('DOMContentLoaded', function () {
     .finally(function () {
       btnSend.disabled = false;
       btnSend.innerHTML = '<i class="bx bx-send me-1"></i>발송하기';
+    });
+  });
+
+  // ── 이메일 미리보기 ───────────────────────────────
+  document.getElementById('btnPreview').addEventListener('click', function () {
+    const subject = document.getElementById('noticeSubject').value.trim() || '(제목 없음)';
+    const body = editorInstance ? editorInstance.getData() : '';
+
+    const modal = new bootstrap.Modal(document.getElementById('emailPreviewModal'));
+    const spinner = document.getElementById('previewSpinner');
+    const frame = document.getElementById('previewFrame');
+
+    spinner.style.display = 'flex';
+    frame.style.visibility = 'hidden';
+    modal.show();
+
+    const formData = new URLSearchParams({ subject, body });
+    fetch("{% url 'notification:preview_email' %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData.toString(),
+    })
+    .then(r => r.text())
+    .then(function (html) {
+      frame.onload = function () {
+        frame.style.visibility = 'visible';
+        spinner.style.display = 'none';
+      };
+      frame.srcdoc = html;
+    })
+    .catch(function () {
+      spinner.innerHTML = '<span class="text-danger">미리보기를 불러오지 못했습니다.</span>';
     });
   });
 
