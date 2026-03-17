@@ -12,11 +12,11 @@
 | **패치노트 관리** | 제품별 버전/기능추가/기능개선/버그수정/특이사항 등록·수정·삭제 |
 | **Notion 동기화** | Notion Markdown API 기반 패치노트 자동 동기화 (변경 감지 + 파일 캐싱) |
 | **영문 자동 번역** | 패치노트 등록·수정 시 내부 Ollama AI 서버로 한→영 번역 (백그라운드) |
-| **고객사 관리** | 고객사 정보 및 솔루션 구독 현황 관리 |
+| **고객사 관리** | 고객사 정보 및 솔루션 구독 현황 관리, Google 연락처 CSV 가져오기, On-Premise 설치 여부 구분 |
 | **구독 관리** | 고객사별 Gmail / Slack 채널 구독 설정 (주기, 최대 건수) |
-| **공문 발송** | 솔루션 선택 또는 직접 입력 방식으로 Gmail 공문 발송 |
+| **공문 발송** | 솔루션 선택 또는 직접 입력 방식으로 Gmail 공문 발송, 발송 전 이메일 미리보기 |
 | **Slack 앱** | 고객사 워크스페이스에 앱 설치 → Home Tab에서 구독 직접 설정 |
-| **발송 로그** | 발송 이력 조회 (유형/채널/상태/고객사/날짜 필터) |
+| **발송 로그** | 발송 이력 조회 (유형/채널/상태/고객사/날짜 필터), 공문 원문 조회, 실패 원인 상세 확인 |
 
 ---
 
@@ -211,3 +211,16 @@ python manage.py runserver
 
 - 필터: 발송 유형 / 채널 / 상태 / 고객사 / 날짜 범위
 - 실패 건은 `error_message` 컬럼에서 원인 확인 가능
+
+---
+
+## 오픈소스 라이선스
+
+이 프로젝트는 아래 오픈소스 템플릿을 기반으로 제작되었습니다.
+
+| 항목 | 내용 |
+|------|------|
+| **템플릿** | [Sneat Free Bootstrap HTML + Django Admin Template](https://themeselection.com/item/sneat-free-bootstrap-html-django-admin-template/) |
+| **제작사** | [ThemeSelection](https://themeselection.com/) |
+| **라이선스** | [ThemeSelection Freebies License](https://themeselection.com/license/#freebies-license) |
+| **GitHub** | [themeselection/sneat-bootstrap-html-django-admin-template-free](https://github.com/themeselection/sneat-bootstrap-html-django-admin-template-free) |

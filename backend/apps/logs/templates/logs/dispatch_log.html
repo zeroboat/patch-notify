@@ -184,7 +184,16 @@
             </td>
             <td class="align-middle small">{{ log.recipient }}</td>
             <td class="align-middle small text-truncate" style="max-width:200px;" title="{{ log.subject }}">
+              {% if log.log_type == 'official' and log.official_notice %}
+              <button class="btn btn-link p-0 text-start small text-truncate d-block w-100 btn-view-notice"
+                      type="button"
+                      data-notice-id="{{ log.official_notice.id }}"
+                      title="{{ log.subject }}">
+                {{ log.subject|default:"-" }}
+              </button>
+              {% else %}
               {{ log.subject|default:"-" }}
+              {% endif %}
             </td>
             <td class="align-middle text-center">
               {% if log.status == 'success' %}
@@ -270,6 +279,27 @@
   </div>
 </div>
 
+<!-- 공문 원문 모달 -->
+<div class="modal fade" id="noticeViewModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bx bx-envelope me-2"></i>공문 원문</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0" style="height:70vh;overflow:hidden;position:relative;">
+        <div id="noticeSpinner" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#fff;z-index:10;">
+          <div class="spinner-border text-primary"></div>
+        </div>
+        <iframe id="noticeFrame" style="width:100%;height:100%;border:none;display:block;visibility:hidden;"></iframe>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block page_js %}
@@ -279,6 +309,34 @@ document.addEventListener('DOMContentLoaded', function () {
   const errorModal = document.getElementById('errorModal');
   errorModal.addEventListener('show.bs.modal', function (e) {
     document.getElementById('errorDetail').textContent = e.relatedTarget.dataset.error;
+  });
+
+  // 공문 원문 보기
+  const noticeModal = new bootstrap.Modal(document.getElementById('noticeViewModal'));
+  const noticeFrame = document.getElementById('noticeFrame');
+  const noticeSpinner = document.getElementById('noticeSpinner');
+
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.btn-view-notice');
+    if (!btn) return;
+    const noticeId = btn.dataset.noticeId;
+
+    noticeFrame.style.visibility = 'hidden';
+    noticeSpinner.style.display = 'flex';
+    noticeModal.show();
+
+    fetch(`/notification/notice/${noticeId}/`)
+      .then(r => r.text())
+      .then(function (html) {
+        noticeFrame.onload = function () {
+          noticeFrame.style.visibility = 'visible';
+          noticeSpinner.style.display = 'none';
+        };
+        noticeFrame.srcdoc = html;
+      })
+      .catch(function () {
+        noticeSpinner.innerHTML = '<span class="text-danger">공문을 불러오지 못했습니다.</span>';
+      });
   });
 });
 </script>

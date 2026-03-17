@@ -5,7 +5,8 @@ import traceback
 from django.views.generic import TemplateView
 from django.http import JsonResponse
 from django.http import HttpResponse
-from django.views.decorators.http import require_POST
+from django.shortcuts import get_object_or_404
+from django.views.decorators.http import require_POST, require_GET
 
 logger = logging.getLogger(__name__)
 from django.utils import timezone
@@ -215,3 +216,15 @@ def send_notice(request):
         'success_count': success_count,
         'failed_count': failed_count,
     })
+
+
+@require_GET
+@role_required('se')
+def view_notice(request, notice_id):
+    """발송 이력에서 공문 원문 조회 — 렌더링된 이메일 HTML 반환"""
+    notice = get_object_or_404(OfficialNotice, pk=notice_id)
+    html = render_to_string(
+        'notification/email/official_notice_email.html',
+        {'subject': notice.subject, 'body': notice.body},
+    )
+    return HttpResponse(html)
