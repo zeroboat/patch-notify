@@ -4,6 +4,7 @@ from apps.base.models import BaseModel
 
 class Customer(BaseModel):
     name = models.CharField(max_length=100, verbose_name="고객사명")
+    is_on_premise = models.BooleanField(default=False, verbose_name="On-Premise 설치")
     solutions = models.ManyToManyField('product.Solution', related_name='customers', verbose_name="구매 솔루션", blank=True)
 
     class Meta:

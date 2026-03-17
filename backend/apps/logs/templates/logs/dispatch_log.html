@@ -190,7 +190,15 @@
               {% if log.status == 'success' %}
               <span class="badge bg-success">성공</span>
               {% elif log.status == 'failed' %}
-              <span class="badge bg-danger" {% if log.error_message %}title="{{ log.error_message }}"{% endif %}>실패</span>
+              {% if log.error_message %}
+              <button class="badge bg-danger border-0" type="button"
+                      data-bs-toggle="modal" data-bs-target="#errorModal"
+                      data-error="{{ log.error_message }}">
+                실패 <i class="bx bx-info-circle ms-1"></i>
+              </button>
+              {% else %}
+              <span class="badge bg-danger">실패</span>
+              {% endif %}
               {% else %}
               <span class="badge bg-warning">대기</span>
               {% endif %}
@@ -246,4 +254,32 @@
   </div>
 
 </div>
+
+<!-- 에러 상세 모달 -->
+<div class="modal fade" id="errorModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-bottom-0 pb-0">
+        <h6 class="modal-title text-danger"><i class="bx bx-error-circle me-2"></i>발송 실패 원인</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <pre id="errorDetail" class="bg-body-secondary rounded p-3 small mb-0" style="white-space:pre-wrap;word-break:break-all;"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const errorModal = document.getElementById('errorModal');
+  errorModal.addEventListener('show.bs.modal', function (e) {
+    document.getElementById('errorDetail').textContent = e.relatedTarget.dataset.error;
+  });
+});
+</script>
 {% endblock %}

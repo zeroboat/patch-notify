@@ -52,7 +52,7 @@ class DispatchLog(BaseModel):
         related_name='dispatch_logs',
         verbose_name="공문",
     )
-    recipient = models.CharField(max_length=300, verbose_name="수신자")
+    recipient = models.TextField(verbose_name="수신자")
     subject = models.CharField(max_length=300, blank=True, verbose_name="제목")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_PENDING, verbose_name="상태")
     error_message = models.TextField(blank=True, verbose_name="오류 메시지")

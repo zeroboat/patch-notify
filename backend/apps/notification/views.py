@@ -1,8 +1,13 @@
 import json
+import logging
+import traceback
 
 from django.views.generic import TemplateView
 from django.http import JsonResponse
+from django.http import HttpResponse
 from django.views.decorators.http import require_POST
+
+logger = logging.getLogger(__name__)
 from django.utils import timezone
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
@@ -16,8 +21,8 @@ from apps.logs.models import DispatchLog
 from .models import OfficialNotice
 
 
-def _send_official_email(to_email, subject, body_html):
-    """Gmail SMTP로 공문 이메일 발송. (성공 여부, 에러 메시지) 반환"""
+def _send_official_email(to_emails, subject, body_html):
+    """Gmail SMTP로 공문 이메일 발송. to_emails는 리스트. (성공 여부, 에러 메시지) 반환"""
     try:
         html_body = render_to_string(
             'notification/email/official_notice_email.html',
@@ -28,13 +33,17 @@ def _send_official_email(to_email, subject, body_html):
         msg = EmailMultiAlternatives(
             subject=subject,
             body=text_body,
-            to=[to_email],
+            to=to_emails,
         )
         msg.attach_alternative(html_body, 'text/html')
-        msg.send()
+        sent = msg.send(fail_silently=False)
+        if sent == 0:
+            return False, '발송 서버가 메시지를 거부했습니다 (sent=0).'
         return True, ''
     except Exception as e:
-        return False, str(e)
+        err_detail = traceback.format_exc()
+        logger.error("이메일 발송 실패 to=%s\n%s", to_emails, err_detail)
+        return False, f"{type(e).__name__}: {e}"
 
 
 class OfficialNoticeView(RoleRequiredMixin, TemplateView):
@@ -59,6 +68,19 @@ class OfficialNoticeView(RoleRequiredMixin, TemplateView):
 
         context['solutions_data'] = solutions_data
         return context
+
+
+@require_POST
+@role_required()
+def preview_email(request):
+    """이메일 본문 미리보기 — 실제 이메일 템플릿으로 렌더링해서 HTML 반환"""
+    subject = request.POST.get('subject', '(제목 없음)').strip() or '(제목 없음)'
+    body = request.POST.get('body', '').strip()
+    html = render_to_string(
+        'notification/email/official_notice_email.html',
+        {'subject': subject, 'body': body},
+    )
+    return HttpResponse(html)
 
 
 @require_POST
@@ -103,34 +125,46 @@ def send_notice(request):
     if not body:
         return JsonResponse({'ok': False, 'error': '본문을 입력해주세요.'})
 
+    # ── 수신 그룹 구성 (고객사별 묶음) ─────────────────────────
+    # groups: [{'customer': obj_or_None, 'customer_name': str, 'emails': [str, ...]}]
     if send_mode == 'solution':
         solution_ids = request.POST.getlist('solution_ids[]')
         if not solution_ids:
             return JsonResponse({'ok': False, 'error': '솔루션을 선택해주세요.'})
-        emails = (
+
+        email_qs = (
             CustomerEmail.objects
             .filter(customer__solutions__id__in=solution_ids)
             .select_related('customer')
             .distinct()
+            .order_by('customer__name', 'email')
         )
-        recipients = [
-            {'customer': e.customer.name, 'customer_obj': e.customer, 'email': e.email, 'name': e.name or ''}
-            for e in emails
-        ]
+
+        # 고객사별로 묶기
+        customer_map = {}
+        for e in email_qs:
+            cid = e.customer_id
+            if cid not in customer_map:
+                customer_map[cid] = {'customer': e.customer, 'customer_name': e.customer.name, 'emails': []}
+            customer_map[cid]['emails'].append(e.email)
+        groups = list(customer_map.values())
+
     else:
         raw = request.POST.get('recipients_direct', '')
         email_list = [e.strip() for e in raw.replace(',', ';').split(';') if e.strip()]
         if not email_list:
             return JsonResponse({'ok': False, 'error': '수신 이메일을 입력해주세요.'})
-        recipients = [{'customer': '', 'customer_obj': None, 'email': e, 'name': ''} for e in email_list]
+        # direct 모드는 고객사 구분 없이 단일 그룹으로 발송
+        groups = [{'customer': None, 'customer_name': '', 'emails': email_list}]
 
-    if not recipients:
+    if not groups:
         return JsonResponse({'ok': False, 'error': '수신자가 없습니다.'})
 
     now = timezone.now()
+    total_emails = sum(len(g['emails']) for g in groups)
     recipients_for_json = [
-        {'customer': r['customer'], 'email': r['email'], 'name': r['name']}
-        for r in recipients
+        {'customer': g['customer_name'], 'emails': g['emails']}
+        for g in groups
     ]
 
     notice = OfficialNotice.objects.create(
@@ -138,41 +172,41 @@ def send_notice(request):
         body=body,
         send_mode=send_mode,
         recipients_json=json.dumps(recipients_for_json, ensure_ascii=False),
-        recipient_count=len(recipients),
+        recipient_count=total_emails,
         sent_at=now,
     )
 
-    # 수신자별 이메일 발송 + 로그 수집
+    # 고객사별 발송 + 로그 수집
     logs = []
     success_count = 0
-    for r in recipients:
-        ok, err = _send_official_email(r['email'], subject, body)
+    for g in groups:
+        ok, err = _send_official_email(g['emails'], subject, body)
         if ok:
             success_count += 1
         logs.append(DispatchLog(
             log_type=DispatchLog.TYPE_OFFICIAL,
             channel=DispatchLog.CHANNEL_EMAIL,
-            customer=r['customer_obj'],
+            customer=g['customer'],
             official_notice=notice,
-            recipient=r['email'],
+            recipient=', '.join(g['emails']),
             subject=subject,
             status=DispatchLog.STATUS_SUCCESS if ok else DispatchLog.STATUS_FAILED,
             error_message=err,
-            sent_at=now if ok else None,
+            sent_at=now,
         ))
 
     DispatchLog.objects.bulk_create(logs)
 
-    failed_count = len(recipients) - success_count
+    failed_count = len(groups) - success_count
     if success_count == 0:
         return JsonResponse({
             'ok': False,
-            'error': f'발송에 실패했습니다. ({failed_count}건 실패)',
+            'error': f'발송에 실패했습니다. ({failed_count}개 고객사 실패)',
         })
 
-    msg = f'{len(recipients)}명에게 발송 완료.'
+    msg = f'{len(groups)}개 고객사 ({total_emails}명)에게 발송 완료.'
     if failed_count:
-        msg = f'{success_count}명 발송 완료, {failed_count}명 실패.'
+        msg = f'{success_count}개 고객사 발송 완료, {failed_count}개 실패.'
 
     return JsonResponse({
         'ok': True,

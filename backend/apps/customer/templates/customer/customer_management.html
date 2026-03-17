@@ -16,16 +16,21 @@
       </h4>
       <p class="text-muted mb-0 small">고객사와 수신 이메일을 관리합니다.</p>
     </div>
-    <button class="btn btn-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasAddCustomer">
-      <i class="bx bx-plus me-1"></i> 고객사 추가
-    </button>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-success" type="button" data-bs-toggle="modal" data-bs-target="#csvImportModal">
+        <i class="bx bx-upload me-1"></i> CSV 가져오기
+      </button>
+      <button class="btn btn-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasAddCustomer">
+        <i class="bx bx-plus me-1"></i> 고객사 추가
+      </button>
+    </div>
   </div>
 
   <!-- 통계 카드 -->
   <div class="row g-4 mb-4">
     <div class="col-6 col-xl-3">
       <div class="card h-100">
-        <div class="card-body d-flex align-items-center gap-3">
+        <div class="card-body d-flex align-items-cepter gap-3">
           <div class="avatar avatar-md flex-shrink-0">
             <span class="avatar-initial rounded bg-label-primary">
               <i class="bx bx-buildings fs-4"></i>
@@ -52,6 +57,7 @@
             <tr>
               <th class="ps-4">#</th>
               <th>고객사명</th>
+              <th class="text-center">On-Premise</th>
               <th>구매 솔루션</th>
               <th>수신 이메일</th>
               <th class="text-center">관리</th>
@@ -63,6 +69,13 @@
               <td class="ps-4 text-muted small">{{ forloop.counter }}</td>
               <td>
                 <span class="fw-medium">{{ customer.name }}</span>
+              </td>
+              <td class="text-center">
+                {% if customer.is_on_premise %}
+                <span class="badge bg-label-warning"><i class="bx bx-server me-1"></i>On-Premise</span>
+                {% else %}
+                <span class="text-muted small">—</span>
+                {% endif %}
               </td>
               <td>
                 {% for solution in customer.solutions.all %}
@@ -102,6 +115,7 @@
                   <button class="btn btn-sm btn-icon btn-text-primary edit-customer-btn"
                           data-customer-id="{{ customer.id }}"
                           data-customer-name="{{ customer.name }}"
+                          data-on-premise="{{ customer.is_on_premise|yesno:'true,false' }}"
                           data-solution-ids="[{% for s in customer.solutions.all %}{{ s.id }}{% if not forloop.last %},{% endif %}{% endfor %}]"
                           title="편집">
                     <i class="bx bx-edit-alt"></i>
@@ -118,7 +132,7 @@
             </tr>
             {% empty %}
             <tr>
-              <td colspan="5" class="text-center py-5 text-muted">
+              <td colspan="6" class="text-center py-5 text-muted">
                 <i class="bx bx-buildings fs-2 d-block mb-2"></i>
                 등록된 고객사가 없습니다.
               </td>
@@ -145,6 +159,14 @@
         <label class="form-label fw-medium">고객사명 <span class="text-danger">*</span></label>
         <input type="text" class="form-control" name="name" placeholder="고객사명을 입력하세요" required>
       </div>
+      <div class="mb-3">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="addOnPremise" name="is_on_premise" value="true">
+          <label class="form-check-label" for="addOnPremise">
+            <i class="bx bx-server me-1"></i> On-Premise 설치 고객사
+          </label>
+        </div>
+      </div>
       <div class="d-grid mt-4">
         <button type="submit" class="btn btn-primary">
           <i class="bx bx-save me-1"></i> 저장
@@ -166,6 +188,16 @@
     <div>
       <label class="form-label fw-semibold">고객사명</label>
       <input type="text" class="form-control" id="editCustomerName">
+    </div>
+
+    <!-- On-Premise -->
+    <div>
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="editOnPremise">
+        <label class="form-check-label" for="editOnPremise">
+          <i class="bx bx-server me-1"></i> On-Premise 설치 고객사
+        </label>
+      </div>
     </div>
 
     <!-- 구매 솔루션 -->
@@ -212,6 +244,56 @@
   </div>
 </div>
 
+<!-- ===== CSV 가져오기 모달 ===== -->
+<div class="modal fade" id="csvImportModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-bottom">
+        <h5 class="modal-title fw-bold">
+          <i class="bx bx-upload me-1 text-success"></i>Google 연락처 CSV 가져오기
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-light border py-2 px-3 small mb-3">
+          <strong>사용법</strong>&ensp;
+          <a href="https://contacts.google.com/" target="_blank" rel="noopener">Google 연락처</a> →
+          내보내기 → Google CSV 형식으로 다운로드 → 여기에 업로드
+        </div>
+
+        <!-- 파일 선택 -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold">CSV 파일 <span class="text-danger">*</span></label>
+          <input type="file" id="csvFileInput" class="form-control" accept=".csv">
+        </div>
+
+        <!-- 미리보기 -->
+        <div id="csvPreviewArea" class="d-none">
+          <label class="form-label fw-semibold">미리보기 <small class="text-muted fw-normal">(최대 10건)</small></label>
+          <div class="table-responsive border rounded" style="max-height:300px; overflow-y:auto;">
+            <table class="table table-sm table-hover mb-0 small">
+              <thead class="table-light sticky-top">
+                <tr id="csvPreviewHead"></tr>
+              </thead>
+              <tbody id="csvPreviewBody"></tbody>
+            </table>
+          </div>
+          <div class="mt-2 small text-muted" id="csvPreviewInfo"></div>
+        </div>
+
+        <!-- 결과 -->
+        <div id="csvImportResult" class="d-none mt-3"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">닫기</button>
+        <button type="button" id="btnCsvImport" class="btn btn-success" disabled>
+          <i class="bx bx-import me-1"></i>가져오기
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Django → JS 데이터 브릿지 -->
 <script id="customerEmailData" type="application/json">
 {
@@ -250,11 +332,13 @@ document.addEventListener('DOMContentLoaded', function () {
   document.querySelectorAll('.edit-customer-btn').forEach(btn => {
     btn.addEventListener('click', function () {
       currentCustomerId = this.dataset.customerId;
-      const name       = this.dataset.customerName;
+      const name        = this.dataset.customerName;
+      const onPremise   = this.dataset.onPremise === 'true';
       const solutionIds = JSON.parse(this.dataset.solutionIds);
 
-      // 고객사명 세팅
+      // 고객사명 + On-Premise 세팅
       document.getElementById('editCustomerName').value = name;
+      document.getElementById('editOnPremise').checked = onPremise;
 
       // 솔루션 체크박스 초기화
       document.querySelectorAll('.solution-checkbox').forEach(cb => {
@@ -365,7 +449,8 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
     const selectedSolutions = [...document.querySelectorAll('.solution-checkbox:checked')].map(cb => cb.value);
-    const body = new URLSearchParams({ customer_id: currentCustomerId, name });
+    const isOnPremise = document.getElementById('editOnPremise').checked;
+    const body = new URLSearchParams({ customer_id: currentCustomerId, name, is_on_premise: isOnPremise });
     selectedSolutions.forEach(id => body.append('solution_ids', id));
 
     fetch(UPDATE_URL, {
@@ -427,6 +512,125 @@ document.addEventListener('DOMContentLoaded', function () {
       title: msg.text,
       showConfirmButton: false, timer: 3500, timerProgressBar: true,
     });
+  });
+
+  // ── CSV 가져오기 ─────────────────────────────────────────────
+  const csvFileInput = document.getElementById('csvFileInput');
+  const csvPreviewArea = document.getElementById('csvPreviewArea');
+  const csvPreviewHead = document.getElementById('csvPreviewHead');
+  const csvPreviewBody = document.getElementById('csvPreviewBody');
+  const csvPreviewInfo = document.getElementById('csvPreviewInfo');
+  const csvImportResult = document.getElementById('csvImportResult');
+  const btnCsvImport = document.getElementById('btnCsvImport');
+
+  let csvParsedFile = null;
+
+  csvFileInput.addEventListener('change', function () {
+    const file = this.files[0];
+    csvPreviewArea.classList.add('d-none');
+    csvImportResult.classList.add('d-none');
+    btnCsvImport.disabled = true;
+    csvParsedFile = null;
+
+    if (!file) return;
+    csvParsedFile = file;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const text = e.target.result;
+      const lines = text.split('\n').filter(l => l.trim());
+      if (lines.length < 2) {
+        csvPreviewInfo.textContent = '데이터가 없습니다.';
+        csvPreviewArea.classList.remove('d-none');
+        return;
+      }
+
+      // 간단한 CSV 파싱 (쉼표 기준, 따옴표 처리)
+      function parseCSVLine(line) {
+        const result = [];
+        let current = '', inQuote = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (inQuote) {
+            if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
+            else if (ch === '"') { inQuote = false; }
+            else { current += ch; }
+          } else {
+            if (ch === '"') { inQuote = true; }
+            else if (ch === ',') { result.push(current.trim()); current = ''; }
+            else { current += ch; }
+          }
+        }
+        result.push(current.trim());
+        return result;
+      }
+
+      const headers = parseCSVLine(lines[0]);
+      // 표시할 컬럼 필터 (Name, Organization, E-mail만)
+      const showCols = [];
+      headers.forEach((h, i) => {
+        const lower = h.toLowerCase();
+        if (lower === 'name' || lower === '이름' ||
+            lower.includes('organization') || lower.includes('조직') || lower.includes('company') || lower.includes('회사') ||
+            (lower.includes('mail') && lower.includes('value')) ||
+            (lower.includes('mail') && !lower.includes('type'))) {
+          showCols.push({ idx: i, name: h });
+        }
+      });
+      if (!showCols.length) {
+        // 컬럼 못 찾으면 전체 표시 (최대 6개)
+        headers.slice(0, 6).forEach((h, i) => showCols.push({ idx: i, name: h }));
+      }
+
+      csvPreviewHead.innerHTML = showCols.map(c => `<th class="text-nowrap">${c.name}</th>`).join('');
+
+      const dataLines = lines.slice(1, 11); // 최대 10행
+      csvPreviewBody.innerHTML = dataLines.map(line => {
+        const cols = parseCSVLine(line);
+        return '<tr>' + showCols.map(c => `<td>${cols[c.idx] || ''}</td>`).join('') + '</tr>';
+      }).join('');
+
+      csvPreviewInfo.textContent = `총 ${lines.length - 1}건 중 ${dataLines.length}건 미리보기`;
+      csvPreviewArea.classList.remove('d-none');
+      btnCsvImport.disabled = false;
+    };
+    reader.readAsText(file, 'UTF-8');
+  });
+
+  btnCsvImport.addEventListener('click', async function () {
+    if (!csvParsedFile) return;
+
+    const btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>가져오는 중...';
+    csvImportResult.classList.add('d-none');
+
+    const fd = new FormData();
+    fd.append('csrfmiddlewaretoken', CSRF_TOKEN);
+    fd.append('csv_file', csvParsedFile);
+
+    try {
+      const res = await fetch("{% url 'customer:import_csv' %}", { method: 'POST', body: fd });
+      const data = await res.json();
+      csvImportResult.classList.remove('d-none');
+      if (res.ok) {
+        csvImportResult.innerHTML =
+          `<div class="alert alert-success mb-0 small">` +
+          `<i class="bx bx-check-circle me-1"></i>${data.message}</div>`;
+        // 3초 후 페이지 리로드
+        setTimeout(() => location.reload(), 3000);
+      } else {
+        csvImportResult.innerHTML =
+          `<div class="alert alert-danger mb-0 small">` +
+          `<i class="bx bx-error-circle me-1"></i>${data.error}</div>`;
+      }
+    } catch (e) {
+      csvImportResult.classList.remove('d-none');
+      csvImportResult.innerHTML = '<div class="alert alert-danger mb-0 small">네트워크 오류</div>';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bx bx-import me-1"></i>가져오기';
+    }
   });
 
 }); // DOMContentLoaded
