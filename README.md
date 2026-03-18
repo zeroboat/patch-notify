@@ -36,14 +36,15 @@
 
 ## 기술 스택
 
-- **Backend** Django 6.0.2 (Python 3.12)
-- **Database** PostgreSQL 18
-- **Static Files** WhiteNoise (Gunicorn 환경에서 static 서빙)
-- **Email** Gmail SMTP (`EmailMultiAlternatives`)
-- **Slack** slack-bolt (OAuth 2.0, Home Tab, Block Kit)
-- **AI 번역** Ollama (내부 서버, `/api/generate`)
-- **Notion 연동** Notion Markdown API 기반 패치노트 자동 동기화
-- **배포** Docker Compose (backend + db + notion_md volume)
+| 서비스 | 기술 |
+|--------|------|
+| **Backend (내부)** | Django 6.0.2 (Python 3.12) · Gunicorn · WhiteNoise |
+| **Slack API (외부)** | FastAPI · Uvicorn · slack-bolt · SQLAlchemy |
+| **Database** | PostgreSQL 18 (두 서비스가 공유) |
+| **Email** | Gmail SMTP (`EmailMultiAlternatives`) |
+| **AI 번역** | Ollama (내부 서버, `/api/generate`) |
+| **Notion 연동** | Notion Markdown API 기반 패치노트 자동 동기화 |
+| **배포** | Docker Compose (backend + slack-api + db) |
 
 ---
 
@@ -73,29 +74,50 @@ Notion 페이지에서 사용되는 다양한 섹션명을 3개 카테고리로 
 
 ---
 
+## 서비스 구조
+
+```
+[내부망]                          [외부 공개]
+backend (Django · 포트 8000)      slack-api (FastAPI · 포트 8001)
+  - 패치노트 / 고객사 / 공문 관리     - GET  /slack/install/
+  - 발송 로그 조회                   - GET  /slack/oauth/callback/
+  - Django Admin (워크스페이스 승인)  - POST /slack/events/
+          │                                │
+          └──────── PostgreSQL ────────────┘
+                   (테이블 공유)
+```
+
 ## 프로젝트 구조
 
 ```
 patch-notify/
-├── backend/
+├── backend/                     # Django (내부 전용)
 │   ├── apps/
-│   │   ├── authentication/  # 로그인, 회원가입, 역할(UserProfile)
-│   │   ├── base/            # 공통 믹스인 (RoleRequiredMixin, role_required)
-│   │   ├── patchnote/       # 패치노트 등록·수정·삭제, 영문 번역
-│   │   ├── product/         # 솔루션 / 제품 관리
-│   │   ├── customer/        # 고객사 관리
-│   │   ├── notification/    # 공문 작성 및 Gmail 발송
-│   │   ├── subscriber/      # 고객사별 구독 설정 (Gmail / Slack)
-│   │   ├── slack_app/       # Slack 앱 OAuth, Home Tab, 이벤트 처리
-│   │   ├── notion/          # Notion 페이지 매핑 및 동기화
-│   │   └── logs/            # 발송 로그 조회
-│   ├── core/                # settings, urls, context_processors
-│   ├── notion_md/           # Notion MD 파일 캐시 (Docker volume)
+│   │   ├── authentication/      # 로그인, 회원가입, 역할(UserProfile)
+│   │   ├── base/                # 공통 믹스인 (RoleRequiredMixin, role_required)
+│   │   ├── patchnote/           # 패치노트 등록·수정·삭제, 영문 번역
+│   │   ├── product/             # 솔루션 / 제품 관리
+│   │   ├── customer/            # 고객사 관리
+│   │   ├── notification/        # 공문 작성 및 Gmail 발송
+│   │   ├── subscriber/          # 고객사별 구독 설정 (Gmail / Slack)
+│   │   ├── slack_app/           # SlackWorkspace 모델·Admin (스키마 관리)
+│   │   ├── notion/              # Notion 페이지 매핑 및 동기화
+│   │   └── logs/                # 발송 로그 조회
+│   ├── core/                    # settings, urls, context_processors
+│   ├── notion_md/               # Notion MD 파일 캐시 (Docker volume)
 │   └── requirements.txt
-├── patchnote-converter/     # 독립 실행용 패치노트 파서
+├── slack-api/                   # FastAPI (외부 공개)
+│   ├── main.py                  # OAuth install/callback, events 라우트
+│   ├── bolt_app.py              # slack_bolt 이벤트 핸들러
+│   ├── home_tab.py              # Block Kit 빌더
+│   ├── database.py              # SQLAlchemy 엔진
+│   ├── models.py                # Django 테이블 Table 정의
+│   ├── requirements.txt
+│   └── Dockerfile
+├── patchnote-converter/         # 독립 실행용 패치노트 파서
 ├── docker-compose.yml
 ├── .env.example
-└── dev.env                  # 로컬 개발용 환경변수 (gitignore)
+└── dev.env                      # 로컬 개발용 환경변수 (gitignore)
 ```
 
 ---
@@ -163,6 +185,7 @@ docker compose logs -f backend
 
 ### 3. 로컬 개발 실행
 
+**Django (백엔드)**
 ```bash
 cp .env.example dev.env   # dev.env 값 채우기
 
@@ -173,8 +196,25 @@ pip install -r requirements.txt
 
 python manage.py migrate
 python manage.py createsuperuser
-python manage.py runserver
+python manage.py runserver      # http://localhost:8000
 ```
+
+**FastAPI (Slack API)**
+```bash
+cd slack-api
+python -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
+uvicorn main:app --reload --port 8001   # http://localhost:8001
+```
+
+**Slack 로컬 테스트 (ngrok)**
+```bash
+# FastAPI 쪽에만 ngrok 연결
+ngrok http 8001
+```
+→ 발급된 `https://xxxx.ngrok.io` 를 Slack App 설정의 Event URL / OAuth Redirect URL 에 입력하고 `dev.env`의 `SLACK_REDIRECT_URI`도 동일하게 변경
 
 ---
 
@@ -184,15 +224,17 @@ python manage.py runserver
 
 | 항목 | 값 |
 |------|----|
-| **OAuth Redirect URL** | `https://yourdomain.com/slack/oauth/callback/` |
-| **Event Subscriptions URL** | `https://yourdomain.com/slack/events/` |
+| **OAuth Redirect URL** | `https://slack-api.yourcompany.com/slack/oauth/callback/` |
+| **Event Subscriptions URL** | `https://slack-api.yourcompany.com/slack/events/` |
 | **Subscribe to Events** | `app_home_opened` |
 | **Bot Token Scopes** | `chat:write`, `channels:read` |
 | **App Home** | Home Tab 활성화 |
 
+> 로컬 테스트 시 `slack-api.yourcompany.com` 대신 ngrok URL을 사용합니다.
+
 **고객사 연동 흐름:**
-1. 고객사 담당자가 `/slack/install/` 접속 → Slack OAuth 동의
-2. 관리자가 Django Admin에서 워크스페이스 **승인** + **고객사 연결**
+1. 고객사 담당자가 `https://slack-api.yourcompany.com/slack/install/` 접속 → Slack OAuth 동의
+2. 관리자가 Django Admin(`https://backend.yourcompany.com/admin/`)에서 워크스페이스 **승인** + **고객사 연결**
 3. 고객사 직원이 Slack Home Tab에서 솔루션별 구독 설정
 
 ---
