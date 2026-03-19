@@ -3,8 +3,8 @@ slack_bolt App 인스턴스 + 이벤트 핸들러
 FastAPI 어댑터를 통해 /slack/events/ 에서 수신
 """
 import os
+from datetime import datetime, timezone
 from sqlalchemy import select, and_
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from slack_bolt import App
 from slack_sdk.oauth.installation_store import InstallationStore
 from slack_sdk.oauth.installation_store.models.bot import Bot
@@ -23,20 +23,25 @@ class SAInstallationStore(InstallationStore):
     def save(self, installation: Installation, **kwargs):
         db = SessionLocal()
         try:
-            stmt = (
-                pg_insert(slack_workspace)
-                .values(
+            existing = db.execute(
+                select(slack_workspace).where(slack_workspace.c.team_id == installation.team_id)
+            ).fetchone()
+            if existing:
+                db.execute(
+                    slack_workspace.update()
+                    .where(slack_workspace.c.team_id == installation.team_id)
+                    .values(team_name=installation.team_name or '', bot_token=installation.bot_token, updated_at=datetime.now(timezone.utc))
+                )
+            else:
+                now = datetime.now(timezone.utc)
+                db.execute(slack_workspace.insert().values(
                     team_id=installation.team_id,
                     team_name=installation.team_name or '',
                     bot_token=installation.bot_token,
                     status='pending',
-                )
-                .on_conflict_do_update(
-                    index_elements=['team_id'],
-                    set_={'team_name': installation.team_name or '', 'bot_token': installation.bot_token},
-                )
-            )
-            db.execute(stmt)
+                    created_at=now,
+                    updated_at=now,
+                ))
             db.commit()
         finally:
             db.close()
@@ -61,7 +66,7 @@ class SAInstallationStore(InstallationStore):
             ).fetchone()
             if not row:
                 return None
-            return Installation(bot_token=row.bot_token, team_id=row.team_id, team_name=row.team_name)
+            return Installation(bot_token=row.bot_token, team_id=row.team_id, team_name=row.team_name, user_id="")
         finally:
             db.close()
 
@@ -110,6 +115,7 @@ def _pending_view():
 
 @bolt_app.event("app_home_opened")
 def handle_app_home_opened(event, client, body):
+    # print("home tab test") // 디버깅용 로그
     user_id = event['user']
     team_id = body.get('team_id') or body.get('team', {}).get('id', '')
 
@@ -120,7 +126,12 @@ def handle_app_home_opened(event, client, body):
 
     db = SessionLocal()
     try:
-        blocks = build_home_tab(db, workspace.customer_id, workspace.team_name)
+        from models import customer as customer_table
+        customer_row = db.execute(
+            select(customer_table).where(customer_table.c.id == workspace.customer_id)
+        ).fetchone()
+        customer_name = customer_row.name if customer_row else workspace.team_name
+        blocks = build_home_tab(db, workspace.customer_id, customer_name)
     finally:
         db.close()
 
@@ -204,7 +215,12 @@ def handle_save_subscription(ack, body, view, client):
         _upsert_subscription(db, customer_id, solution_id, 'email', email_enabled, email_freq, email_max, None)
         _upsert_subscription(db, customer_id, solution_id, 'slack', slack_enabled, slack_freq, slack_max, slack_channel_val)
         db.commit()
-        blocks = build_home_tab(db, customer_id, workspace.team_name)
+        from models import customer as customer_table
+        customer_row = db.execute(
+            select(customer_table).where(customer_table.c.id == customer_id)
+        ).fetchone()
+        customer_name = customer_row.name if customer_row else workspace.team_name
+        blocks = build_home_tab(db, customer_id, customer_name)
     finally:
         db.close()
 

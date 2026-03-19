@@ -157,11 +157,15 @@ OLLAMA_MODEL=your-model-name
 GMAIL_USER=your@gmail.com
 GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
 
-# Slack App (https://api.slack.com/apps)
+# Slack App — slack-api 서비스 (FastAPI, 포트 8001)
 SLACK_CLIENT_ID=...
 SLACK_CLIENT_SECRET=...
 SLACK_SIGNING_SECRET=...
-SLACK_REDIRECT_URI=https://yourdomain.com/slack/oauth/callback/
+SLACK_REDIRECT_URI=https://slack-api.yourdomain.com/slack/oauth/callback/
+
+# [로컬 테스트 전용] SQLite 사용 시 주석 해제 + 경로 수정
+# 운영(Docker) 환경에서는 주석 처리 — DB_HOST/DB_NAME 등으로 자동 구성
+# DATABASE_URL=sqlite:///C:/절대경로/patch-notify/backend/db.sqlite3
 ```
 
 ### 2. Docker 실행

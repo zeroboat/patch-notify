@@ -5,23 +5,26 @@ FastAPI — Slack 외부 공개 엔드포인트
   POST /slack/events/           → Slack 이벤트 수신 (bolt)
 """
 import os
+from datetime import datetime, timezone
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', 'dev.env'))
+
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse
 from slack_bolt.adapter.fastapi import SlackRequestHandler
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy import select
 
 from bolt_app import bolt_app
 from database import SessionLocal
 from models import slack_workspace
 
-app = FastAPI(title="Patch Notify — Slack API")
+app = FastAPI(title="Patch Notify — Slack API", redirect_slashes=False)
 handler = SlackRequestHandler(bolt_app)
 
 
 @app.get("/slack/install/")
-def slack_install():
+def slack_install(team: str = None):
     """Slack OAuth 설치 시작 — Slack 인증 화면으로 리다이렉트"""
     scopes = "chat:write,channels:read"
     url = (
@@ -30,6 +33,8 @@ def slack_install():
         f"&scope={scopes}"
         f"&redirect_uri={os.environ['SLACK_REDIRECT_URI']}"
     )
+    if team:
+        url += f"&team={team}"
     return RedirectResponse(url)
 
 
@@ -70,16 +75,18 @@ async def slack_oauth_callback(request: Request):
         existing = db.execute(
             select(slack_workspace).where(slack_workspace.c.team_id == team_id)
         ).fetchone()
-
-        stmt = (
-            pg_insert(slack_workspace)
-            .values(team_id=team_id, team_name=team_name, bot_token=bot_token, status='pending')
-            .on_conflict_do_update(
-                index_elements=['team_id'],
-                set_={'team_name': team_name, 'bot_token': bot_token},
+        if existing:
+            db.execute(
+                slack_workspace.update()
+                .where(slack_workspace.c.team_id == team_id)
+                .values(team_name=team_name, bot_token=bot_token, updated_at=datetime.now(timezone.utc))
             )
-        )
-        db.execute(stmt)
+        else:
+            now = datetime.now(timezone.utc)
+            db.execute(slack_workspace.insert().values(
+                team_id=team_id, team_name=team_name, bot_token=bot_token, status='pending',
+                created_at=now, updated_at=now,
+            ))
         db.commit()
     finally:
         db.close()
@@ -98,4 +105,5 @@ async def slack_oauth_callback(request: Request):
 @app.post("/slack/events/")
 async def slack_events(request: Request):
     """Slack 이벤트 수신 (slack_bolt 서명 검증 포함)"""
+    # print("Received request at /slack/events/") // 디버깅용 로그
     return await handler.handle(request)
