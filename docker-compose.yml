@@ -30,6 +30,16 @@ services:
       db:
         condition: service_healthy
 
+  slack-api:
+    container_name: patch-slack
+    build: ./slack-api
+    ports:
+      - "8001:8001"
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   notion_md_data:

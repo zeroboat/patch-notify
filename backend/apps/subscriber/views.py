@@ -5,6 +5,7 @@ from django.views.decorators.http import require_POST, require_GET
 from web_project import TemplateLayout
 from apps.base.mixins import RoleRequiredMixin, role_required
 from apps.customer.models import Customer
+from apps.product.models import Product
 from .models import Subscription
 
 
@@ -20,17 +21,16 @@ class SubscriberManagementView(RoleRequiredMixin, TemplateView):
             Customer.objects
             .prefetch_related(
                 'solutions',
-                'subscriptions__solution',
+                'subscriptions__product__solution',
             )
             .order_by('name')
         )
 
-        # 테이블 표시용: 각 고객사의 Gmail/Slack 구독 솔루션 목록 첨부
         customer_rows = []
         for c in customers:
-            subs = list(c.subscriptions.filter(is_active=True).select_related('solution'))
-            email_subs = [s.solution.name for s in subs if s.channel == Subscription.CHANNEL_EMAIL]
-            slack_subs = [s.solution.name for s in subs if s.channel == Subscription.CHANNEL_SLACK]
+            subs = list(c.subscriptions.filter(is_active=True).select_related('product__solution'))
+            email_subs = sorted({s.product.solution.name for s in subs if s.channel == Subscription.CHANNEL_EMAIL})
+            slack_subs = sorted({s.product.solution.name for s in subs if s.channel == Subscription.CHANNEL_SLACK})
             customer_rows.append({
                 'id': c.id,
                 'name': c.name,
@@ -47,39 +47,43 @@ class SubscriberManagementView(RoleRequiredMixin, TemplateView):
 @require_GET
 @role_required('se')
 def get_customer_subscriptions(request, customer_id):
-    """Admin+SE AJAX: 특정 고객사의 구매 솔루션 목록 + 기존 구독 설정 반환"""
+    """Admin+SE AJAX: 특정 고객사의 구매 솔루션 > 제품별 구독 설정 반환"""
     try:
-        customer = Customer.objects.prefetch_related('solutions').get(pk=customer_id)
+        customer = Customer.objects.prefetch_related('solutions__products').get(pk=customer_id)
     except Customer.DoesNotExist:
         return JsonResponse({'ok': False, 'error': '고객사를 찾을 수 없습니다.'}, status=404)
 
-    # 구매 솔루션만
-    purchased_solutions = customer.solutions.order_by('name')
-
-    # 기존 구독 매핑: {(solution_id, channel): Subscription}
     existing = {
-        (s.solution_id, s.channel): s
-        for s in Subscription.objects.filter(customer=customer).select_related('solution')
+        (s.product_id, s.channel): s
+        for s in Subscription.objects.filter(customer=customer)
     }
 
     solutions_data = []
-    for sol in purchased_solutions:
-        email_sub = existing.get((sol.id, Subscription.CHANNEL_EMAIL))
-        slack_sub = existing.get((sol.id, Subscription.CHANNEL_SLACK))
+    for sol in customer.solutions.order_by('name'):
+        products_data = []
+        for prod in sol.products.all():
+            email_sub = existing.get((prod.id, Subscription.CHANNEL_EMAIL))
+            slack_sub = existing.get((prod.id, Subscription.CHANNEL_SLACK))
+            products_data.append({
+                'id': prod.id,
+                'platform': prod.get_platform_display(),
+                'category': prod.get_category_display(),
+                'email': {
+                    'active': email_sub.is_active if email_sub else False,
+                    'frequency': email_sub.frequency if email_sub else Subscription.FREQUENCY_WEEKLY,
+                    'max_items': email_sub.max_items if email_sub else 5,
+                },
+                'slack': {
+                    'active': slack_sub.is_active if slack_sub else False,
+                    'frequency': slack_sub.frequency if slack_sub else Subscription.FREQUENCY_WEEKLY,
+                    'max_items': slack_sub.max_items if slack_sub else 5,
+                    'slack_channel': slack_sub.slack_channel or '' if slack_sub else '',
+                },
+            })
         solutions_data.append({
             'id': sol.id,
             'name': sol.name,
-            'email': {
-                'active': email_sub.is_active if email_sub else False,
-                'frequency': email_sub.frequency if email_sub else Subscription.FREQUENCY_WEEKLY,
-                'max_items': email_sub.max_items if email_sub else 5,
-            },
-            'slack': {
-                'active': slack_sub.is_active if slack_sub else False,
-                'frequency': slack_sub.frequency if slack_sub else Subscription.FREQUENCY_WEEKLY,
-                'max_items': slack_sub.max_items if slack_sub else 5,
-                'slack_channel': slack_sub.slack_channel or '' if slack_sub else '',
-            },
+            'products': products_data,
         })
 
     return JsonResponse({
@@ -92,24 +96,22 @@ def get_customer_subscriptions(request, customer_id):
 @require_POST
 @role_required('se')
 def save_customer_subscription(request):
-    """Admin+SE AJAX: 고객사+솔루션 단위 Gmail/Slack 구독 저장"""
+    """Admin+SE AJAX: 고객사+제품 단위 Gmail/Slack 구독 저장"""
     customer_id = request.POST.get('customer_id')
-    solution_id = request.POST.get('solution_id')
+    product_id = request.POST.get('product_id')
 
     try:
         customer = Customer.objects.get(pk=customer_id)
     except Customer.DoesNotExist:
         return JsonResponse({'ok': False, 'error': '고객사를 찾을 수 없습니다.'})
 
-    # 구매 솔루션 소유 여부 확인
-    if not customer.solutions.filter(pk=solution_id).exists():
-        return JsonResponse({'ok': False, 'error': '해당 솔루션의 구독 권한이 없습니다.'})
-
-    from apps.product.models import Solution
     try:
-        solution = Solution.objects.get(pk=solution_id)
-    except Solution.DoesNotExist:
-        return JsonResponse({'ok': False, 'error': '솔루션을 찾을 수 없습니다.'})
+        product = Product.objects.select_related('solution').get(pk=product_id)
+    except Product.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': '제품을 찾을 수 없습니다.'})
+
+    if not customer.solutions.filter(pk=product.solution_id).exists():
+        return JsonResponse({'ok': False, 'error': '해당 솔루션의 구독 권한이 없습니다.'})
 
     # Gmail
     email_active = request.POST.get('email_active') == 'true'
@@ -119,7 +121,7 @@ def save_customer_subscription(request):
     if email_active:
         Subscription.objects.update_or_create(
             customer=customer,
-            solution=solution,
+            product=product,
             channel=Subscription.CHANNEL_EMAIL,
             defaults={
                 'is_active': True,
@@ -129,7 +131,7 @@ def save_customer_subscription(request):
         )
     else:
         Subscription.objects.filter(
-            customer=customer, solution=solution, channel=Subscription.CHANNEL_EMAIL
+            customer=customer, product=product, channel=Subscription.CHANNEL_EMAIL
         ).delete()
 
     # Slack
@@ -141,7 +143,7 @@ def save_customer_subscription(request):
     if slack_active:
         Subscription.objects.update_or_create(
             customer=customer,
-            solution=solution,
+            product=product,
             channel=Subscription.CHANNEL_SLACK,
             defaults={
                 'is_active': True,
@@ -152,7 +154,8 @@ def save_customer_subscription(request):
         )
     else:
         Subscription.objects.filter(
-            customer=customer, solution=solution, channel=Subscription.CHANNEL_SLACK
+            customer=customer, product=product, channel=Subscription.CHANNEL_SLACK
         ).delete()
 
-    return JsonResponse({'ok': True, 'message': f'{solution.name} 구독 설정이 저장되었습니다.'})
+    label = f"{product.solution.name} {product.get_platform_display()} {product.get_category_display()}"
+    return JsonResponse({'ok': True, 'message': f'{label} 구독 설정이 저장되었습니다.'})
