@@ -24,6 +24,7 @@ class PatchNote(BaseModel):
         default='skipped',
         verbose_name="번역 상태",
     )
+    is_published = models.BooleanField(default=False, verbose_name="발행 여부")
 
     class Meta:
         verbose_name = "패치노트"

@@ -5,6 +5,7 @@ from .views import (
     get_patch_note_data,
     patch_note_update,
     patch_note_delete,
+    patch_note_publish,
     translation_status,
 )
 
@@ -16,5 +17,6 @@ urlpatterns = [
     path('data/<int:patch_note_id>/', get_patch_note_data, name='patch_note_data'),
     path('update/', patch_note_update, name='patch_note_update'),
     path('delete/', patch_note_delete, name='patch_note_delete'),
+    path('publish/', patch_note_publish, name='patch_note_publish'),
     path('translation-status/<int:patch_note_id>/', translation_status, name='translation_status'),
 ]

@@ -24,7 +24,7 @@ subscription = Table(
     'subscriber_subscription', metadata,
     Column('id', Integer, primary_key=True),
     Column('customer_id', Integer, ForeignKey('customer_customer.id')),
-    Column('solution_id', Integer, ForeignKey('product_solution.id')),
+    Column('product_id', Integer, ForeignKey('product_product.id')),
     Column('channel', String),                                   # email / slack
     Column('is_active', Boolean),
     Column('frequency', String),                                 # weekly / monthly / quarterly
@@ -40,10 +40,71 @@ solution = Table(
     Column('name', String),
 )
 
+product = Table(
+    'product_product', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('solution_id', Integer, ForeignKey('product_solution.id')),
+    Column('platform', String),
+    Column('category', String),
+)
+
+patchnote = Table(
+    'patchnote_patchnote', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('product_id', Integer, ForeignKey('product_product.id')),
+    Column('version', String),
+    Column('release_date', String),
+    Column('is_published', Boolean, default=False),
+)
+
+patchnote_feature = Table(
+    'patchnote_feature', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('patch_note_id', Integer, ForeignKey('patchnote_patchnote.id')),
+    Column('content', String),
+    Column('parent_id', Integer, nullable=True),
+    Column('order', Integer),
+)
+
+patchnote_improvement = Table(
+    'patchnote_improvement', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('patch_note_id', Integer, ForeignKey('patchnote_patchnote.id')),
+    Column('content', String),
+    Column('parent_id', Integer, nullable=True),
+    Column('order', Integer),
+)
+
+patchnote_bugfix = Table(
+    'patchnote_bugfix', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('patch_note_id', Integer, ForeignKey('patchnote_patchnote.id')),
+    Column('content', String),
+    Column('parent_id', Integer, nullable=True),
+    Column('order', Integer),
+)
+
+patchnote_remark = Table(
+    'patchnote_remark', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('patch_note_id', Integer, ForeignKey('patchnote_patchnote.id')),
+    Column('content', String),
+    Column('parent_id', Integer, nullable=True),
+    Column('order', Integer),
+)
+
 customer = Table(
     'customer_customer', metadata,
     Column('id', Integer, primary_key=True),
     Column('name', String),
+)
+
+customer_email = Table(
+    'customer_customeremail', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('customer_id', Integer, ForeignKey('customer_customer.id')),
+    Column('email', String),
+    Column('name', String, nullable=True),
 )
 
 # Customer ↔ Solution ManyToMany (Django 자동 생성 테이블)

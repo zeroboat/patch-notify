@@ -105,5 +105,6 @@ async def slack_oauth_callback(request: Request):
 @app.post("/slack/events/")
 async def slack_events(request: Request):
     """Slack 이벤트 수신 (slack_bolt 서명 검증 포함)"""
+    print(request.headers)  # 디버깅용 로그
     # print("Received request at /slack/events/") // 디버깅용 로그
     return await handler.handle(request)

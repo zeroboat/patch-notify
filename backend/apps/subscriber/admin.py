@@ -4,6 +4,6 @@ from .models import Subscription
 
 @admin.register(Subscription)
 class SubscriptionAdmin(admin.ModelAdmin):
-    list_display = ('customer', 'solution', 'channel', 'is_active', 'frequency', 'max_items')
-    list_filter = ('channel', 'is_active', 'frequency', 'solution')
-    search_fields = ('customer__name', 'solution__name')
+    list_display = ('customer', 'product', 'channel', 'is_active', 'frequency', 'max_items')
+    list_filter = ('channel', 'is_active', 'frequency', 'product__solution')
+    search_fields = ('customer__name', 'product__solution__name')

@@ -309,6 +309,15 @@
                             <h5 class="mb-0 text-primary fw-bold">{{ note.version }}</h5>
                         </div>
                         <div class="d-flex align-items-center gap-2">
+                            {% if note.is_published %}
+                            <span class="badge bg-label-success fs-small">
+                                <i class="bx bx-send me-1"></i>발행됨
+                            </span>
+                            {% else %}
+                            <span class="badge bg-label-warning fs-small">
+                                <i class="bx bx-edit-alt me-1"></i>미발행
+                            </span>
+                            {% endif %}
                             <span id="translation-badge-{{ note.id }}"
                                   class="badge {% if note.translation_status == 'done' %}bg-label-success{% elif note.translation_status == 'translating' or note.translation_status == 'pending' %}bg-label-warning{% elif note.translation_status == 'failed' %}bg-label-danger{% else %}bg-label-secondary{% endif %} fs-small"
                                   title="번역 상태">
@@ -319,6 +328,12 @@
                                 <i class="bx bx-calendar me-1"></i>{{ note.release_date|date:"Y년 m월 d일" }}
                             </span>
                             {% if user_role == 'admin' or user_role == 'dev' %}
+                            {% if not note.is_published %}
+                            <button class="btn btn-sm btn-label-success btn-publish-note"
+                                    data-id="{{ note.id }}" data-version="{{ note.version }}" title="발행">
+                                <i class="bx bx-send me-1"></i>발행
+                            </button>
+                            {% endif %}
                             <button class="btn btn-sm btn-icon btn-label-success btn-push-notion"
                                     data-id="{{ note.id }}" data-version="{{ note.version }}" title="Notion Push">
                                 <i class="bx bx-upload"></i>
@@ -599,6 +614,41 @@
             } finally {
                 btn.disabled = false;
             }
+        });
+
+        // ── 발행 버튼 ────────────────────────────────────────────────────────────
+        document.querySelectorAll('.btn-publish-note').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                const noteId = this.dataset.id;
+                const version = this.dataset.version;
+                const result = await Swal.fire({
+                    title: `버전 ${version} 발행`,
+                    text: '발행 후에는 즉시 주기 구독자에게 Slack 알림이 전송됩니다. 발행하시겠습니까?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: '발행',
+                    cancelButtonText: '취소',
+                    confirmButtonColor: '#28a745',
+                });
+                if (!result.isConfirmed) return;
+
+                const formData = new FormData();
+                formData.append('patch_note_id', noteId);
+                formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+                try {
+                    const res = await fetch('{% url "patchnote:patch_note_publish" %}', { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if (res.ok) {
+                        await Swal.fire({ icon: 'success', title: '발행 완료', text: data.message, timer: 1500, showConfirmButton: false });
+                        location.reload();
+                    } else {
+                        Swal.fire('오류', data.error || '발행 중 오류가 발생했습니다.', 'error');
+                    }
+                } catch (e) {
+                    Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
+                }
+            });
         });
 
         // ── 삭제 버튼 ────────────────────────────────────────────────────────────

@@ -189,6 +189,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ── FREQUENCY / MAX_ITEMS 선택지 ──────────────────
   const frequencyOptions = [
+    { value: 'immediate', label: '즉시' },
     { value: 'weekly',    label: '매주' },
     { value: 'monthly',   label: '매월' },
     { value: 'quarterly', label: '분기' },
@@ -211,7 +212,8 @@ document.addEventListener('DOMContentLoaded', function () {
   function renderSubscriptionPanel(data) {
     const customerId = data.customer_id;
 
-    if (!data.solutions || data.solutions.length === 0) {
+    const hasSolutions = data.solutions && data.solutions.some(s => s.products && s.products.length > 0);
+    if (!hasSolutions) {
       offcanvasBody.innerHTML =
         '<div class="d-flex justify-content-center align-items-center py-5 text-muted">'
         + '<div class="text-center"><i class="bx bx-layer fs-2 d-block mb-2"></i>'
@@ -222,68 +224,75 @@ document.addEventListener('DOMContentLoaded', function () {
     let html = '<div class="p-3">';
 
     data.solutions.forEach(function (sol) {
-      const emailActive = sol.email.active;
-      const slackActive = sol.slack.active;
+      if (!sol.products || sol.products.length === 0) return;
 
-      html += '<div class="card mb-3 solution-card" data-solution-id="' + sol.id + '" data-customer-id="' + customerId + '">';
-      html += '<div class="card-header py-2 d-flex align-items-center justify-content-between">';
-      html += '<span class="fw-semibold">' + sol.name + '</span>';
-      html += '</div>';
-      html += '<div class="card-body pb-2">';
+      html += '<p class="fw-bold small text-muted text-uppercase mb-2 mt-3">' + sol.name + '</p>';
 
-      // Gmail 섹션
-      html += '<div class="mb-3">';
-      html += '<div class="d-flex align-items-center gap-2 mb-2">';
-      html += '<i class="bx bx-envelope text-danger fs-5"></i>';
-      html += '<span class="fw-medium small">Gmail</span>';
-      html += '<div class="form-check form-switch ms-auto mb-0">';
-      html += '<input class="form-check-input channel-toggle" type="checkbox" role="switch"';
-      html += ' data-channel="email" ' + (emailActive ? 'checked' : '') + '>';
-      html += '</div>';
-      html += '</div>';
-      html += '<div class="channel-settings ps-4 ' + (emailActive ? '' : 'd-none') + '" data-channel="email">';
-      html += '<div class="row g-2 align-items-center">';
-      html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">전달 주기</label></div>';
-      html += '<div class="col-auto">' + buildSelect('email_frequency', frequencyOptions, sol.email.frequency) + '</div>';
-      html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">최대 건수</label></div>';
-      html += '<div class="col-auto">' + buildSelect('email_max_items', maxItemsOptions, sol.email.max_items) + '</div>';
-      html += '</div>';
-      html += '</div>';
-      html += '</div>';
+      sol.products.forEach(function (prod) {
+        const emailActive = prod.email.active;
+        const slackActive = prod.slack.active;
+        const prodLabel = prod.platform + ' ' + prod.category;
 
-      html += '<hr class="my-2">';
+        html += '<div class="card mb-2 product-card" data-product-id="' + prod.id + '" data-customer-id="' + customerId + '">';
+        html += '<div class="card-header py-2 d-flex align-items-center justify-content-between">';
+        html += '<span class="fw-semibold small">' + prodLabel + '</span>';
+        html += '</div>';
+        html += '<div class="card-body pb-2">';
 
-      // Slack 섹션
-      html += '<div class="mb-2">';
-      html += '<div class="d-flex align-items-center gap-2 mb-2">';
-      html += '<i class="bx bxl-slack text-success fs-5"></i>';
-      html += '<span class="fw-medium small">Slack</span>';
-      html += '<div class="form-check form-switch ms-auto mb-0">';
-      html += '<input class="form-check-input channel-toggle" type="checkbox" role="switch"';
-      html += ' data-channel="slack" ' + (slackActive ? 'checked' : '') + '>';
-      html += '</div>';
-      html += '</div>';
-      html += '<div class="channel-settings ps-4 ' + (slackActive ? '' : 'd-none') + '" data-channel="slack">';
-      html += '<div class="mb-2">';
-      html += '<input type="text" class="form-control form-control-sm" name="slack_channel"';
-      html += ' placeholder="#channel-name" value="' + (sol.slack.slack_channel || '') + '">';
-      html += '</div>';
-      html += '<div class="row g-2 align-items-center">';
-      html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">전달 주기</label></div>';
-      html += '<div class="col-auto">' + buildSelect('slack_frequency', frequencyOptions, sol.slack.frequency) + '</div>';
-      html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">최대 건수</label></div>';
-      html += '<div class="col-auto">' + buildSelect('slack_max_items', maxItemsOptions, sol.slack.max_items) + '</div>';
-      html += '</div>';
-      html += '</div>';
-      html += '</div>';
+        // Gmail 섹션
+        html += '<div class="mb-3">';
+        html += '<div class="d-flex align-items-center gap-2 mb-2">';
+        html += '<i class="bx bx-envelope text-danger fs-5"></i>';
+        html += '<span class="fw-medium small">Gmail</span>';
+        html += '<div class="form-check form-switch ms-auto mb-0">';
+        html += '<input class="form-check-input channel-toggle" type="checkbox" role="switch"';
+        html += ' data-channel="email" ' + (emailActive ? 'checked' : '') + '>';
+        html += '</div>';
+        html += '</div>';
+        html += '<div class="channel-settings ps-4 ' + (emailActive ? '' : 'd-none') + '" data-channel="email">';
+        html += '<div class="row g-2 align-items-center">';
+        html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">전달 주기</label></div>';
+        html += '<div class="col-auto">' + buildSelect('email_frequency', frequencyOptions, prod.email.frequency) + '</div>';
+        html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">최대 건수</label></div>';
+        html += '<div class="col-auto">' + buildSelect('email_max_items', maxItemsOptions, prod.email.max_items) + '</div>';
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
 
-      // 저장 버튼
-      html += '</div>'; // card-body end
-      html += '<div class="card-footer py-2 d-flex justify-content-end">';
-      html += '<button type="button" class="btn btn-sm btn-primary btn-save-solution">';
-      html += '<i class="bx bx-save me-1"></i>저장</button>';
-      html += '</div>';
-      html += '</div>'; // card end
+        html += '<hr class="my-2">';
+
+        // Slack 섹션
+        html += '<div class="mb-2">';
+        html += '<div class="d-flex align-items-center gap-2 mb-2">';
+        html += '<i class="bx bxl-slack text-success fs-5"></i>';
+        html += '<span class="fw-medium small">Slack</span>';
+        html += '<div class="form-check form-switch ms-auto mb-0">';
+        html += '<input class="form-check-input channel-toggle" type="checkbox" role="switch"';
+        html += ' data-channel="slack" ' + (slackActive ? 'checked' : '') + '>';
+        html += '</div>';
+        html += '</div>';
+        html += '<div class="channel-settings ps-4 ' + (slackActive ? '' : 'd-none') + '" data-channel="slack">';
+        html += '<div class="mb-2">';
+        html += '<input type="text" class="form-control form-control-sm" name="slack_channel"';
+        html += ' placeholder="#channel-name" value="' + (prod.slack.slack_channel || '') + '">';
+        html += '</div>';
+        html += '<div class="row g-2 align-items-center">';
+        html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">전달 주기</label></div>';
+        html += '<div class="col-auto">' + buildSelect('slack_frequency', frequencyOptions, prod.slack.frequency) + '</div>';
+        html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">최대 건수</label></div>';
+        html += '<div class="col-auto">' + buildSelect('slack_max_items', maxItemsOptions, prod.slack.max_items) + '</div>';
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+
+        // 저장 버튼
+        html += '</div>'; // card-body end
+        html += '<div class="card-footer py-2 d-flex justify-content-end">';
+        html += '<button type="button" class="btn btn-sm btn-primary btn-save-product">';
+        html += '<i class="bx bx-save me-1"></i>저장</button>';
+        html += '</div>';
+        html += '</div>'; // card end
+      });
     });
 
     html += '</div>';
@@ -292,7 +301,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // 토글 이벤트 바인딩
     offcanvasBody.querySelectorAll('.channel-toggle').forEach(function (toggle) {
       toggle.addEventListener('change', function () {
-        const card = this.closest('.solution-card');
+        const card = this.closest('.product-card');
         const channel = this.dataset.channel;
         const settingsEl = card.querySelector('.channel-settings[data-channel="' + channel + '"]');
         if (this.checked) {
@@ -303,19 +312,19 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
 
-    // 솔루션별 저장 버튼
-    offcanvasBody.querySelectorAll('.btn-save-solution').forEach(function (btn) {
+    // 제품별 저장 버튼
+    offcanvasBody.querySelectorAll('.btn-save-product').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        const card = this.closest('.solution-card');
-        saveSolution(card, btn);
+        const card = this.closest('.product-card');
+        saveProduct(card, btn);
       });
     });
   }
 
-  // ── 솔루션 구독 저장 ──────────────────────────────
-  function saveSolution(card, btn) {
+  // ── 제품 구독 저장 ──────────────────────────────
+  function saveProduct(card, btn) {
     const customerId = card.dataset.customerId;
-    const solutionId = card.dataset.solutionId;
+    const productId = card.dataset.productId;
 
     const emailToggle = card.querySelector('.channel-toggle[data-channel="email"]');
     const slackToggle = card.querySelector('.channel-toggle[data-channel="slack"]');
@@ -324,7 +333,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const body = new URLSearchParams({
       customer_id: customerId,
-      solution_id: solutionId,
+      product_id: productId,
       email_active: emailToggle.checked ? 'true' : 'false',
       email_frequency: emailSettings.querySelector('[name="email_frequency"]').value,
       email_max_items: emailSettings.querySelector('[name="email_max_items"]').value,
@@ -349,7 +358,6 @@ document.addEventListener('DOMContentLoaded', function () {
     .then(function (data) {
       if (data.ok) {
         Swal.fire({ icon: 'success', title: '저장 완료', text: data.message, confirmButtonText: '확인', timer: 2000, timerProgressBar: true });
-        // 테이블 배지 새로고침
         reloadTableRow(customerId);
       } else {
         Swal.fire({ icon: 'error', title: '저장 실패', text: data.error, confirmButtonText: '확인' });
@@ -377,8 +385,15 @@ document.addEventListener('DOMContentLoaded', function () {
       const slackCell = row.querySelector('td:nth-child(3)');
       const totalCell = row.querySelector('td:nth-child(4)');
 
-      const emailSubs = data.solutions.filter(s => s.email.active).map(s => s.name);
-      const slackSubs = data.solutions.filter(s => s.slack.active).map(s => s.name);
+      const emailSols = new Set(), slackSols = new Set();
+      (data.solutions || []).forEach(function (sol) {
+        (sol.products || []).forEach(function (prod) {
+          if (prod.email.active) emailSols.add(sol.name);
+          if (prod.slack.active) slackSols.add(sol.name);
+        });
+      });
+      const emailSubs = [...emailSols];
+      const slackSubs = [...slackSols];
       const total = emailSubs.length + slackSubs.length;
 
       emailCell.innerHTML = emailSubs.length
