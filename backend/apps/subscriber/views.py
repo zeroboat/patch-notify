@@ -59,7 +59,7 @@ def get_customer_subscriptions(request, customer_id):
     }
 
     solutions_data = []
-    for sol in customer.solutions.order_by('name'):
+    for sol in customer.solutions.order_by('order', 'id'):
         products_data = []
         for prod in sol.products.all():
             email_sub = existing.get((prod.id, Subscription.CHANNEL_EMAIL))

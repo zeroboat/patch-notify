@@ -80,7 +80,7 @@
               <td>
                 {% for solution in customer.solutions.all %}
                 <span class="badge bg-label-primary me-1 mb-1">
-                  <i class="bx bx-{{ solution.icon|default:'bx-layer' }} me-1"></i>{{ solution.name }}
+                  <i class="bx {{ solution.icon|default:'bx-layer' }} me-1"></i>{{ solution.name }}
                 </span>
                 {% empty %}
                 <span class="text-muted small">없음</span>
@@ -211,7 +211,7 @@
                  id="sol_{{ solution.id }}"
                  value="{{ solution.id }}">
           <label class="form-check-label" for="sol_{{ solution.id }}">
-            <i class="bx bx-{{ solution.icon|default:'bx-layer' }} me-1"></i>{{ solution.name }}
+            <i class="bx {{ solution.icon|default:'bx-layer' }} me-1"></i>{{ solution.name }}
           </label>
         </div>
         {% endfor %}

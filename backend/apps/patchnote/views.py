@@ -243,7 +243,6 @@ def patch_note_append(request):
         patch_note.translation_status = PatchNote.TRANSLATION_PENDING
         patch_note.save(update_fields=["translation_status", "updated_at"])
         start_translation(patch_note.id)
-        _push_to_notion_safe(patch_note, is_new=True)
 
         return JsonResponse({'message': '패치노트가 등록되었습니다.', 'patch_note_id': patch_note.id})
 
@@ -325,7 +324,6 @@ def patch_note_update(request):
         note.translation_status = PatchNote.TRANSLATION_PENDING
         note.save(update_fields=["translation_status", "updated_at"])
         start_translation(note.id)
-        _push_to_notion_safe(note, is_new=False)
 
         return JsonResponse({'message': '패치노트가 수정되었습니다.', 'patch_note_id': note.id})
 
@@ -383,6 +381,7 @@ def patch_note_publish(request):
     note.is_published = True
     note.save(update_fields=['is_published', 'updated_at'])
 
+    _push_to_notion_safe(note, is_new=True)
     _send_immediate_slack_notifications(note)
 
     return JsonResponse({'message': f'버전 {note.version} 이(가) 발행되었습니다.'})

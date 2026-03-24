@@ -75,7 +75,16 @@
         </div>
       </div>
       <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-label-secondary rounded-pill" title="정렬 순서">
+          <i class="bx bx-sort-alt-2 me-1"></i>{{ solution.order }}
+        </span>
         <span class="badge bg-label-primary rounded-pill">{{ solution.name }}</span>
+        <button class="btn btn-sm btn-icon btn-label-warning btn-edit-solution"
+                data-id="{{ solution.id }}" data-name="{{ solution.name }}"
+                data-icon="{{ solution.icon|default:'bx-layer' }}" data-order="{{ solution.order }}"
+                title="솔루션 편집">
+          <i class="bx bx-edit-alt"></i>
+        </button>
         <button class="btn btn-sm btn-icon btn-label-danger btn-delete-solution"
                 data-id="{{ solution.id }}" data-name="{{ solution.name }}" title="솔루션 삭제">
           <i class="bx bx-trash"></i>
@@ -90,7 +99,8 @@
       <table class="table table-hover align-middle mb-0">
         <thead class="table-light">
           <tr>
-            <th class="ps-4" style="width:150px">플랫폼</th>
+            <th class="ps-4 text-center" style="width:80px">순서</th>
+            <th style="width:150px">플랫폼</th>
             <th style="width:120px">카테고리</th>
             <th>설명</th>
             <th style="width:150px">최신 릴리즈</th>
@@ -100,7 +110,8 @@
         <tbody>
           {% for product in products %}
           <tr>
-            <td class="ps-4">
+            <td class="ps-4 text-center text-muted small">{{ product.order }}</td>
+            <td>
               <div class="d-flex align-items-center gap-2">
                 <i class="bx {{ product.solution.icon|default:'bx-layer' }} text-{{ product.platform_color }}" style="font-size:1.2rem;"></i>
                 <span class="badge bg-label-{{ product.platform_color }} rounded-pill px-3 py-2">
@@ -141,7 +152,8 @@
                      data-id="{{ product.id }}"
                      data-platform="{{ product.platform }}"
                      data-category="{{ product.category }}"
-                     data-description="{{ product.description|default:'' }}">
+                     data-description="{{ product.description|default:'' }}"
+                     data-order="{{ product.order }}">
                     <i class="bx bx-edit-alt me-2 text-warning"></i>수정
                   </a>
                   <div class="dropdown-divider"></div>
@@ -311,6 +323,11 @@
         </div>
         <div class="form-text">아이콘을 클릭하여 선택하세요.</div>
       </div>
+      <div class="mb-4">
+        <label class="form-label fw-semibold">정렬 순서</label>
+        <input type="number" name="order" class="form-control" min="0" value="0">
+        <div class="form-text">숫자가 작을수록 상단에 표시됩니다.</div>
+      </div>
       <div class="d-flex gap-2">
         <button type="submit" class="btn btn-primary">
           <i class="bx bx-check me-1"></i> 등록
@@ -366,16 +383,87 @@
         </select>
       </div>
       <!-- 설명 -->
-      <div class="mb-4">
+      <div class="mb-3">
         <label class="form-label fw-semibold">설명</label>
         <textarea name="description" class="form-control" rows="3"
           placeholder="제품에 대한 간단한 설명을 입력하세요."></textarea>
+      </div>
+      <div class="mb-4">
+        <label class="form-label fw-semibold">정렬 순서</label>
+        <input type="number" name="order" class="form-control" min="0" value="0">
+        <div class="form-text">숫자가 작을수록 상단에 표시됩니다.</div>
       </div>
       <div class="d-flex gap-2">
         <button type="submit" class="btn btn-primary">
           <i class="bx bx-check me-1"></i> 등록
         </button>
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="offcanvas">취소</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 솔루션 편집 모달 -->
+<div class="modal fade" id="solutionEditModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-md" role="document">
+    <form id="solutionEditForm" action="{% url 'product:update_solution' %}" method="POST" class="modal-content">
+      {% csrf_token %}
+      <input type="hidden" name="solution_id" id="editSolutionId">
+      <div class="modal-header border-bottom pb-3">
+        <h5 class="modal-title fw-bold">솔루션 편집</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">솔루션 이름 <span class="text-danger">*</span></label>
+          <input type="text" name="name" id="editSolutionName" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">아이콘</label>
+          <input type="hidden" name="icon" id="editSolutionIcon" value="bx-layer">
+          <div class="d-flex align-items-center gap-2 mb-2 px-3 py-2 rounded border bg-light" style="width:fit-content;">
+            <i class="bx bx-layer text-primary" id="editSolIconPreviewEl" style="font-size:1.3rem;"></i>
+            <span class="small text-muted" id="editSolIconPreviewText">bx-layer</span>
+          </div>
+          <div class="border rounded p-2" style="max-height:180px; overflow-y:auto;">
+            <div class="d-flex flex-wrap gap-1">
+                <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-layer" title="Layer" style="width:36px;height:36px;"><i class="bx bx-layer" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-mobile-alt" title="Mobile" style="width:36px;height:36px;"><i class="bx bx-mobile-alt" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bxl-android" title="Android" style="width:36px;height:36px;"><i class="bx bxl-android" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bxl-apple" title="Apple" style="width:36px;height:36px;"><i class="bx bxl-apple" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-laptop" title="Laptop" style="width:36px;height:36px;"><i class="bx bx-laptop" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-desktop" title="Desktop" style="width:36px;height:36px;"><i class="bx bx-desktop" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-devices" title="Devices" style="width:36px;height:36px;"><i class="bx bx-devices" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-server" title="Server" style="width:36px;height:36px;"><i class="bx bx-server" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-cloud" title="Cloud" style="width:36px;height:36px;"><i class="bx bx-cloud" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-data" title="Data" style="width:36px;height:36px;"><i class="bx bx-data" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-chip" title="Chip" style="width:36px;height:36px;"><i class="bx bx-chip" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-globe" title="Globe" style="width:36px;height:36px;"><i class="bx bx-globe" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-code-block" title="Code" style="width:36px;height:36px;"><i class="bx bx-code-block" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-terminal" title="Terminal" style="width:36px;height:36px;"><i class="bx bx-terminal" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-shield" title="Shield" style="width:36px;height:36px;"><i class="bx bx-shield" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-shield-quarter" title="Shield Q" style="width:36px;height:36px;"><i class="bx bx-shield-quarter" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-shield-alt-2" title="Shield Alt" style="width:36px;height:36px;"><i class="bx bx-shield-alt-2" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-lock" title="Lock" style="width:36px;height:36px;"><i class="bx bx-lock" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-fingerprint" title="Fingerprint" style="width:36px;height:36px;"><i class="bx bx-fingerprint" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-scan" title="Scan" style="width:36px;height:36px;"><i class="bx bx-scan" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-bug" title="Bug" style="width:36px;height:36px;"><i class="bx bx-bug" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-show" title="Eye" style="width:36px;height:36px;"><i class="bx bx-show" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-analyse" title="Analyse" style="width:36px;height:36px;"><i class="bx bx-analyse" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-cube-alt" title="Cube" style="width:36px;height:36px;"><i class="bx bx-cube-alt" style="font-size:1.15rem;pointer-events:none;"></i></button>
+              <button type="button" class="edit-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-package" title="Package" style="width:36px;height:36px;"><i class="bx bx-package" style="font-size:1.15rem;pointer-events:none;"></i></button>
+            </div>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">정렬 순서</label>
+          <input type="number" name="order" id="editSolutionOrder" class="form-control" min="0" value="0">
+          <div class="form-text">숫자가 작을수록 상단에 표시됩니다.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">취소</button>
+        <button type="submit" class="btn btn-warning" id="btn-update-solution">저장</button>
       </div>
     </form>
   </div>
@@ -417,6 +505,11 @@
           <label class="form-label fw-semibold">설명</label>
           <textarea name="description" id="editProductDescription" class="form-control" rows="3"
             placeholder="제품에 대한 간단한 설명을 입력하세요."></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">정렬 순서</label>
+          <input type="number" name="order" id="editProductOrder" class="form-control" min="0" value="0">
+          <div class="form-text">숫자가 작을수록 상단에 표시됩니다.</div>
         </div>
       </div>
       <div class="modal-footer">
@@ -463,6 +556,70 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  // 솔루션 편집 모달 열기
+  document.querySelectorAll('.btn-edit-solution').forEach(btn => {
+    btn.addEventListener('click', function () {
+      document.getElementById('editSolutionId').value    = this.dataset.id;
+      document.getElementById('editSolutionName').value  = this.dataset.name;
+      document.getElementById('editSolutionIcon').value  = this.dataset.icon;
+      document.getElementById('editSolutionOrder').value = this.dataset.order;
+      // 아이콘 미리보기 업데이트
+      const icon = this.dataset.icon || 'bx-layer';
+      document.getElementById('editSolIconPreviewEl').className = 'bx ' + icon + ' text-primary';
+      document.getElementById('editSolIconPreviewEl').style.fontSize = '1.3rem';
+      document.getElementById('editSolIconPreviewText').textContent = icon;
+      // 아이콘 선택 버튼 하이라이트
+      document.querySelectorAll('.edit-sol-icon-opt').forEach(o => {
+        o.classList.remove('btn-primary', 'text-white');
+        o.classList.add('text-muted');
+        if (o.dataset.icon === icon) {
+          o.classList.add('btn-primary', 'text-white');
+          o.classList.remove('text-muted');
+        }
+      });
+      new bootstrap.Modal(document.getElementById('solutionEditModal')).show();
+    });
+  });
+
+  // 솔루션 편집 아이콘 피커
+  document.querySelectorAll('.edit-sol-icon-opt').forEach(btn => {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.edit-sol-icon-opt').forEach(o => {
+        o.classList.remove('btn-primary', 'text-white');
+        o.classList.add('text-muted');
+      });
+      this.classList.add('btn-primary', 'text-white');
+      this.classList.remove('text-muted');
+      const icon = this.dataset.icon;
+      document.getElementById('editSolutionIcon').value = icon;
+      document.getElementById('editSolIconPreviewEl').className = 'bx ' + icon + ' text-primary';
+      document.getElementById('editSolIconPreviewEl').style.fontSize = '1.3rem';
+      document.getElementById('editSolIconPreviewText').textContent = icon;
+    });
+  });
+
+  // 솔루션 편집 폼 제출
+  document.getElementById('solutionEditForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-update-solution');
+    btn.disabled = true;
+    const fd = new FormData(this);
+    try {
+      const res = await fetch(this.action, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (res.ok) {
+        await Swal.fire({ icon: 'success', title: '수정 완료', text: data.message, timer: 1500, showConfirmButton: false });
+        location.reload();
+      } else {
+        Swal.fire('오류', data.error, 'error');
+      }
+    } catch (e) {
+      Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
   // 제품 수정 모달 열기
   document.querySelectorAll('.btn-edit-product').forEach(btn => {
     btn.addEventListener('click', function () {
@@ -470,6 +627,7 @@ document.addEventListener('DOMContentLoaded', function () {
       document.getElementById('editProductPlatform').value  = this.dataset.platform;
       document.getElementById('editProductCategory').value  = this.dataset.category;
       document.getElementById('editProductDescription').value = this.dataset.description;
+      document.getElementById('editProductOrder').value     = this.dataset.order;
       new bootstrap.Modal(document.getElementById('productEditModal')).show();
     });
   });
