@@ -414,6 +414,47 @@
                         {% endif %}
                         {% endwith %}
 
+                        <!-- 첨부 파일 섹션 -->
+                        {% with release_files=note.files.all debug_files=note.files.all %}
+                        <hr class="my-3 opacity-25">
+                        <div class="patch-section border-start border-3 border-secondary ps-3 mb-2">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <span class="fw-bold text-secondary small text-uppercase">📎 첨부 파일</span>
+                                {% if user_role == 'admin' or user_role == 'dev' %}
+                                <button class="btn btn-xs btn-label-primary btn-file-upload"
+                                        data-id="{{ note.id }}" data-version="{{ note.version }}"
+                                        style="font-size:0.7rem; padding: 2px 8px;">
+                                    <i class="bx bx-upload me-1"></i>업로드
+                                </button>
+                                {% endif %}
+                            </div>
+                            <div id="file-list-{{ note.id }}">
+                                {% for pf in note.files.all %}
+                                    {% if pf.file_type == 'release' or user_role == 'admin' or user_role == 'dev' %}
+                                    <div class="d-flex align-items-center gap-2 mb-1 file-item" data-file-id="{{ pf.id }}">
+                                        <span class="badge {% if pf.file_type == 'release' %}bg-label-success{% else %}bg-label-danger{% endif %}" style="font-size:0.65rem;">
+                                            {{ pf.get_file_type_display }}
+                                        </span>
+                                        <a href="{% url 'patchnote:file_download' pf.id %}" class="text-body small text-truncate" style="max-width:300px;" title="{{ pf.original_filename }}">
+                                            {{ pf.original_filename }}
+                                        </a>
+                                        <span class="text-muted" style="font-size:0.7rem;">{{ pf.file_size|filesizeformat }}</span>
+                                        {% if user_role == 'admin' or user_role == 'dev' %}
+                                        <button class="btn btn-xs btn-icon btn-label-danger btn-file-delete"
+                                                data-file-id="{{ pf.id }}" data-filename="{{ pf.original_filename }}"
+                                                style="width:20px; height:20px; font-size:0.6rem;" title="삭제">
+                                            <i class="bx bx-x"></i>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                {% empty %}
+                                    <p class="text-muted small mb-0 no-files-msg">등록된 파일이 없습니다.</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endwith %}
+
                     </div>
                 </div>
             {% empty %}
@@ -828,6 +869,184 @@
             const noteId = badge.id.replace('translation-badge-', '');
             pollTranslationStatus(noteId);
         }
+    });
+    </script>
+
+    <!-- ===== 파일 업로드 모달 ===== -->
+    <div class="modal fade" id="fileUploadModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header border-bottom py-3">
+                    <h6 class="modal-title fw-bold mb-0">
+                        <i class="bx bx-upload me-1 text-primary"></i>파일 업로드
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted mb-3">
+                        <strong id="uploadVersion"></strong> 에 파일을 첨부합니다.
+                    </p>
+                    <input type="hidden" id="uploadNoteId">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">파일 유형</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="uploadFileType" id="fileTypeRelease" value="release" checked>
+                                <label class="form-check-label small" for="fileTypeRelease">
+                                    <strong>Release</strong>
+                                    <span class="text-muted d-block" style="font-size:0.75rem;">릴리즈용 파일</span>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="uploadFileType" id="fileTypeDebug" value="debug">
+                                <label class="form-check-label small" for="fileTypeDebug">
+                                    <strong>Debug</strong>
+                                    <span class="text-muted d-block" style="font-size:0.75rem;">디버깅용 파일</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="uploadFileInput" class="form-label fw-semibold small">파일 선택</label>
+                        <input type="file" class="form-control form-control-sm" id="uploadFileInput">
+                    </div>
+                    <div id="uploadResult" class="d-none"></div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-label-secondary" data-bs-dismiss="modal">닫기</button>
+                    <button type="button" id="btnFileUpload" class="btn btn-sm btn-primary">
+                        <i class="bx bx-upload me-1"></i>업로드
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ── 파일 업로드 / 삭제 ────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', function () {
+        const uploadModalEl = document.getElementById('fileUploadModal');
+        if (!uploadModalEl) return;
+        const uploadModal = new bootstrap.Modal(uploadModalEl);
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+
+        // 업로드 모달 열기
+        document.querySelectorAll('.btn-file-upload').forEach(btn => {
+            btn.addEventListener('click', function () {
+                document.getElementById('uploadNoteId').value = this.dataset.id;
+                document.getElementById('uploadVersion').textContent = 'v' + this.dataset.version;
+                document.getElementById('uploadFileInput').value = '';
+                document.getElementById('uploadResult').classList.add('d-none');
+                document.getElementById('btnFileUpload').disabled = false;
+                document.getElementById('fileTypeRelease').checked = true;
+                uploadModal.show();
+            });
+        });
+
+        // 업로드 실행
+        document.getElementById('btnFileUpload').addEventListener('click', async function () {
+            const btn = this;
+            const noteId = document.getElementById('uploadNoteId').value;
+            const fileType = document.querySelector('input[name="uploadFileType"]:checked').value;
+            const fileInput = document.getElementById('uploadFileInput');
+            const resultEl = document.getElementById('uploadResult');
+
+            if (!fileInput.files.length) {
+                resultEl.classList.remove('d-none');
+                resultEl.innerHTML = '<div class="alert alert-warning mb-0 py-2 small">파일을 선택해주세요.</div>';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>업로드 중...';
+            resultEl.classList.add('d-none');
+
+            const fd = new FormData();
+            fd.append('csrfmiddlewaretoken', csrfToken);
+            fd.append('patch_note_id', noteId);
+            fd.append('file_type', fileType);
+            fd.append('file', fileInput.files[0]);
+
+            try {
+                const res = await fetch("{% url 'patchnote:file_upload' %}", { method: 'POST', body: fd });
+                const data = await res.json();
+                resultEl.classList.remove('d-none');
+                if (res.ok) {
+                    resultEl.innerHTML = `<div class="alert alert-success mb-0 py-2 small">${data.message}</div>`;
+                    // 파일 목록에 새 항목 추가
+                    const listEl = document.getElementById(`file-list-${noteId}`);
+                    const noFilesMsg = listEl.querySelector('.no-files-msg');
+                    if (noFilesMsg) noFilesMsg.remove();
+
+                    const f = data.file;
+                    const badgeClass = f.file_type === 'release' ? 'bg-label-success' : 'bg-label-danger';
+                    const typeLabel = f.file_type === 'release' ? 'Release' : 'Debug';
+                    const newItem = document.createElement('div');
+                    newItem.className = 'd-flex align-items-center gap-2 mb-1 file-item';
+                    newItem.dataset.fileId = f.id;
+                    newItem.innerHTML = `
+                        <span class="badge ${badgeClass}" style="font-size:0.65rem;">${typeLabel}</span>
+                        <a href="/patchnote/file/download/${f.id}/" class="text-body small text-truncate" style="max-width:300px;" title="${f.original_filename}">${f.original_filename}</a>
+                        <span class="text-muted" style="font-size:0.7rem;">${f.file_size_display}</span>
+                        <button class="btn btn-xs btn-icon btn-label-danger btn-file-delete"
+                                data-file-id="${f.id}" data-filename="${f.original_filename}"
+                                style="width:20px; height:20px; font-size:0.6rem;" title="삭제">
+                            <i class="bx bx-x"></i>
+                        </button>
+                    `;
+                    listEl.appendChild(newItem);
+                    bindFileDeleteBtn(newItem.querySelector('.btn-file-delete'));
+
+                    fileInput.value = '';
+                } else {
+                    resultEl.innerHTML = `<div class="alert alert-danger mb-0 py-2 small">${data.error}</div>`;
+                }
+            } catch (e) {
+                resultEl.classList.remove('d-none');
+                resultEl.innerHTML = '<div class="alert alert-danger mb-0 py-2 small">네트워크 오류</div>';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bx bx-upload me-1"></i>업로드';
+            }
+        });
+
+        // 파일 삭제
+        function bindFileDeleteBtn(btn) {
+            btn.addEventListener('click', async function () {
+                const fileId = this.dataset.fileId;
+                const filename = this.dataset.filename;
+                const result = await Swal.fire({
+                    title: '파일 삭제',
+                    text: `"${filename}" 파일을 삭제하시겠습니까?`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: '삭제',
+                    cancelButtonText: '취소',
+                    confirmButtonColor: '#d33',
+                });
+                if (!result.isConfirmed) return;
+
+                const fd = new FormData();
+                fd.append('csrfmiddlewaretoken', csrfToken);
+                fd.append('file_id', fileId);
+
+                try {
+                    const res = await fetch("{% url 'patchnote:file_delete' %}", { method: 'POST', body: fd });
+                    const data = await res.json();
+                    if (res.ok) {
+                        const item = document.querySelector(`.file-item[data-file-id="${fileId}"]`);
+                        if (item) item.remove();
+                        Swal.fire({ icon: 'success', title: '삭제 완료', timer: 1000, showConfirmButton: false });
+                    } else {
+                        Swal.fire('오류', data.error || '삭제 중 오류가 발생했습니다.', 'error');
+                    }
+                } catch (e) {
+                    Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
+                }
+            });
+        }
+
+        document.querySelectorAll('.btn-file-delete').forEach(bindFileDeleteBtn);
     });
     </script>
 

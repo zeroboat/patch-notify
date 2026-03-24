@@ -26,6 +26,7 @@ services:
     env_file: .env
     volumes:
       - notion_md_data:/app/notion_md
+      - patchnote_files:/app/media/patchnotes
     depends_on:
       db:
         condition: service_healthy
@@ -43,3 +44,4 @@ services:
 volumes:
   postgres_data:
   notion_md_data:
+  patchnote_files:
