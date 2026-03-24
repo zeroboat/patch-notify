@@ -1,3 +1,11 @@
+# Node.js
+node_modules/
+package-lock.json
+
+# IDE / Tools
+.claude/
+.vscode/
+
 # Created by https://www.toptal.com/developers/gitignore/api/python,django
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,django
 
@@ -169,7 +177,7 @@ cython_debug/
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
@@ -267,3 +275,12 @@ pyrightconfig.json
 
 test*
 test/*
+*.env
+
+patchnote-converter/
+
+# Media uploads
+media/
+
+# Notion MD cache (Docker volume)
+notion_md/
