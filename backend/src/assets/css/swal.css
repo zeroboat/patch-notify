@@ -1,0 +1,3 @@
+.swal2-container {
+    z-index: 9999 !important; /* 모달(1050)보다 훨씬 높은 값을 줍니다 */
+}

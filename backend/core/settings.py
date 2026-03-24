@@ -11,21 +11,34 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from dotenv import load_dotenv
+import os
+from .template import  THEME_LAYOUT_DIR, THEME_VARIABLES
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+load_dotenv(f"{BASE_DIR}/../dev.env")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-%03^8!0gw+(c4iwzwo8$s#!q%z&0u5wjjnx)uvf^-3#pwet*!6'
+SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+_extra_hosts = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "").split(",") if h.strip()]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1"] + _extra_hosts
+
+# Django 4.0+: Origin 헤더 검증 — ALLOWED_HOSTS 와 동일하게 설정
+CSRF_TRUSTED_ORIGINS = (
+    [f"http://{h}" for h in ALLOWED_HOSTS]
+    + [f"https://{h}" for h in ALLOWED_HOSTS]
+)
+ENVIRONMENT = os.environ.get("DJANGO_ENVIRONMENT", default="local")
 
 
 # Application definition
@@ -39,17 +52,28 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'apps.patchnote',
     'apps.product',
-    'apps.contacts',
+    'apps.customer',
+    'apps.dashboards',
+    "apps.base",
+    "apps.notification",
+    "apps.subscriber",
+    "apps.logs",
+    "apps.slack_app",
+    "apps.authentication",
+    "apps.notion",
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    "django.middleware.locale.LocaleMiddleware",
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -57,13 +81,25 @@ ROOT_URLCONF = 'core.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / "templates"],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                "django.contrib.messages.context_processors.messages",
+                "core.context_processors.my_setting",
+                "core.context_processors.environment",
+                "core.context_processors.user_role",
+                "apps.product.context_processors.sidebar_menu",
+            ],
+            "libraries": {
+                "theme": "web_project.template_tags.theme",
+            },
+            "builtins": [
+                "django.templatetags.static",
+                "web_project.template_tags.theme",
             ],
         },
     },
@@ -75,12 +111,24 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+if os.getenv('DB_HOST'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'patchnotify'),
+            'USER': os.getenv('DB_USER', 'patchuser'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
+            'HOST': os.getenv('DB_HOST', 'db'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -118,3 +166,49 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+STATICFILES_DIRS = [
+    BASE_DIR / "src" / "assets",
+]
+
+# Media files (uploads)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+THEME_LAYOUT_DIR = THEME_LAYOUT_DIR
+THEME_VARIABLES = THEME_VARIABLES
+
+LOGIN_URL = '/auth/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/auth/login/'
+
+# ── Ollama (내부 AI 번역 서버) ────────────────────────────────────────────────
+OLLAMA_HOST = os.getenv('OLLAMA_HOST', '')
+OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', '')
+
+# ── Slack App ────────────────────────────────────────────────────────────────
+# Slack App 설정: https://api.slack.com/apps 에서 발급
+SLACK_CLIENT_ID = os.getenv('SLACK_CLIENT_ID', '')
+SLACK_CLIENT_SECRET = os.getenv('SLACK_CLIENT_SECRET', '')
+SLACK_SIGNING_SECRET = os.getenv('SLACK_SIGNING_SECRET', '')
+SLACK_REDIRECT_URI = os.getenv('SLACK_REDIRECT_URI', 'http://localhost:8000/slack/oauth/callback/')
+
+# ── Email (Gmail SMTP) ──────────────────────────────────────────────────────
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.getenv('GMAIL_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('GMAIL_APP_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('GMAIL_USER', '')
+
+# ── Notion ─────────────────────────────────────────────────────────────────
+NOTION_ENABLED = os.getenv('NOTION_ENABLED', 'false').lower() in ('true', '1', 'yes')
+NOTION_TOKEN = os.getenv('NOTION_TOKEN', '')
+NOTION_MD_DIR = Path(os.getenv('NOTION_MD_DIR', BASE_DIR / 'notion_md'))

@@ -1,0 +1,1069 @@
+{% extends layout_path %}
+
+{% load static %}
+{% load i18n %}
+
+{% block title %}Patch Notes{% endblock %}
+
+{% block vendor_css %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <link rel="stylesheet" href="{% static 'css/ckeditor.css' %}"/>
+    <link rel="stylesheet" href="{% static 'css/swal.css' %}"/>
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+    {{ block.super }}
+    <script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+    <script src="https://cdn.ckeditor.com/ckeditor5/41.0.0/super-build/ckeditor.js"></script>
+    <script src="https://cdn.ckeditor.com/ckeditor5/34.0.0/classic/translations/ko.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="{% static 'js/utils/datepicker.js' %}"></script>
+    <script src="{% static 'js/utils/ckeditor.js' %}"></script>
+    <script src="{% static 'js/utils/append.js' %}"></script>
+
+{% endblock vendor_js %}
+
+{% block page_js %}
+    {{ block.super }}
+    <script src="{% static 'js/patch_note_page.js' %}"></script>
+{% endblock page_js %}
+
+
+{% block content %}
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+        <!-- 좌측: 제품 정보 -->
+        <div>
+            <div class="d-flex align-items-center flex-wrap gap-2">
+                {% if selected_product.solution.icon %}
+                <i class="bx {{ selected_product.solution.icon }} text-{{ selected_product.platform_color }}" style="font-size:1.2rem;"></i>
+                {% endif %}
+                <span class="fw-semibold">{{ selected_product.solution.name }}</span>
+                <span class="text-muted">/</span>
+                <span class="badge bg-label-{{ selected_product.platform_color }} rounded-pill">{{ selected_product.get_platform_display }}</span>
+                <span class="text-muted">/</span>
+                <span class="badge bg-label-secondary rounded-pill">{{ selected_product.get_category_display }}</span>
+            </div>
+            {% if selected_product.description %}
+            <p class="mb-0 small text-muted mt-1">{{ selected_product.description }}</p>
+            {% endif %}
+        </div>
+        <!-- 우측: 검색 + 언어 토글 + 등록 버튼 -->
+        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+            <div class="input-group input-group-sm" style="width:200px;">
+                <span class="input-group-text bg-transparent border-end-0"><i class="bx bx-search text-muted"></i></span>
+                <input type="text" id="patchSearchInput" class="form-control border-start-0 ps-0"
+                       placeholder="버전 / 내용 검색">
+            </div>
+            <div class="btn-group" role="group" id="lang-toggle">
+                <button type="button" class="btn btn-sm btn-primary active" data-lang="ko">KO</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" data-lang="en">EN</button>
+            </div>
+            {% if user_role == 'admin' or user_role == 'dev' %}
+            <button type="button" class="btn btn-primary flex-shrink-0"
+                    data-bs-toggle="modal" data-bs-target="#patchAppendModal">
+                <i class="bx bx-plus me-1"></i>패치노트 등록
+            </button>
+            {% endif %}
+        </div>
+    </div>
+    <div class="modal fade" id="patchAppendModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <form id="appendForm" action="{% url 'patchnote:patch_note_append' %}" method="POST" class="modal-content">
+                {% csrf_token %}
+
+                <input type="hidden" name="product_id" value="{{ selected_product.id }}">
+
+                <div class="modal-header border-bottom pb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar flex-shrink-0 me-3">
+                        <span class="avatar-initial rounded bg-label-primary">
+                            <i class="bx bx-file-blank fs-4"></i>
+                        </span>
+                        </div>
+                        <div>
+                            <h4 class="modal-title mb-0 fw-bold">패치내역 등록</h4>
+                            <small class="text-muted">
+                                <span class="badge bg-label-secondary text-capitalize">{{ selected_product }}</span>
+                                전용 릴리즈 노트를 작성합니다.
+                            </small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label for="patchVersion" class="form-label fw-bold">패치 버전 <span class="text-danger">*</span></label>
+                            <input type="text" name="version" id="patchVersion" class="form-control" placeholder="ex) 26.1.0" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="patchDate" class="form-label fw-bold">배포 날짜 <span class="text-danger">*</span></label>
+                            <input type="text" name="patch_date" id="patchDate" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="card mb-4 shadow-none border">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch" type="checkbox" id="switch-new" data-section="new">
+                                        <label class="form-check-label" for="switch-new">🚀 기능 추가</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch" type="checkbox" id="switch-improve" data-section="improve">
+                                        <label class="form-check-label" for="switch-improve">🛠️ 기능 개선</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch" type="checkbox" id="switch-bug" data-section="bug">
+                                        <label class="form-check-label" for="switch-bug">🐛 버그 수정</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch" type="checkbox" id="switch-note" data-section="note">
+                                        <label class="form-check-label" for="switch-note">📝 특이 사항</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-light border py-2 px-3 mb-3 small text-muted">
+                        <strong>작성 방법</strong>&ensp;
+                        Bold : &ensp;<code>Ctrl+B</code>  &ensp;|&ensp;
+                        Bullet : &ensp;<code>- + Space</code>  &ensp;|&ensp;
+                        Inline Code : &ensp;<code>`코드`</code>  &ensp;|&ensp;
+                        Code Block : &ensp;<code>```</code>
+                    </div>
+
+                    <div id="editor-section-container">
+                        <div id="wrapper-new" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🚀 기능 추가</label>
+                            <textarea id="editor-features" name="new_features"></textarea>
+                        </div>
+                        <div id="wrapper-improve" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🛠️ 기능 개선</label>
+                            <textarea id="editor-improvements" name="improvements"></textarea>
+                        </div>
+                        <div id="wrapper-bug" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🐛 버그 수정</label>
+                            <textarea id="editor-bugfixes" name="bug_fixes"></textarea>
+                        </div>
+                        <div id="wrapper-note" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">📝 특이 사항</label>
+                            <textarea id="editor-remarks" name="special_notes"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary" id="btn-append-patch">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 패치노트 수정 모달 -->
+    <div class="modal fade" id="patchEditModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <form id="editForm" action="{% url 'patchnote:patch_note_update' %}" method="POST" class="modal-content">
+                {% csrf_token %}
+                <input type="hidden" name="patch_note_id" id="editPatchNoteId">
+
+                <div class="modal-header border-bottom pb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar flex-shrink-0 me-3">
+                            <span class="avatar-initial rounded bg-label-warning">
+                                <i class="bx bx-edit fs-4"></i>
+                            </span>
+                        </div>
+                        <div>
+                            <h4 class="modal-title mb-0 fw-bold">패치내역 수정</h4>
+                            <small class="text-muted">
+                                <span class="badge bg-label-secondary text-capitalize">{{ selected_product }}</span>
+                                릴리즈 노트를 수정합니다.
+                            </small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label for="editPatchVersion" class="form-label fw-bold">패치 버전 <span class="text-danger">*</span></label>
+                            <input type="text" name="version" id="editPatchVersion" class="form-control" placeholder="ex) 26.1.0" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="editPatchDate" class="form-label fw-bold">배포 날짜 <span class="text-danger">*</span></label>
+                            <input type="text" name="patch_date" id="editPatchDate" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="card mb-4 shadow-none border">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch-edit" type="checkbox" id="switch-edit-new" data-section="edit-new">
+                                        <label class="form-check-label" for="switch-edit-new">🚀 기능 추가</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch-edit" type="checkbox" id="switch-edit-improve" data-section="edit-improve">
+                                        <label class="form-check-label" for="switch-edit-improve">🛠️ 기능 개선</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch-edit" type="checkbox" id="switch-edit-bug" data-section="edit-bug">
+                                        <label class="form-check-label" for="switch-edit-bug">🐛 버그 수정</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch-edit" type="checkbox" id="switch-edit-note" data-section="edit-note">
+                                        <label class="form-check-label" for="switch-edit-note">📝 특이 사항</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-light border py-2 px-3 mb-3 small text-muted">
+                        <strong>작성 방법</strong>&ensp;
+                        <code>Ctrl+B</code> Bold &ensp;|&ensp;
+                        <code>-</code> + Space &ensp;Bullet &ensp;|&ensp;
+                        <code>`코드`</code> Inline Code &ensp;|&ensp;
+                        <code>```</code> + Enter &ensp;Code Block
+                    </div>
+
+                    <div id="editor-edit-section-container">
+                        <div id="wrapper-edit-new" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🚀 기능 추가</label>
+                            <textarea id="editor-edit-features" name="new_features"></textarea>
+                        </div>
+                        <div id="wrapper-edit-improve" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🛠️ 기능 개선</label>
+                            <textarea id="editor-edit-improvements" name="improvements"></textarea>
+                        </div>
+                        <div id="wrapper-edit-bug" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🐛 버그 수정</label>
+                            <textarea id="editor-edit-bugfixes" name="bug_fixes"></textarea>
+                        </div>
+                        <div id="wrapper-edit-note" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">📝 특이 사항</label>
+                            <textarea id="editor-edit-remarks" name="special_notes"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-warning" id="btn-edit-patch">저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row flex-nowrap">
+        <div class="d-none d-md-block flex-shrink-0" style="width: 170px;">
+            <div class="card sticky-top" style="top: 100px; z-index: 10;">
+                <div class="card-body px-0 py-3">
+                    <h6 class="fw-bold small text-uppercase mb-3 text-center">Versions</h6>
+                    <nav id="version-list" class="nav flex-column nav-pills" style="max-height: calc(100vh - 200px); overflow-y: auto;">
+                        {% for note in patch_notes %}
+                            <a class="nav-link mb-0 py-1 ps-2 pe-1 text-start small {% if forloop.first %}active{% endif %}"
+                               href="#version-{{ note.version|slugify }}">
+                                - {{ note.version }}
+                            </a>
+                        {% endfor %}
+                    </nav>
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            {% for note in patch_notes %}
+                <div id="version-{{ note.version|slugify }}" class="card mb-4 shadow-none border">
+                    <div class="card-header d-flex justify-content-between align-items-center py-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bx bx-tag-alt text-primary"></i>
+                            <h5 class="mb-0 text-primary fw-bold">{{ note.version }}</h5>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            {% if note.is_published %}
+                            <span class="badge bg-label-success fs-small">
+                                <i class="bx bx-send me-1"></i>발행됨
+                            </span>
+                            {% else %}
+                            <span class="badge bg-label-warning fs-small">
+                                <i class="bx bx-edit-alt me-1"></i>미발행
+                            </span>
+                            {% endif %}
+                            <span id="translation-badge-{{ note.id }}"
+                                  class="badge {% if note.translation_status == 'done' %}bg-label-success{% elif note.translation_status == 'translating' or note.translation_status == 'pending' %}bg-label-warning{% elif note.translation_status == 'failed' %}bg-label-danger{% else %}bg-label-secondary{% endif %} fs-small"
+                                  title="번역 상태">
+                                <i class="bx {% if note.translation_status == 'done' %}bx-check{% elif note.translation_status == 'translating' or note.translation_status == 'pending' %}bx-loader-alt bx-spin{% elif note.translation_status == 'failed' %}bx-x{% else %}bx-minus{% endif %} me-1"></i>
+                                {% if note.translation_status == 'done' %}번역 완료{% elif note.translation_status == 'translating' %}번역 중{% elif note.translation_status == 'pending' %}번역 대기{% elif note.translation_status == 'failed' %}번역 실패{% else %}번역 없음{% endif %}
+                            </span>
+                            <span class="badge bg-label-secondary fs-small">
+                                <i class="bx bx-calendar me-1"></i>{{ note.release_date|date:"Y년 m월 d일" }}
+                            </span>
+                            {% if user_role == 'admin' or user_role == 'dev' %}
+                            {% if not note.is_published %}
+                            <button class="btn btn-sm btn-label-success btn-publish-note"
+                                    data-id="{{ note.id }}" data-version="{{ note.version }}" title="발행">
+                                <i class="bx bx-send me-1"></i>발행
+                            </button>
+                            {% endif %}
+                            <button class="btn btn-sm btn-icon btn-label-success btn-push-notion"
+                                    data-id="{{ note.id }}" data-version="{{ note.version }}" title="Notion Push">
+                                <i class="bx bx-upload"></i>
+                            </button>
+                            <button class="btn btn-sm btn-icon btn-label-primary btn-edit-note"
+                                    data-id="{{ note.id }}" title="수정">
+                                <i class="bx bx-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-icon btn-label-danger btn-delete-note"
+                                    data-id="{{ note.id }}" data-version="{{ note.version }}" title="삭제">
+                                <i class="bx bx-trash"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="card-body px-4 py-3">
+
+                        {% with feat=note.features.first %}
+                        {% if feat and feat.content %}
+                        <div class="patch-section border-start border-3 border-success ps-3 mb-4">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="fw-bold text-success small text-uppercase">🚀 기능 추가</span>
+                            </div>
+                            <div class="patch-html-body lang-ko">{{ feat.content|safe }}</div>
+                            <div class="patch-html-body lang-en d-none">
+                                {% if feat.content_en %}{{ feat.content_en|safe }}
+                                {% else %}{{ feat.content|safe }}<span class="badge bg-label-warning ms-2" style="font-size:0.65rem;">번역 중</span>{% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endwith %}
+
+                        {% with impr=note.improvements.first %}
+                        {% if impr and impr.content %}
+                        {% if note.features.exists %}<hr class="my-3 opacity-25">{% endif %}
+                        <div class="patch-section border-start border-3 border-info ps-3 mb-4">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="fw-bold text-info small text-uppercase">🛠️ 기능 개선</span>
+                            </div>
+                            <div class="patch-html-body lang-ko">{{ impr.content|safe }}</div>
+                            <div class="patch-html-body lang-en d-none">
+                                {% if impr.content_en %}{{ impr.content_en|safe }}
+                                {% else %}{{ impr.content|safe }}<span class="badge bg-label-warning ms-2" style="font-size:0.65rem;">번역 중</span>{% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endwith %}
+
+                        {% with bugf=note.bugfixes.first %}
+                        {% if bugf and bugf.content %}
+                        {% if note.features.exists or note.improvements.exists %}<hr class="my-3 opacity-25">{% endif %}
+                        <div class="patch-section border-start border-3 border-danger ps-3 mb-4">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="fw-bold text-danger small text-uppercase">🐛 버그 수정</span>
+                            </div>
+                            <div class="patch-html-body lang-ko">{{ bugf.content|safe }}</div>
+                            <div class="patch-html-body lang-en d-none">
+                                {% if bugf.content_en %}{{ bugf.content_en|safe }}
+                                {% else %}{{ bugf.content|safe }}<span class="badge bg-label-warning ms-2" style="font-size:0.65rem;">번역 중</span>{% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endwith %}
+
+                        {% with remk=note.remarks.first %}
+                        {% if remk and remk.content %}
+                        {% if note.features.exists or note.improvements.exists or note.bugfixes.exists %}<hr class="my-3 opacity-25">{% endif %}
+                        <div class="patch-section border-start border-3 border-warning ps-3 mb-4">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="fw-bold text-warning small text-uppercase">📝 특이 사항</span>
+                            </div>
+                            <div class="patch-html-body lang-ko">{{ remk.content|safe }}</div>
+                            <div class="patch-html-body lang-en d-none">
+                                {% if remk.content_en %}{{ remk.content_en|safe }}
+                                {% else %}{{ remk.content|safe }}<span class="badge bg-label-warning ms-2" style="font-size:0.65rem;">번역 중</span>{% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endwith %}
+
+                        <!-- 첨부 파일 섹션 -->
+                        {% with release_files=note.files.all debug_files=note.files.all %}
+                        <hr class="my-3 opacity-25">
+                        <div class="patch-section border-start border-3 border-secondary ps-3 mb-2">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <span class="fw-bold text-secondary small text-uppercase">📎 첨부 파일</span>
+                                {% if user_role == 'admin' or user_role == 'dev' %}
+                                <button class="btn btn-xs btn-label-primary btn-file-upload"
+                                        data-id="{{ note.id }}" data-version="{{ note.version }}"
+                                        style="font-size:0.7rem; padding: 2px 8px;">
+                                    <i class="bx bx-upload me-1"></i>업로드
+                                </button>
+                                {% endif %}
+                            </div>
+                            <div id="file-list-{{ note.id }}">
+                                {% for pf in note.files.all %}
+                                    {% if pf.file_type == 'release' or user_role == 'admin' or user_role == 'dev' %}
+                                    <div class="d-flex align-items-center gap-2 mb-1 file-item" data-file-id="{{ pf.id }}">
+                                        <span class="badge {% if pf.file_type == 'release' %}bg-label-success{% else %}bg-label-danger{% endif %}" style="font-size:0.65rem;">
+                                            {{ pf.get_file_type_display }}
+                                        </span>
+                                        <a href="{% url 'patchnote:file_download' pf.id %}" class="text-body small text-truncate" style="max-width:300px;" title="{{ pf.original_filename }}">
+                                            {{ pf.original_filename }}
+                                        </a>
+                                        <span class="text-muted" style="font-size:0.7rem;">{{ pf.file_size|filesizeformat }}</span>
+                                        {% if user_role == 'admin' or user_role == 'dev' %}
+                                        <button class="btn btn-xs btn-icon btn-label-danger btn-file-delete"
+                                                data-file-id="{{ pf.id }}" data-filename="{{ pf.original_filename }}"
+                                                style="width:20px; height:20px; font-size:0.6rem;" title="삭제">
+                                            <i class="bx bx-x"></i>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                {% empty %}
+                                    <p class="text-muted small mb-0 no-files-msg">등록된 파일이 없습니다.</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endwith %}
+
+                    </div>
+                </div>
+            {% empty %}
+                <div class="card text-center py-5" style="border: 2px dashed #d1d5db !important;">
+                    <div class="card-body">
+                        <div class="mb-3" style="font-size:3rem; opacity:0.25;">📋</div>
+                        <h6 class="fw-semibold mb-1">아직 등록된 패치노트가 없습니다.</h6>
+                        <p class="text-muted small mb-3">
+                            <span class="badge bg-label-{{ selected_product.platform_color }} rounded-pill">{{ selected_product.get_platform_display }}</span>
+                            <span class="badge bg-label-secondary rounded-pill ms-1">{{ selected_product.get_category_display }}</span>
+                            의 첫 번째 릴리즈 노트를 작성해 보세요.
+                        </p>
+                        <button type="button" class="btn btn-primary btn-sm"
+                                data-bs-toggle="modal" data-bs-target="#patchAppendModal">
+                            <i class="bx bx-plus me-1"></i>패치노트 등록
+                        </button>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        // ── 패치노트 검색 필터 ────────────────────────────────────────────────────
+        document.getElementById('patchSearchInput').addEventListener('input', function () {
+            const q = this.value.trim().toLowerCase();
+            document.querySelectorAll('.col > [id^="version-"]').forEach(card => {
+                const text = card.innerText.toLowerCase();
+                const match = !q || text.includes(q);
+                card.style.display = match ? '' : 'none';
+            });
+
+            // 사이드바 링크도 동기화
+            document.querySelectorAll('#version-list a').forEach(link => {
+                const targetId = link.getAttribute('href').replace('#', '');
+                const card = document.getElementById(targetId);
+                link.style.display = (!card || card.style.display === 'none') ? 'none' : '';
+            });
+        });
+
+        // ── 버전 사이드바 스크롤 ──────────────────────────────────────────────────
+        document.querySelectorAll('#version-list a').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+                document.querySelectorAll('#version-list a').forEach(nav => nav.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // ── KO / EN 언어 토글 ────────────────────────────────────────────────────
+        document.querySelectorAll('#lang-toggle button').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const lang = this.dataset.lang;
+
+                // 버튼 활성화 상태 교체
+                document.querySelectorAll('#lang-toggle button').forEach(b => {
+                    b.classList.toggle('btn-primary', b.dataset.lang === lang);
+                    b.classList.toggle('btn-outline-primary', b.dataset.lang !== lang);
+                    b.classList.toggle('active', b.dataset.lang === lang);
+                });
+
+                // 텍스트 표시/숨김
+                document.querySelectorAll('.lang-ko').forEach(el => el.classList.toggle('d-none', lang === 'en'));
+                document.querySelectorAll('.lang-en').forEach(el => el.classList.toggle('d-none', lang === 'ko'));
+            });
+        });
+
+        // ── 수정 모달 편집기 ─────────────────────────────────────────────────────
+        const activeEditEditors = {};
+        let editDatepicker = null;
+
+        // 수정 모달 섹션 스위치
+        const editEditorMap = {
+            'edit-new':     'editor-edit-features',
+            'edit-improve': 'editor-edit-improvements',
+            'edit-bug':     'editor-edit-bugfixes',
+            'edit-note':    'editor-edit-remarks',
+        };
+        document.querySelectorAll('.section-switch-edit').forEach(sw => {
+            sw.addEventListener('change', async function () {
+                const section = this.dataset.section;
+                const wrapper = document.getElementById(`wrapper-${section}`);
+                if (!wrapper) return;
+                if (this.checked) {
+                    wrapper.style.display = 'block';
+                    const editorId = editEditorMap[section];
+                    if (editorId && !activeEditEditors[editorId]) {
+                        activeEditEditors[editorId] = await initCKEditor(`#${editorId}`);
+                    }
+                } else {
+                    wrapper.style.display = 'none';
+                }
+            });
+        });
+
+        // 수정 버튼 클릭 → 데이터 로드 → 모달 열기
+        document.querySelectorAll('.btn-edit-note').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                const noteId = this.dataset.id;
+                let data;
+                try {
+                    const res = await fetch(`/patchnote/data/${noteId}/`);
+                    if (!res.ok) {
+                        const err = await res.json();
+                        Swal.fire('오류', err.error || '데이터를 불러올 수 없습니다.', 'error');
+                        return;
+                    }
+                    data = await res.json();
+                } catch (e) {
+                    Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
+                    return;
+                }
+
+                // 기본 필드 채우기
+                document.getElementById('editPatchNoteId').value = data.id;
+                document.getElementById('editPatchVersion').value = data.version;
+                if (!editDatepicker) {
+                    editDatepicker = initSimpleDatePicker('#editPatchDate');
+                }
+                editDatepicker.setDate(data.release_date, false);
+
+                // 섹션 스위치 초기화
+                const sectionMap = {
+                    'edit-new':     { switchId: 'switch-edit-new',     html: data.features_html,     editorId: 'editor-edit-features' },
+                    'edit-improve': { switchId: 'switch-edit-improve',  html: data.improvements_html, editorId: 'editor-edit-improvements' },
+                    'edit-bug':     { switchId: 'switch-edit-bug',      html: data.bugfixes_html,     editorId: 'editor-edit-bugfixes' },
+                    'edit-note':    { switchId: 'switch-edit-note',     html: data.remarks_html,      editorId: 'editor-edit-remarks' },
+                };
+
+                for (const [section, cfg] of Object.entries(sectionMap)) {
+                    const sw = document.getElementById(cfg.switchId);
+                    const wrapper = document.getElementById(`wrapper-${section}`);
+                    const hasContent = cfg.html && cfg.html.trim() !== '';
+                    sw.checked = hasContent;
+                    if (hasContent) {
+                        wrapper.style.display = 'block';
+                        if (!activeEditEditors[cfg.editorId]) {
+                            activeEditEditors[cfg.editorId] = initCKEditor(`#${cfg.editorId}`);
+                        }
+                        // CKEditor가 초기화될 때까지 짧게 대기
+                        const editor = activeEditEditors[cfg.editorId];
+                        if (editor && typeof editor.then === 'function') {
+                            activeEditEditors[cfg.editorId] = await editor;
+                        }
+                        activeEditEditors[cfg.editorId].setData(cfg.html);
+                    } else {
+                        wrapper.style.display = 'none';
+                    }
+                }
+
+                const modal = new bootstrap.Modal(document.getElementById('patchEditModal'));
+                modal.show();
+            });
+        });
+
+        // 수정 폼 제출
+        document.getElementById('editForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-edit-patch');
+            btn.disabled = true;
+
+            // CKEditor 내용 textarea에 동기화
+            for (const [editorId, editor] of Object.entries(activeEditEditors)) {
+                const textarea = document.getElementById(editorId);
+                if (textarea && editor && typeof editor.getData === 'function') {
+                    textarea.value = editor.getData();
+                }
+            }
+
+            // 숨겨진 섹션은 비워두기
+            const sectionMap = {
+                'switch-edit-new':     'editor-edit-features',
+                'switch-edit-improve': 'editor-edit-improvements',
+                'switch-edit-bug':     'editor-edit-bugfixes',
+                'switch-edit-note':    'editor-edit-remarks',
+            };
+            for (const [switchId, editorId] of Object.entries(sectionMap)) {
+                if (!document.getElementById(switchId).checked) {
+                    document.getElementById(editorId).value = '';
+                }
+            }
+
+            const formData = new FormData(this);
+            try {
+                const res = await fetch(this.action, { method: 'POST', body: formData });
+                const result = await res.json();
+                if (res.ok) {
+                    await Swal.fire({ icon: 'success', title: '수정 완료', text: result.message, timer: 1500, showConfirmButton: false });
+                    location.reload();
+                } else {
+                    Swal.fire('오류', result.error || '수정 중 오류가 발생했습니다.', 'error');
+                }
+            } catch (e) {
+                Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        // ── 발행 버튼 ────────────────────────────────────────────────────────────
+        document.querySelectorAll('.btn-publish-note').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                const noteId = this.dataset.id;
+                const version = this.dataset.version;
+                const result = await Swal.fire({
+                    title: `버전 ${version} 발행`,
+                    text: '발행 후에는 즉시 주기 구독자에게 Slack 알림이 전송됩니다. 발행하시겠습니까?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: '발행',
+                    cancelButtonText: '취소',
+                    confirmButtonColor: '#28a745',
+                });
+                if (!result.isConfirmed) return;
+
+                const formData = new FormData();
+                formData.append('patch_note_id', noteId);
+                formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+                try {
+                    const res = await fetch('{% url "patchnote:patch_note_publish" %}', { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if (res.ok) {
+                        await Swal.fire({ icon: 'success', title: '발행 완료', text: data.message, timer: 1500, showConfirmButton: false });
+                        location.reload();
+                    } else {
+                        Swal.fire('오류', data.error || '발행 중 오류가 발생했습니다.', 'error');
+                    }
+                } catch (e) {
+                    Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
+                }
+            });
+        });
+
+        // ── 삭제 버튼 ────────────────────────────────────────────────────────────
+        document.querySelectorAll('.btn-delete-note').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                const noteId = this.dataset.id;
+                const version = this.dataset.version;
+                const result = await Swal.fire({
+                    title: `버전 ${version} 삭제`,
+                    text: '패치노트를 삭제하면 되돌릴 수 없습니다. 정말 삭제하시겠습니까?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: '삭제',
+                    cancelButtonText: '취소',
+                    confirmButtonColor: '#d33',
+                });
+                if (!result.isConfirmed) return;
+
+                const formData = new FormData();
+                formData.append('patch_note_id', noteId);
+                formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+                try {
+                    const res = await fetch('{% url "patchnote:patch_note_delete" %}', { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if (res.ok) {
+                        await Swal.fire({ icon: 'success', title: '삭제 완료', text: data.message, timer: 1500, showConfirmButton: false });
+                        location.reload();
+                    } else {
+                        Swal.fire('오류', data.error || '삭제 중 오류가 발생했습니다.', 'error');
+                    }
+                } catch (e) {
+                    Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
+                }
+            });
+        });
+    </script>
+
+    <!-- ===== Notion Push 모달 ===== -->
+    <div class="modal fade" id="notionPushModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header border-bottom py-3">
+                    <h6 class="modal-title fw-bold mb-0">
+                        <i class="bx bx-upload me-1 text-success"></i>Notion Push
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted mb-3">
+                        <strong id="pushVersion"></strong> 을 Notion에 Push합니다.
+                    </p>
+                    <input type="hidden" id="pushNoteId">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Push 모드</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="notionPushMode" id="notionPushInsert" value="true" checked>
+                                <label class="form-check-label small" for="notionPushInsert">
+                                    <strong>Insert</strong>
+                                    <span class="text-muted d-block" style="font-size:0.75rem;">새 버전 삽입</span>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="notionPushMode" id="notionPushUpdate" value="false">
+                                <label class="form-check-label small" for="notionPushUpdate">
+                                    <strong>Update</strong>
+                                    <span class="text-muted d-block" style="font-size:0.75rem;">기존 내용 교체</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="notionPushResult" class="d-none"></div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-label-secondary" data-bs-dismiss="modal">닫기</button>
+                    <button type="button" id="btnNotionPush" class="btn btn-sm btn-success">
+                        <i class="bx bx-upload me-1"></i>Push
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ── Notion Push ────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', function () {
+        const pushModalEl = document.getElementById('notionPushModal');
+        if (!pushModalEl) return;
+        const pushModal = new bootstrap.Modal(pushModalEl);
+
+        document.querySelectorAll('.btn-push-notion').forEach(btn => {
+            btn.addEventListener('click', function () {
+                document.getElementById('pushNoteId').value = this.dataset.id;
+                document.getElementById('pushVersion').textContent = 'v' + this.dataset.version;
+                document.getElementById('notionPushResult').classList.add('d-none');
+                document.getElementById('btnNotionPush').disabled = false;
+                document.getElementById('notionPushInsert').checked = true;
+                pushModal.show();
+            });
+        });
+
+        document.getElementById('btnNotionPush').addEventListener('click', async function () {
+            const btn = this;
+            const noteId = document.getElementById('pushNoteId').value;
+            const isNew = document.querySelector('input[name="notionPushMode"]:checked').value;
+            const resultEl = document.getElementById('notionPushResult');
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Push...';
+            resultEl.classList.add('d-none');
+
+            const fd = new FormData();
+            fd.append('csrfmiddlewaretoken', csrfToken);
+            fd.append('patch_note_id', noteId);
+            fd.append('is_new', isNew);
+
+            try {
+                const res = await fetch("{% url 'notion:notion_push' %}", { method: 'POST', body: fd });
+                const data = await res.json();
+                resultEl.classList.remove('d-none');
+                if (res.ok) {
+                    resultEl.innerHTML = `<div class="alert alert-success mb-0 py-2 small">${data.message}</div>`;
+                } else {
+                    resultEl.innerHTML = `<div class="alert alert-danger mb-0 py-2 small">${data.error}</div>`;
+                }
+            } catch (e) {
+                resultEl.classList.remove('d-none');
+                resultEl.innerHTML = '<div class="alert alert-danger mb-0 py-2 small">네트워크 오류</div>';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bx bx-upload me-1"></i>Push';
+            }
+        });
+    });
+    </script>
+
+    <script>
+    // ── 번역 상태 폴링 ────────────────────────────────────────────────────
+    function pollTranslationStatus(noteId) {
+        const badge = document.getElementById(`translation-badge-${noteId}`);
+        if (!badge) return;
+
+        const STATUS_MAP = {
+            pending:     { cls: 'bg-label-warning',   icon: 'bx-loader-alt bx-spin', text: '번역 대기' },
+            translating: { cls: 'bg-label-warning',   icon: 'bx-loader-alt bx-spin', text: '번역 중' },
+            done:        { cls: 'bg-label-success',   icon: 'bx-check',              text: '번역 완료' },
+            failed:      { cls: 'bg-label-danger',    icon: 'bx-x',                  text: '번역 실패' },
+            skipped:     { cls: 'bg-label-secondary', icon: 'bx-minus',              text: '번역 없음' },
+        };
+
+        const interval = setInterval(async () => {
+            try {
+                const res = await fetch(`/patchnote/translation-status/${noteId}/`);
+                if (!res.ok) return;
+                const data = await res.json();
+                const info = STATUS_MAP[data.status];
+                if (!info) return;
+
+                badge.className = `badge ${info.cls} fs-small`;
+                badge.innerHTML = `<i class="bx ${info.icon} me-1"></i>${info.text}`;
+
+                if (['done', 'failed', 'skipped'].includes(data.status)) {
+                    clearInterval(interval);
+                }
+            } catch (e) {
+                clearInterval(interval);
+            }
+        }, 3000);
+    }
+
+    // 페이지 로드 시 진행 중인 번역이 있으면 폴링 시작
+    document.querySelectorAll('[id^="translation-badge-"]').forEach(badge => {
+        const text = badge.textContent.trim();
+        if (text.includes('번역 대기') || text.includes('번역 중')) {
+            const noteId = badge.id.replace('translation-badge-', '');
+            pollTranslationStatus(noteId);
+        }
+    });
+    </script>
+
+    <!-- ===== 파일 업로드 모달 ===== -->
+    <div class="modal fade" id="fileUploadModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header border-bottom py-3">
+                    <h6 class="modal-title fw-bold mb-0">
+                        <i class="bx bx-upload me-1 text-primary"></i>파일 업로드
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted mb-3">
+                        <strong id="uploadVersion"></strong> 에 파일을 첨부합니다.
+                    </p>
+                    <input type="hidden" id="uploadNoteId">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">파일 유형</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="uploadFileType" id="fileTypeRelease" value="release" checked>
+                                <label class="form-check-label small" for="fileTypeRelease">
+                                    <strong>Release</strong>
+                                    <span class="text-muted d-block" style="font-size:0.75rem;">릴리즈용 파일</span>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="uploadFileType" id="fileTypeDebug" value="debug">
+                                <label class="form-check-label small" for="fileTypeDebug">
+                                    <strong>Debug</strong>
+                                    <span class="text-muted d-block" style="font-size:0.75rem;">디버깅용 파일</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="uploadFileInput" class="form-label fw-semibold small">파일 선택</label>
+                        <input type="file" class="form-control form-control-sm" id="uploadFileInput">
+                    </div>
+                    <div id="uploadResult" class="d-none"></div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-label-secondary" data-bs-dismiss="modal">닫기</button>
+                    <button type="button" id="btnFileUpload" class="btn btn-sm btn-primary">
+                        <i class="bx bx-upload me-1"></i>업로드
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ── 파일 업로드 / 삭제 ────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', function () {
+        const uploadModalEl = document.getElementById('fileUploadModal');
+        if (!uploadModalEl) return;
+        const uploadModal = new bootstrap.Modal(uploadModalEl);
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+
+        // 업로드 모달 열기
+        document.querySelectorAll('.btn-file-upload').forEach(btn => {
+            btn.addEventListener('click', function () {
+                document.getElementById('uploadNoteId').value = this.dataset.id;
+                document.getElementById('uploadVersion').textContent = 'v' + this.dataset.version;
+                document.getElementById('uploadFileInput').value = '';
+                document.getElementById('uploadResult').classList.add('d-none');
+                document.getElementById('btnFileUpload').disabled = false;
+                document.getElementById('fileTypeRelease').checked = true;
+                uploadModal.show();
+            });
+        });
+
+        // 업로드 실행
+        document.getElementById('btnFileUpload').addEventListener('click', async function () {
+            const btn = this;
+            const noteId = document.getElementById('uploadNoteId').value;
+            const fileType = document.querySelector('input[name="uploadFileType"]:checked').value;
+            const fileInput = document.getElementById('uploadFileInput');
+            const resultEl = document.getElementById('uploadResult');
+
+            if (!fileInput.files.length) {
+                resultEl.classList.remove('d-none');
+                resultEl.innerHTML = '<div class="alert alert-warning mb-0 py-2 small">파일을 선택해주세요.</div>';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>업로드 중...';
+            resultEl.classList.add('d-none');
+
+            const fd = new FormData();
+            fd.append('csrfmiddlewaretoken', csrfToken);
+            fd.append('patch_note_id', noteId);
+            fd.append('file_type', fileType);
+            fd.append('file', fileInput.files[0]);
+
+            try {
+                const res = await fetch("{% url 'patchnote:file_upload' %}", { method: 'POST', body: fd });
+                const data = await res.json();
+                resultEl.classList.remove('d-none');
+                if (res.ok) {
+                    resultEl.innerHTML = `<div class="alert alert-success mb-0 py-2 small">${data.message}</div>`;
+                    // 파일 목록에 새 항목 추가
+                    const listEl = document.getElementById(`file-list-${noteId}`);
+                    const noFilesMsg = listEl.querySelector('.no-files-msg');
+                    if (noFilesMsg) noFilesMsg.remove();
+
+                    const f = data.file;
+                    const badgeClass = f.file_type === 'release' ? 'bg-label-success' : 'bg-label-danger';
+                    const typeLabel = f.file_type === 'release' ? 'Release' : 'Debug';
+                    const newItem = document.createElement('div');
+                    newItem.className = 'd-flex align-items-center gap-2 mb-1 file-item';
+                    newItem.dataset.fileId = f.id;
+                    newItem.innerHTML = `
+                        <span class="badge ${badgeClass}" style="font-size:0.65rem;">${typeLabel}</span>
+                        <a href="/patchnote/file/download/${f.id}/" class="text-body small text-truncate" style="max-width:300px;" title="${f.original_filename}">${f.original_filename}</a>
+                        <span class="text-muted" style="font-size:0.7rem;">${f.file_size_display}</span>
+                        <button class="btn btn-xs btn-icon btn-label-danger btn-file-delete"
+                                data-file-id="${f.id}" data-filename="${f.original_filename}"
+                                style="width:20px; height:20px; font-size:0.6rem;" title="삭제">
+                            <i class="bx bx-x"></i>
+                        </button>
+                    `;
+                    listEl.appendChild(newItem);
+                    bindFileDeleteBtn(newItem.querySelector('.btn-file-delete'));
+
+                    fileInput.value = '';
+                } else {
+                    resultEl.innerHTML = `<div class="alert alert-danger mb-0 py-2 small">${data.error}</div>`;
+                }
+            } catch (e) {
+                resultEl.classList.remove('d-none');
+                resultEl.innerHTML = '<div class="alert alert-danger mb-0 py-2 small">네트워크 오류</div>';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bx bx-upload me-1"></i>업로드';
+            }
+        });
+
+        // 파일 삭제
+        function bindFileDeleteBtn(btn) {
+            btn.addEventListener('click', async function () {
+                const fileId = this.dataset.fileId;
+                const filename = this.dataset.filename;
+                const result = await Swal.fire({
+                    title: '파일 삭제',
+                    text: `"${filename}" 파일을 삭제하시겠습니까?`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: '삭제',
+                    cancelButtonText: '취소',
+                    confirmButtonColor: '#d33',
+                });
+                if (!result.isConfirmed) return;
+
+                const fd = new FormData();
+                fd.append('csrfmiddlewaretoken', csrfToken);
+                fd.append('file_id', fileId);
+
+                try {
+                    const res = await fetch("{% url 'patchnote:file_delete' %}", { method: 'POST', body: fd });
+                    const data = await res.json();
+                    if (res.ok) {
+                        const item = document.querySelector(`.file-item[data-file-id="${fileId}"]`);
+                        if (item) item.remove();
+                        Swal.fire({ icon: 'success', title: '삭제 완료', timer: 1000, showConfirmButton: false });
+                    } else {
+                        Swal.fire('오류', data.error || '삭제 중 오류가 발생했습니다.', 'error');
+                    }
+                } catch (e) {
+                    Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
+                }
+            });
+        }
+
+        document.querySelectorAll('.btn-file-delete').forEach(bindFileDeleteBtn);
+    });
+    </script>
+
+    <!-- 최상단 이동 버튼 -->
+    <button id="btn-scroll-top" class="btn btn-primary btn-icon rounded-circle shadow"
+            style="position:fixed; bottom:2rem; right:2rem; display:none; z-index:1090; width:42px; height:42px;">
+        <i class="bx bx-chevron-up"></i>
+    </button>
+    <script>
+    (function() {
+        const btn = document.getElementById('btn-scroll-top');
+        window.addEventListener('scroll', function() {
+            btn.style.display = window.scrollY > 300 ? '' : 'none';
+        });
+        btn.addEventListener('click', function() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    })();
+    </script>
+{% endblock %}

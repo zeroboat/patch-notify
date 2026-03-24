@@ -1,0 +1,348 @@
+{% extends layout_path %}
+
+{% load static %}
+{% load i18n %}
+
+{% block title %}공문 작성{% endblock %}
+
+{% block vendor_js %}
+  {{ block.super }}
+  <script src="https://cdn.ckeditor.com/ckeditor5/40.0.0/classic/ckeditor.js"></script>
+{% endblock vendor_js %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <!-- 페이지 헤더 -->
+  <div class="mb-4">
+    <h4 class="fw-bold mb-1">공문 작성</h4>
+    <p class="text-muted mb-0 small">고객사에 이메일 공문을 작성하고 발송합니다.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-body pt-4">
+      <form id="noticeSendForm">
+        {% csrf_token %}
+        <input type="hidden" id="sendMode" name="send_mode" value="solution">
+
+        <!-- ── 수신자 설정 ──────────────────────────── -->
+        <div class="mb-4">
+
+          <!-- 수신 방식 탭 -->
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <span class="text-muted fw-medium" style="min-width:36px;">수신</span>
+            <ul class="nav nav-pills gap-1" id="recipientModeTabs" role="tablist">
+              <li class="nav-item">
+                <button type="button" class="nav-link active py-1 px-3" data-mode="solution">
+                  <i class="bx bx-layer me-1"></i>솔루션 선택
+                </button>
+              </li>
+              <li class="nav-item">
+                <button type="button" class="nav-link py-1 px-3" data-mode="direct">
+                  <i class="bx bx-edit me-1"></i>직접 입력
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          <!-- 솔루션 선택 패널 -->
+          <div id="panelSolution">
+            {% if solutions_data %}
+            <div class="row g-2 mb-3">
+              {% for sol in solutions_data %}
+              <div class="col-12 col-md-6 col-xl-4">
+                <label class="d-flex align-items-center gap-3 p-3 rounded border h-100" style="cursor:pointer;">
+                  <input type="checkbox" class="form-check-input solution-checkbox flex-shrink-0 mt-0" value="{{ sol.id }}">
+                  <div class="flex-grow-1">
+                    <div class="fw-medium">{{ sol.name }}</div>
+                    <div class="small text-muted mt-1">
+                      <span class="me-2"><i class="bx bx-buildings me-1"></i>{{ sol.customer_count }}개사</span>
+                      <span><i class="bx bx-envelope me-1"></i>{{ sol.email_count }}명</span>
+                    </div>
+                  </div>
+                </label>
+              </div>
+              {% endfor %}
+            </div>
+
+            <!-- 수신자 미리보기 -->
+            <div class="border rounded p-3 bg-body-secondary">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="small fw-semibold text-muted">수신자 미리보기</span>
+                <span class="badge bg-label-primary" id="previewCount">0명</span>
+              </div>
+              <div id="previewList" style="max-height:200px; overflow-y:auto;">
+                <span class="small text-muted">솔루션을 선택하면 수신자 목록이 표시됩니다.</span>
+              </div>
+            </div>
+
+            {% else %}
+            <div class="text-center py-5 text-muted border rounded">
+              <i class="bx bx-layer fs-2 d-block mb-2"></i>
+              등록된 솔루션이 없습니다.
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- 직접 입력 패널 -->
+          <div id="panelDirect" style="display:none;">
+            <textarea
+              class="form-control"
+              id="recipientsDirect"
+              name="recipients_direct"
+              rows="3"
+              placeholder="이메일 주소를 입력하세요. (예: user1@example.com; user2@example.com)"
+            ></textarea>
+            <div class="form-text">세미콜론(;) 또는 쉼표(,)로 구분하여 여러 이메일을 입력하세요.</div>
+          </div>
+
+        </div>
+
+        <hr class="my-4">
+
+        <!-- ── 제목 ──────────────────────────────────── -->
+        <div class="row mb-3 align-items-center">
+          <label class="col-auto col-form-label text-muted fw-medium pe-0" style="min-width:36px;">제목</label>
+          <div class="col">
+            <input
+              type="text"
+              class="form-control border-0 border-bottom rounded-0 shadow-none px-0 fw-semibold"
+              id="noticeSubject"
+              name="subject"
+              placeholder="공문 제목을 입력하세요"
+            >
+          </div>
+        </div>
+
+        <!-- ── 본문 ──────────────────────────────────── -->
+        <div class="mb-4">
+          <div id="noticeEditor">
+            <p>안녕하세요, OOO 팀입니다.</p>
+            <p>공지 사항을 다음과 같이 안내드립니다.</p>
+          </div>
+        </div>
+
+        <!-- ── 버튼 ──────────────────────────────────── -->
+        <div class="d-flex justify-content-end gap-2 mt-3">
+          <button type="button" class="btn btn-label-secondary" id="btnReset">
+            <i class="bx bx-reset me-1"></i>초기화
+          </button>
+          <button type="button" class="btn btn-label-info" id="btnPreview">
+            <i class="bx bx-show me-1"></i>미리보기
+          </button>
+          <button type="submit" class="btn btn-primary px-5" id="btnSend">
+            <i class="bx bx-send me-1"></i>발송하기
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<style>
+  .ck-editor__editable { min-height: 420px; }
+</style>
+
+<!-- 이메일 미리보기 모달 -->
+<div class="modal fade" id="emailPreviewModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bx bx-envelope me-2"></i>이메일 미리보기</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0" style="height:70vh;overflow:hidden;position:relative;">
+        <div id="previewSpinner" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#fff;z-index:10;">
+          <div class="spinner-border text-primary"></div>
+        </div>
+        <iframe id="previewFrame" style="width:100%;height:100%;border:none;display:block;visibility:hidden;"></iframe>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+  const sendModeInput = document.getElementById('sendMode');
+  const panelSolution = document.getElementById('panelSolution');
+  const panelDirect = document.getElementById('panelDirect');
+  const previewList = document.getElementById('previewList');
+  const previewCount = document.getElementById('previewCount');
+
+  // ── CKEditor 초기화 ──────────────────────────────
+  let editorInstance = null;
+  ClassicEditor.create(document.querySelector('#noticeEditor'), {
+    toolbar: ['bold', 'italic', 'underline', '|', 'link', 'bulletedList', 'numberedList', '|', 'blockQuote', '|', 'undo', 'redo'],
+    language: 'ko'
+  }).then(editor => {
+    editorInstance = editor;
+  }).catch(console.error);
+
+  // ── 수신 방식 탭 전환 ─────────────────────────────
+  document.querySelectorAll('#recipientModeTabs .nav-link').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      document.querySelectorAll('#recipientModeTabs .nav-link').forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+      const mode = this.dataset.mode;
+      sendModeInput.value = mode;
+      if (mode === 'solution') {
+        panelSolution.style.display = '';
+        panelDirect.style.display = 'none';
+      } else {
+        panelSolution.style.display = 'none';
+        panelDirect.style.display = '';
+      }
+    });
+  });
+
+  // ── 수신자 미리보기 ───────────────────────────────
+  function updatePreview() {
+    if (!panelSolution || panelSolution.style.display === 'none') return;
+    const ids = Array.from(document.querySelectorAll('.solution-checkbox:checked')).map(c => c.value);
+    if (ids.length === 0) {
+      previewCount.textContent = '0명';
+      previewList.innerHTML = '<span class="small text-muted">솔루션을 선택하면 수신자 목록이 표시됩니다.</span>';
+      return;
+    }
+    const body = new URLSearchParams();
+    ids.forEach(id => body.append('solution_ids[]', id));
+    fetch("{% url 'notification:recipients_preview' %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    })
+    .then(r => r.json())
+    .then(function (data) {
+      previewCount.textContent = data.count + '명';
+      if (data.recipients.length === 0) {
+        previewList.innerHTML = '<span class="small text-muted">등록된 이메일이 없습니다.</span>';
+        return;
+      }
+      previewList.innerHTML = data.recipients.map(function (r) {
+        return '<div class="d-flex align-items-center gap-2 py-1 border-bottom border-light-subtle small">'
+          + '<span class="text-muted" style="min-width:110px;">' + r.customer + '</span>'
+          + '<span>' + r.email + '</span>'
+          + (r.name ? '<span class="text-muted">(' + r.name + ')</span>' : '')
+          + '</div>';
+      }).join('');
+    })
+    .catch(console.error);
+  }
+
+  document.querySelectorAll('.solution-checkbox').forEach(function (cb) {
+    cb.addEventListener('change', updatePreview);
+  });
+
+  // ── 폼 발송 ───────────────────────────────────────
+  document.getElementById('noticeSendForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const subject = document.getElementById('noticeSubject').value.trim();
+    const body = editorInstance ? editorInstance.getData() : '';
+    const mode = sendModeInput.value;
+
+    if (!subject) {
+      Swal.fire({ icon: 'warning', title: '제목 필요', text: '제목을 입력해주세요.', confirmButtonText: '확인' });
+      return;
+    }
+    if (!body || body === '<p>&nbsp;</p>') {
+      Swal.fire({ icon: 'warning', title: '본문 필요', text: '본문을 입력해주세요.', confirmButtonText: '확인' });
+      return;
+    }
+
+    const formData = new URLSearchParams();
+    formData.append('subject', subject);
+    formData.append('body', body);
+    formData.append('send_mode', mode);
+
+    if (mode === 'solution') {
+      const checked = document.querySelectorAll('.solution-checkbox:checked');
+      if (checked.length === 0) {
+        Swal.fire({ icon: 'warning', title: '솔루션 선택', text: '수신 솔루션을 하나 이상 선택해주세요.', confirmButtonText: '확인' });
+        return;
+      }
+      checked.forEach(cb => formData.append('solution_ids[]', cb.value));
+    } else {
+      formData.append('recipients_direct', document.getElementById('recipientsDirect').value);
+    }
+
+    const btnSend = document.getElementById('btnSend');
+    btnSend.disabled = true;
+    btnSend.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>발송 중...';
+
+    fetch("{% url 'notification:send_notice' %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData.toString()
+    })
+    .then(r => r.json())
+    .then(function (data) {
+      if (data.ok) {
+        Swal.fire({ icon: 'success', title: '발송 완료', text: data.message, confirmButtonText: '확인' }).then(resetForm);
+      } else {
+        Swal.fire({ icon: 'error', title: '발송 실패', text: data.error, confirmButtonText: '확인' });
+      }
+    })
+    .catch(function () {
+      Swal.fire({ icon: 'error', title: '오류 발생', text: '서버 오류가 발생했습니다.', confirmButtonText: '확인' });
+    })
+    .finally(function () {
+      btnSend.disabled = false;
+      btnSend.innerHTML = '<i class="bx bx-send me-1"></i>발송하기';
+    });
+  });
+
+  // ── 이메일 미리보기 ───────────────────────────────
+  document.getElementById('btnPreview').addEventListener('click', function () {
+    const subject = document.getElementById('noticeSubject').value.trim() || '(제목 없음)';
+    const body = editorInstance ? editorInstance.getData() : '';
+
+    const modal = new bootstrap.Modal(document.getElementById('emailPreviewModal'));
+    const spinner = document.getElementById('previewSpinner');
+    const frame = document.getElementById('previewFrame');
+
+    spinner.style.display = 'flex';
+    frame.style.visibility = 'hidden';
+    modal.show();
+
+    const formData = new URLSearchParams({ subject, body });
+    fetch("{% url 'notification:preview_email' %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData.toString(),
+    })
+    .then(r => r.text())
+    .then(function (html) {
+      frame.onload = function () {
+        frame.style.visibility = 'visible';
+        spinner.style.display = 'none';
+      };
+      frame.srcdoc = html;
+    })
+    .catch(function () {
+      spinner.innerHTML = '<span class="text-danger">미리보기를 불러오지 못했습니다.</span>';
+    });
+  });
+
+  // ── 초기화 버튼 ──────────────────────────────────
+  function resetForm() {
+    document.getElementById('noticeSubject').value = '';
+    if (editorInstance) editorInstance.setData('');
+    document.querySelectorAll('.solution-checkbox').forEach(cb => { cb.checked = false; });
+    document.getElementById('recipientsDirect').value = '';
+    updatePreview();
+  }
+
+  document.getElementById('btnReset').addEventListener('click', resetForm);
+});
+</script>
+{% endblock %}
