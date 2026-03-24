@@ -29,12 +29,12 @@ class NotionManagementView(RoleRequiredMixin, TemplateView):
 
         mappings = NotionPageMapping.objects.select_related(
             'product', 'product__solution'
-        ).order_by('product__solution__name', 'product__platform')
+        ).order_by('product__solution__order', 'product__order', 'product__platform')
 
         mapped_product_ids = set(mappings.values_list('product_id', flat=True))
         unmapped_products = Product.objects.select_related('solution').exclude(
             id__in=mapped_product_ids
-        ).order_by('solution__name', 'platform')
+        ).order_by('solution__order', 'order', 'platform')
 
         context.update({
             'mappings': mappings,

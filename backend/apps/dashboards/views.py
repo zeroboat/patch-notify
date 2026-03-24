@@ -27,7 +27,7 @@ class DashboardsView(LoginRequiredMixin, TemplateView):
         solutions_with_customers = (
             Solution.objects
             .prefetch_related('customers')
-            .order_by('name')
+            .order_by('order', 'id')
         )
 
         # 최근 패치노트 5건

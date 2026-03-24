@@ -24,7 +24,7 @@ class CustomerManagementView(RoleRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = TemplateLayout.init(self, super().get_context_data(**kwargs))
         customers = Customer.objects.prefetch_related('emails', 'solutions').order_by('name')
-        solutions = Solution.objects.order_by('name')
+        solutions = Solution.objects.order_by('order', 'id')
         context.update({
             'customers': customers,
             'solutions': solutions,

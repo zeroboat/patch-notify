@@ -23,9 +23,9 @@ class ProductManagementView(RoleRequiredMixin, TemplateView):
                 'products',
                 queryset=Product.objects.annotate(
                     latest_release=Max('patch_notes__release_date')
-                ).order_by('platform', 'category')
+                ).order_by('order', 'platform', 'category')
             )
-        ).order_by('id')
+        ).order_by('order', 'id')
 
         total_products = Product.objects.count()
 
@@ -41,8 +41,9 @@ def create_solution(request):
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
         icon = request.POST.get('icon', '').strip() or 'bx-layer'
+        order = request.POST.get('order', '0').strip()
         if name:
-            Solution.objects.create(name=name, icon=icon)
+            Solution.objects.create(name=name, icon=icon, order=int(order or 0))
             messages.success(request, f'솔루션 "{name}"이 등록되었습니다.')
         else:
             messages.error(request, '솔루션 이름을 입력해주세요.')
@@ -56,6 +57,7 @@ def create_product(request):
         platform = request.POST.get('platform')
         category = request.POST.get('category')
         description = request.POST.get('description', '').strip()
+        order = request.POST.get('order', '0').strip()
 
         try:
             solution = Solution.objects.get(id=solution_id)
@@ -64,6 +66,7 @@ def create_product(request):
                 platform=platform,
                 category=category,
                 description=description or None,
+                order=int(order or 0),
             )
             messages.success(request, '제품이 등록되었습니다.')
         except Solution.DoesNotExist:
@@ -87,11 +90,15 @@ def update_product(request):
     if not platform or not category:
         return JsonResponse({'error': '플랫폼과 카테고리는 필수입니다.'}, status=400)
 
+    order = request.POST.get('order', '').strip()
+
     try:
         product = Product.objects.get(id=product_id)
         product.platform    = platform
         product.category    = category
         product.description = description or None
+        if order:
+            product.order = int(order)
         product.save()
         return JsonResponse({'message': '제품 정보가 수정되었습니다.'})
     except Product.DoesNotExist:
@@ -113,6 +120,33 @@ def delete_product(request):
         return JsonResponse({'error': '제품을 찾을 수 없습니다.'}, status=404)
     except Exception as e:
         return JsonResponse({'error': f'삭제 중 오류가 발생했습니다: {e}'}, status=500)
+
+
+@require_POST
+@role_required()
+def update_solution(request):
+    solution_id = request.POST.get('solution_id', '').strip()
+    name = request.POST.get('name', '').strip()
+    icon = request.POST.get('icon', '').strip()
+    order = request.POST.get('order', '').strip()
+
+    if not solution_id:
+        return JsonResponse({'error': '솔루션 ID가 누락되었습니다.'}, status=400)
+
+    try:
+        solution = Solution.objects.get(id=solution_id)
+        if name:
+            solution.name = name
+        if icon:
+            solution.icon = icon
+        if order:
+            solution.order = int(order)
+        solution.save()
+        return JsonResponse({'message': f'솔루션 "{solution.name}" 정보가 수정되었습니다.'})
+    except Solution.DoesNotExist:
+        return JsonResponse({'error': '솔루션을 찾을 수 없습니다.'}, status=404)
+    except (ValueError, TypeError):
+        return JsonResponse({'error': '순서 값이 올바르지 않습니다.'}, status=400)
 
 
 @require_POST
