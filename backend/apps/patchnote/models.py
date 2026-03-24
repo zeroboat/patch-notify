@@ -65,3 +65,37 @@ class Remark(PatchItemBase):
     """비고/특이사항"""
     patch_note = models.ForeignKey(PatchNote, on_delete=models.CASCADE, related_name='remarks', verbose_name="특이사항")
     class Meta(PatchItemBase.Meta): verbose_name = "특이사항"
+
+
+def patchnote_file_upload_path(instance, filename):
+    note = instance.patch_note
+    solution = note.product.solution.name
+    product = f"{note.product.get_platform_display()}_{note.product.get_category_display()}"
+    version = note.version
+    return f"patchnotes/{solution}/{product}/{version}/{instance.file_type}/{filename}"
+
+
+class PatchNoteFile(BaseModel):
+    """패치노트 첨부 파일 (릴리즈/디버그)"""
+    FILE_TYPE_CHOICES = [
+        ('release', 'Release'),
+        ('debug', 'Debug'),
+    ]
+
+    patch_note = models.ForeignKey(PatchNote, on_delete=models.CASCADE, related_name='files', verbose_name="패치노트")
+    file_type = models.CharField(max_length=10, choices=FILE_TYPE_CHOICES, verbose_name="파일 유형")
+    file = models.FileField(upload_to=patchnote_file_upload_path, verbose_name="파일")
+    original_filename = models.CharField(max_length=255, verbose_name="원본 파일명")
+    file_size = models.PositiveBigIntegerField(default=0, verbose_name="파일 크기(bytes)")
+    uploaded_by = models.ForeignKey(
+        'auth.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='uploaded_patchnote_files', verbose_name="업로더"
+    )
+
+    class Meta:
+        verbose_name = "패치노트 파일"
+        verbose_name_plural = "패치노트 파일 목록"
+        ordering = ['file_type', '-created_at']
+
+    def __str__(self):
+        return f"{self.patch_note} - {self.get_file_type_display()} - {self.original_filename}"

@@ -3,15 +3,16 @@ import re
 
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import JsonResponse
+from django.core.exceptions import PermissionDenied
+from django.http import JsonResponse, FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST, require_GET
 from django.views.generic import TemplateView
 
 from web_project import TemplateLayout
-from apps.base.mixins import role_required
+from apps.base.mixins import role_required, get_user_role
 from apps.product.models import Product
-from .models import PatchNote, Feature, Improvement, BugFix, Remark
+from .models import PatchNote, Feature, Improvement, BugFix, Remark, PatchNoteFile
 from .translation import start_translation
 
 logger = logging.getLogger(__name__)
@@ -155,7 +156,7 @@ class PatchNoteDetailView(LoginRequiredMixin, TemplateView):
         product = get_object_or_404(Product, id=product_id)
 
         patch_notes = PatchNote.objects.filter(product=product).prefetch_related(
-            'features', 'improvements', 'bugfixes', 'remarks'
+            'features', 'improvements', 'bugfixes', 'remarks', 'files'
         ).order_by('-release_date', '-version')
 
         context.update({
@@ -399,3 +400,130 @@ def translation_status(request, patch_note_id):
         'patch_note_id': note.id,
         'status': note.translation_status,
     })
+
+
+# ──────────────────────────────────────────────
+# 파일 업로드 / 다운로드 / 삭제
+# ──────────────────────────────────────────────
+
+def _format_file_size(size_bytes):
+    """파일 크기를 사람이 읽기 쉬운 형태로 변환"""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
+
+
+@require_POST
+@role_required('dev')
+def patch_note_file_upload(request):
+    """패치노트 파일 업로드 (release / debug)"""
+    patch_note_id = request.POST.get('patch_note_id', '').strip()
+    file_type = request.POST.get('file_type', '').strip()
+
+    if not patch_note_id or not file_type:
+        return JsonResponse({'error': '필수 파라미터가 누락되었습니다.'}, status=400)
+    if file_type not in ('release', 'debug'):
+        return JsonResponse({'error': '유효하지 않은 파일 유형입니다.'}, status=400)
+
+    uploaded_file = request.FILES.get('file')
+    if not uploaded_file:
+        return JsonResponse({'error': '파일이 첨부되지 않았습니다.'}, status=400)
+
+    try:
+        note = PatchNote.objects.get(id=patch_note_id)
+    except PatchNote.DoesNotExist:
+        return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
+
+    pf = PatchNoteFile.objects.create(
+        patch_note=note,
+        file_type=file_type,
+        file=uploaded_file,
+        original_filename=uploaded_file.name,
+        file_size=uploaded_file.size,
+        uploaded_by=request.user,
+    )
+
+    return JsonResponse({
+        'message': '파일이 업로드되었습니다.',
+        'file': {
+            'id': pf.id,
+            'file_type': pf.file_type,
+            'original_filename': pf.original_filename,
+            'file_size': pf.file_size,
+            'file_size_display': _format_file_size(pf.file_size),
+            'created_at': pf.created_at.strftime('%Y-%m-%d %H:%M'),
+        },
+    })
+
+
+@require_GET
+def patch_note_file_download(request, file_id):
+    """파일 다운로드 — debug 파일은 admin/dev만 허용"""
+    if not request.user.is_authenticated:
+        raise PermissionDenied
+
+    pf = get_object_or_404(PatchNoteFile, id=file_id)
+
+    if pf.file_type == 'debug':
+        role = get_user_role(request.user)
+        if role not in ('admin', 'dev'):
+            raise PermissionDenied
+
+    if not pf.file:
+        raise Http404
+
+    return FileResponse(pf.file.open('rb'), as_attachment=True, filename=pf.original_filename)
+
+
+@require_POST
+@role_required('dev')
+def patch_note_file_delete(request):
+    """파일 삭제"""
+    file_id = request.POST.get('file_id', '').strip()
+    if not file_id:
+        return JsonResponse({'error': '파일 ID가 누락되었습니다.'}, status=400)
+
+    try:
+        pf = PatchNoteFile.objects.get(id=file_id)
+    except PatchNoteFile.DoesNotExist:
+        return JsonResponse({'error': '파일을 찾을 수 없습니다.'}, status=404)
+
+    pf.file.delete(save=False)
+    pf.delete()
+
+    return JsonResponse({'message': '파일이 삭제되었습니다.'})
+
+
+@require_GET
+def patch_note_files_list(request, patch_note_id):
+    """패치노트의 파일 목록 JSON 반환"""
+    if not request.user.is_authenticated:
+        raise PermissionDenied
+
+    try:
+        note = PatchNote.objects.get(id=patch_note_id)
+    except PatchNote.DoesNotExist:
+        return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
+
+    role = get_user_role(request.user)
+    files = note.files.all()
+
+    result = []
+    for pf in files:
+        if pf.file_type == 'debug' and role not in ('admin', 'dev'):
+            continue
+        result.append({
+            'id': pf.id,
+            'file_type': pf.file_type,
+            'file_type_display': pf.get_file_type_display(),
+            'original_filename': pf.original_filename,
+            'file_size': pf.file_size,
+            'file_size_display': _format_file_size(pf.file_size),
+            'created_at': pf.created_at.strftime('%Y-%m-%d %H:%M'),
+        })
+
+    return JsonResponse({'files': result})

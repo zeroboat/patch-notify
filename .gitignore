@@ -279,5 +279,8 @@ test/*
 
 patchnote-converter/
 
+# Media uploads
+media/
+
 # Notion MD cache (Docker volume)
 notion_md/
