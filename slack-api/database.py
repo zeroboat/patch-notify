@@ -1,11 +1,12 @@
 import os
+from urllib.parse import quote_plus
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 # DATABASE_URL이 있으면 그대로 사용, 없으면 PostgreSQL URL 조합
 # 로컬 SQLite 예: DATABASE_URL=sqlite:///../backend/db.sqlite3
 DATABASE_URL = os.environ.get('DATABASE_URL') or (
-    f"postgresql://{os.environ['DB_USER']}:{os.environ['DB_PASSWORD']}"
+    f"postgresql://{quote_plus(os.environ['DB_USER'])}:{quote_plus(os.environ['DB_PASSWORD'])}"
     f"@{os.environ['DB_HOST']}:{os.environ.get('DB_PORT', '5432')}/{os.environ['DB_NAME']}"
 )
 
