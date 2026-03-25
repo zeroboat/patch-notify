@@ -439,6 +439,13 @@
                                             {{ pf.original_filename }}
                                         </a>
                                         <span class="text-muted" style="font-size:0.7rem;">{{ pf.file_size|filesizeformat }}</span>
+                                        {% if pf.nextcloud_url %}
+                                        <button class="btn btn-xs btn-icon btn-label-info btn-copy-nas"
+                                                style="width:20px; height:20px; font-size:0.6rem;" title="NAS 링크 복사"
+                                                data-url="{{ pf.nextcloud_url }}">
+                                            <i class="bx bx-link"></i>
+                                        </button>
+                                        {% endif %}
                                         {% if user_role == 'admin' or user_role == 'dev' %}
                                         <button class="btn btn-xs btn-icon btn-label-danger btn-file-delete"
                                                 data-file-id="{{ pf.id }}" data-filename="{{ pf.original_filename }}"
@@ -984,10 +991,18 @@
                     const newItem = document.createElement('div');
                     newItem.className = 'd-flex align-items-center gap-2 mb-1 file-item';
                     newItem.dataset.fileId = f.id;
+                    const nasBtn = f.nextcloud_url
+                        ? `<button class="btn btn-xs btn-icon btn-label-info btn-copy-nas"
+                              style="width:20px; height:20px; font-size:0.6rem;" title="NAS 링크 복사"
+                              data-url="${f.nextcloud_url}">
+                              <i class="bx bx-link"></i>
+                           </button>`
+                        : '';
                     newItem.innerHTML = `
                         <span class="badge ${badgeClass}" style="font-size:0.65rem;">${typeLabel}</span>
                         <a href="/patchnote/file/download/${f.id}/" class="text-body small text-truncate" style="max-width:300px;" title="${f.original_filename}">${f.original_filename}</a>
                         <span class="text-muted" style="font-size:0.7rem;">${f.file_size_display}</span>
+                        ${nasBtn}
                         <button class="btn btn-xs btn-icon btn-label-danger btn-file-delete"
                                 data-file-id="${f.id}" data-filename="${f.original_filename}"
                                 style="width:20px; height:20px; font-size:0.6rem;" title="삭제">
@@ -1047,6 +1062,18 @@
         }
 
         document.querySelectorAll('.btn-file-delete').forEach(bindFileDeleteBtn);
+
+        // NAS 링크 복사
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('.btn-copy-nas');
+            if (!btn) return;
+            const url = btn.dataset.url;
+            navigator.clipboard.writeText(url).then(() => {
+                const icon = btn.querySelector('i');
+                icon.className = 'bx bx-check';
+                setTimeout(() => { icon.className = 'bx bx-link'; }, 1500);
+            });
+        });
     });
     </script>
 

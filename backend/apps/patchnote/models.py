@@ -87,6 +87,7 @@ class PatchNoteFile(BaseModel):
     file = models.FileField(upload_to=patchnote_file_upload_path, verbose_name="파일")
     original_filename = models.CharField(max_length=255, verbose_name="원본 파일명")
     file_size = models.PositiveBigIntegerField(default=0, verbose_name="파일 크기(bytes)")
+    nextcloud_url = models.URLField(max_length=500, blank=True, null=True, verbose_name="Nextcloud 다운로드 URL")
     uploaded_by = models.ForeignKey(
         'auth.User', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='uploaded_patchnote_files', verbose_name="업로더"

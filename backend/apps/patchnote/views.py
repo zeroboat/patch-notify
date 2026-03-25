@@ -13,6 +13,7 @@ from web_project import TemplateLayout
 from apps.base.mixins import role_required, get_user_role
 from apps.product.models import Product
 from .models import PatchNote, Feature, Improvement, BugFix, Remark, PatchNoteFile
+from .nextcloud import upload_to_nextcloud, create_share_link, delete_from_nextcloud
 from .translation import start_translation
 
 logger = logging.getLogger(__name__)
@@ -446,6 +447,13 @@ def patch_note_file_upload(request):
         uploaded_by=request.user,
     )
 
+    # Nextcloud 이중 저장
+    if upload_to_nextcloud(pf.file):
+        share_url = create_share_link(pf.file)
+        if share_url:
+            pf.nextcloud_url = share_url
+            pf.save(update_fields=['nextcloud_url'])
+
     return JsonResponse({
         'message': '파일이 업로드되었습니다.',
         'file': {
@@ -455,6 +463,7 @@ def patch_note_file_upload(request):
             'file_size': pf.file_size,
             'file_size_display': _format_file_size(pf.file_size),
             'created_at': pf.created_at.strftime('%Y-%m-%d %H:%M'),
+            'nextcloud_url': pf.nextcloud_url or '',
         },
     })
 
@@ -491,6 +500,9 @@ def patch_note_file_delete(request):
     except PatchNoteFile.DoesNotExist:
         return JsonResponse({'error': '파일을 찾을 수 없습니다.'}, status=404)
 
+    # Nextcloud에서도 삭제
+    delete_from_nextcloud(pf.file)
+
     pf.file.delete(save=False)
     pf.delete()
 
@@ -523,6 +535,7 @@ def patch_note_files_list(request, patch_note_id):
             'file_size': pf.file_size,
             'file_size_display': _format_file_size(pf.file_size),
             'created_at': pf.created_at.strftime('%Y-%m-%d %H:%M'),
+            'nextcloud_url': pf.nextcloud_url or '',
         })
 
     return JsonResponse({'files': result})
