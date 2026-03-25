@@ -212,3 +212,10 @@ DEFAULT_FROM_EMAIL = os.getenv('GMAIL_USER', '')
 NOTION_ENABLED = os.getenv('NOTION_ENABLED', 'false').lower() in ('true', '1', 'yes')
 NOTION_TOKEN = os.getenv('NOTION_TOKEN', '')
 NOTION_MD_DIR = Path(os.getenv('NOTION_MD_DIR', BASE_DIR / 'notion_md'))
+
+# ── Nextcloud (파일 이중 저장) ────────────────────────────────────────────
+NEXTCLOUD_ENABLED = os.getenv('NEXTCLOUD_ENABLED', 'false').lower() in ('true', '1', 'yes')
+NEXTCLOUD_URL = os.getenv('NEXTCLOUD_URL', '')           # https://cloud.example.com
+NEXTCLOUD_USER = os.getenv('NEXTCLOUD_USER', '')
+NEXTCLOUD_PASSWORD = os.getenv('NEXTCLOUD_PASSWORD', '')  # 앱 비밀번호 권장
+NEXTCLOUD_UPLOAD_PATH = os.getenv('NEXTCLOUD_UPLOAD_PATH', '/patch-notify/media')
