@@ -67,22 +67,6 @@ def _call_ollama_batch(sections: dict[str, str]) -> dict[str, str]:
         return {}
 
 
-def _push_en_to_notion(patch_note):
-    """번역 완료 후 Notion 영문 페이지에 자동 push (KO는 건드리지 않음, 실패해도 무시)"""
-    if not getattr(settings, 'NOTION_ENABLED', False):
-        return
-    try:
-        from apps.notion.services import push_en_to_notion
-        result = push_en_to_notion(patch_note, is_new=True)
-        en_status = result.get('en_status', 'skipped')
-        if en_status == 'success':
-            logger.info("번역 완료 → Notion EN push 성공 (v%s)", patch_note.version)
-        else:
-            logger.info("번역 완료 → Notion EN push 건너뜀: %s (v%s)", result.get('en_reason', ''), patch_note.version)
-    except Exception as e:
-        logger.warning("번역 완료 → Notion EN push 실패 (v%s): %s", patch_note.version, e)
-
-
 def _run_translation(patch_note_id: int):
     """백그라운드 스레드 진입점 — 4개 섹션을 단일 배치 호출로 번역"""
     from .models import PatchNote, Feature, Improvement, BugFix, Remark
@@ -130,9 +114,6 @@ def _run_translation(patch_note_id: int):
         patch_note.translation_status = PatchNote.TRANSLATION_DONE
         patch_note.save(update_fields=["translation_status", "updated_at"])
         logger.info("패치노트 %s 영문 번역 완료 (섹션: %s)", patch_note_id, list(translated.keys()))
-
-        # 번역 완료 후 Notion 영문 페이지 자동 push
-        _push_en_to_notion(patch_note)
 
     except PatchNote.DoesNotExist:
         logger.error("번역 대상 패치노트를 찾을 수 없습니다: id=%s", patch_note_id)

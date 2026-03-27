@@ -20,39 +20,45 @@ logger = logging.getLogger(__name__)
 
 
 def _html_to_plain(html: str) -> str:
-    """HTML → 줄바꿈 보존 plain text (Slack mrkdwn용)"""
+    """HTML → 줄바꿈 보존 plain text (Slack mrkdwn용, <ul> 깊이 기반 들여쓰기)"""
     if not html:
         return ''
-    # <li> 항목을 bullet으로 변환
-    html = re.sub(r'<li[^>]*>', '• ', html)
-    # <br>, </p>, </div> 등을 줄바꿈으로 변환
-    html = re.sub(r'<br\s*/?>', '\n', html)
-    html = re.sub(r'</?(p|div|li|ul|ol)[^>]*>', '\n', html)
-    # <strong>/<b> → Slack bold
+    # bold / code 먼저 변환
     html = re.sub(r'<(strong|b)[^>]*>(.+?)</(strong|b)>', r'*\2*', html, flags=re.DOTALL)
-    # <code> → Slack inline code
     html = re.sub(r'<code[^>]*>(.+?)</code>', r'`\1`', html, flags=re.DOTALL)
-    # 나머지 태그 제거
-    html = re.sub(r'<[^>]+>', '', html)
-    # &nbsp; 등 HTML 엔티티 처리
-    html = html.replace('&nbsp;', ' ').replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
-    # 연속 빈줄 정리
-    html = re.sub(r'\n{3,}', '\n\n', html).strip()
-    return html
+
+    result = []
+    ul_depth = 0
+    for token in re.split(r'(</?[a-zA-Z][^>]*>)', html):
+        if not token:
+            continue
+        m = re.match(r'^<(/?)(\w+)', token)
+        if m:
+            closing, tag = m.group(1), m.group(2).lower()
+            if tag in ('ul', 'ol'):
+                ul_depth = max(0, ul_depth + (-1 if closing else 1))
+            elif tag == 'li' and not closing:
+                result.append(f'\n{"  " * ul_depth}- ')
+            elif tag == 'br':
+                result.append('\n')
+            elif tag in ('p', 'div') and closing:
+                result.append('\n')
+            # 나머지 태그 무시
+        else:
+            token = token.replace('&nbsp;', ' ').replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+            result.append(token)
+
+    text = re.sub(r'\n{3,}', '\n\n', ''.join(result))
+    return text.lstrip('\n').rstrip()
 
 
 def _build_patchnote_slack_blocks(patch_note) -> list:
-    """단일 패치노트를 Slack Block Kit 블록으로 변환 (최근 패치노트 보기와 동일 양식)"""
-    solution_name = patch_note.product.solution.name
-    platform = patch_note.product.get_platform_display()
-    category = patch_note.product.get_category_display()
-    product_label = f"{solution_name} {platform} {category}"
-
+    """단일 패치노트를 Slack Block Kit 블록으로 변환"""
     def _section_text(manager):
         obj = manager.filter(parent__isnull=True).order_by('order', 'id').first()
         if not obj or not obj.content:
-            return 'N/A'
-        return _html_to_plain(obj.content) or 'N/A'
+            return '  - N/A'
+        return _html_to_plain(obj.content) or '  - N/A'
 
     features_text   = _section_text(patch_note.features)
     improvements_text = _section_text(patch_note.improvements)
@@ -60,9 +66,9 @@ def _build_patchnote_slack_blocks(patch_note) -> list:
 
     body = (
         f"[Patch Note]\n"
-        f"• 기능 추가\n{features_text}\n\n"
-        f"• 기능 개선\n{improvements_text}\n\n"
-        f"• 버그 수정\n{bugfixes_text}"
+        f"기능 추가\n{features_text}\n\n"
+        f"기능 개선\n{improvements_text}\n\n"
+        f"버그 수정\n{bugfixes_text}"
     )
 
     remarks_obj = patch_note.remarks.filter(parent__isnull=True).order_by('order', 'id').first()
@@ -72,7 +78,6 @@ def _build_patchnote_slack_blocks(patch_note) -> list:
             body += f"\n\n[Remarks]\n{remarks_text}"
 
     return [
-        {"type": "header", "text": {"type": "plain_text", "text": f"{product_label} 최근 패치노트"}},
         {
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"*Version: {patch_note.version}*  ·  {patch_note.release_date}"},
@@ -85,8 +90,8 @@ def _build_patchnote_slack_blocks(patch_note) -> list:
     ]
 
 
-def _send_immediate_slack_notifications(patch_note):
-    """발행 시 즉시(immediate) 주기 Slack 구독자에게 패치노트 내용 전송"""
+def _send_slack_notifications(patch_note):
+    """발행 시 활성 Slack 구독자에게 최근 max_items건 패치노트 전송"""
     try:
         from slack_sdk import WebClient
         from apps.slack_app.models import SlackWorkspace
@@ -98,7 +103,6 @@ def _send_immediate_slack_notifications(patch_note):
                 product=patch_note.product,
                 channel=Subscription.CHANNEL_SLACK,
                 is_active=True,
-                frequency=Subscription.FREQUENCY_IMMEDIATE,
                 slack_channel__isnull=False,
             )
             .exclude(slack_channel='')
@@ -108,12 +112,10 @@ def _send_immediate_slack_notifications(patch_note):
         if not subs.exists():
             return
 
-        blocks = _build_patchnote_slack_blocks(patch_note)
-        fallback_text = (
-            f"{patch_note.product.solution.name} "
-            f"{patch_note.product.get_platform_display()} "
-            f"v{patch_note.version} 패치노트가 발행되었습니다."
-        )
+        solution_name = patch_note.product.solution.name
+        platform = patch_note.product.get_platform_display()
+        category = patch_note.product.get_category_display()
+        product_label = f"{solution_name} {platform} {category}"
 
         for sub in subs:
             workspace = SlackWorkspace.objects.filter(
@@ -122,6 +124,22 @@ def _send_immediate_slack_notifications(patch_note):
             ).first()
             if not workspace:
                 continue
+
+            # 구독자별 max_items건 조회
+            recent_notes = (
+                PatchNote.objects
+                .filter(product=patch_note.product, is_published=True)
+                .prefetch_related('features', 'improvements', 'bugfixes', 'remarks')
+                .order_by('-release_date', '-version')
+                [:sub.max_items]
+            )
+
+            blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"{product_label} 최근 패치노트"}}]
+            for note in recent_notes:
+                blocks.extend(_build_patchnote_slack_blocks(note))
+
+            fallback_text = f"{product_label} v{patch_note.version} 패치노트가 발행되었습니다."
+
             try:
                 client = WebClient(token=workspace.bot_token)
                 client.chat_postMessage(
@@ -130,9 +148,9 @@ def _send_immediate_slack_notifications(patch_note):
                     blocks=blocks,
                 )
             except Exception as e:
-                logger.warning(f'즉시 Slack 알림 실패 (customer={sub.customer.name}): {e}')
+                logger.warning(f'Slack 알림 실패 (customer={sub.customer.name}): {e}')
     except Exception as e:
-        logger.warning(f'즉시 Slack 알림 처리 실패: {e}')
+        logger.warning(f'Slack 알림 처리 실패: {e}')
 
 
 def _push_to_notion_safe(patch_note, is_new=True):
@@ -383,7 +401,7 @@ def patch_note_publish(request):
     note.save(update_fields=['is_published', 'updated_at'])
 
     _push_to_notion_safe(note, is_new=True)
-    _send_immediate_slack_notifications(note)
+    _send_slack_notifications(note)
 
     return JsonResponse({'message': f'버전 {note.version} 이(가) 발행되었습니다.'})
 

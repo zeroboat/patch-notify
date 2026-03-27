@@ -10,17 +10,6 @@ class Subscription(BaseModel):
         (CHANNEL_SLACK, 'Slack'),
     ]
 
-    FREQUENCY_IMMEDIATE = 'immediate'
-    FREQUENCY_WEEKLY = 'weekly'
-    FREQUENCY_MONTHLY = 'monthly'
-    FREQUENCY_QUARTERLY = 'quarterly'
-    FREQUENCY_CHOICES = [
-        (FREQUENCY_IMMEDIATE, '즉시'),
-        (FREQUENCY_WEEKLY, '매주'),
-        (FREQUENCY_MONTHLY, '매월'),
-        (FREQUENCY_QUARTERLY, '분기'),
-    ]
-
     customer = models.ForeignKey(
         'customer.Customer',
         on_delete=models.CASCADE,
@@ -35,12 +24,6 @@ class Subscription(BaseModel):
     )
     channel = models.CharField(max_length=10, choices=CHANNEL_CHOICES, verbose_name="채널")
     is_active = models.BooleanField(default=True, verbose_name="활성화")
-    frequency = models.CharField(
-        max_length=20,
-        choices=FREQUENCY_CHOICES,
-        default=FREQUENCY_WEEKLY,
-        verbose_name="전달 주기",
-    )
     max_items = models.PositiveIntegerField(default=5, verbose_name="최대 건수")
     slack_channel = models.CharField(
         max_length=200,

@@ -518,12 +518,13 @@ def sync_product(mapping: NotionPageMapping, version: str = None, force: bool = 
         patch_note, created = PatchNote.objects.get_or_create(
             product=product,
             version=v,
-            defaults={'release_date': patch_date},
+            defaults={'release_date': patch_date, 'is_published': True},
         )
 
         if not created:
             patch_note.release_date = patch_date
-            patch_note.save()
+            patch_note.is_published = True
+            patch_note.save(update_fields=['release_date', 'is_published', 'updated_at'])
             patch_note.features.all().delete()
             patch_note.improvements.all().delete()
             patch_note.bugfixes.all().delete()
@@ -759,7 +760,6 @@ def _find_supported_anchor(md: str) -> str | None:
 def _push_to_page(page_id: str, md_content: str, is_new: bool, version: str):
     """단일 Notion 페이지에 패치노트 push"""
     current_md = fetch_page_markdown(page_id)
-    
 
     if is_new:
         anchor = _find_supported_anchor(current_md)

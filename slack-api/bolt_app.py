@@ -191,10 +191,6 @@ def handle_save_subscription(ack, body, view, client):
     }
 
     # 공통 설정
-    email_freq = (
-        values.get('email_frequency', {}).get('email_freq_select', {})
-        .get('selected_option', {}).get('value', 'weekly')
-    )
     email_max = int(
         values.get('email_max_items', {}).get('email_max_select', {})
         .get('selected_option', {}).get('value', '5')
@@ -202,10 +198,6 @@ def handle_save_subscription(ack, body, view, client):
     slack_ch = (
         values.get('slack_channel_input', {}).get('slack_channel_value', {})
         .get('selected_conversation') or ''
-    )
-    slack_freq = (
-        values.get('slack_frequency', {}).get('slack_freq_select', {})
-        .get('selected_option', {}).get('value', 'weekly')
     )
     slack_max = int(
         values.get('slack_max_items', {}).get('slack_max_select', {})
@@ -219,8 +211,8 @@ def handle_save_subscription(ack, body, view, client):
         ).fetchall()
 
         for p in products:
-            _upsert_subscription(db, customer_id, p.id, 'email', p.id in email_selected, email_freq, email_max, None)
-            _upsert_subscription(db, customer_id, p.id, 'slack', p.id in slack_selected, slack_freq, slack_max, slack_ch)
+            _upsert_subscription(db, customer_id, p.id, 'email', p.id in email_selected, email_max, None)
+            _upsert_subscription(db, customer_id, p.id, 'slack', p.id in slack_selected, slack_max, slack_ch)
 
         db.commit()
 
@@ -236,7 +228,7 @@ def handle_save_subscription(ack, body, view, client):
     client.views_publish(user_id=user_id, view={"type": "home", "blocks": blocks})
 
 
-def _upsert_subscription(db, customer_id, product_id, channel, enabled, freq, max_items, slack_ch):
+def _upsert_subscription(db, customer_id, product_id, channel, enabled, max_items, slack_ch):
     existing = db.execute(
         select(subscription).where(
             and_(
@@ -250,7 +242,6 @@ def _upsert_subscription(db, customer_id, product_id, channel, enabled, freq, ma
     if existing:
         update_vals = {
             'is_active': enabled,
-            'frequency': freq,
             'max_items': max_items,
             'updated_at': datetime.now(timezone.utc),
         }
@@ -268,7 +259,6 @@ def _upsert_subscription(db, customer_id, product_id, channel, enabled, freq, ma
             'product_id': product_id,
             'channel': channel,
             'is_active': True,
-            'frequency': freq,
             'max_items': max_items,
             'created_at': now,
             'updated_at': now,
