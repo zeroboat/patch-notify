@@ -17,7 +17,7 @@ def get_user_role(user):
 def has_role(user, *roles):
     """Admin은 항상 True. 나머지는 roles 목록에 포함 여부 확인."""
     role = get_user_role(user)
-    return role == 'admin' or role in roles
+    return role in ('admin', 'manager') or role in roles
 
 
 class RoleRequiredMixin(LoginRequiredMixin):

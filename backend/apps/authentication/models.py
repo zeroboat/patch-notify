@@ -8,11 +8,13 @@ from apps.base.models import BaseModel
 
 class UserProfile(BaseModel):
     ROLE_ADMIN = 'admin'
+    ROLE_MANAGER = 'manager'
     ROLE_DEV = 'dev'
     ROLE_SE = 'se'
     ROLE_GUEST = 'guest'
     ROLE_CHOICES = [
         (ROLE_ADMIN, 'Admin'),
+        (ROLE_MANAGER, 'Manager'),
         (ROLE_DEV, 'Dev'),
         (ROLE_SE, 'SE'),
         (ROLE_GUEST, 'Guest'),

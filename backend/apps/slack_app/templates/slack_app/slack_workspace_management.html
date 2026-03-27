@@ -1,0 +1,207 @@
+{% extends layout_path %}
+
+{% load static %}
+{% load i18n %}
+
+{% block title %}Slack Workspace 관리{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <!-- 페이지 헤더 -->
+  <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+    <div>
+      <h4 class="fw-bold mb-1">
+        <span class="text-muted fw-light">Management /</span> Slack Workspaces
+      </h4>
+      <p class="text-muted mb-0 small">고객사 Slack 워크스페이스 승인 및 연결을 관리합니다.</p>
+    </div>
+  </div>
+
+  <!-- 통계 카드 -->
+  <div class="row g-4 mb-4">
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-primary">
+              <i class="bx bx-message-square-dots fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">전체</p>
+            <h4 class="mb-0 fw-bold">{{ total }}</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-warning">
+              <i class="bx bx-time-five fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">승인 대기</p>
+            <h4 class="mb-0 fw-bold">{{ pending_count }}</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-success">
+              <i class="bx bx-check-circle fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">승인됨</p>
+            <h4 class="mb-0 fw-bold">{{ approved_count }}</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded bg-label-danger">
+              <i class="bx bx-x-circle fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">거부됨</p>
+            <h4 class="mb-0 fw-bold">{{ rejected_count }}</h4>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 워크스페이스 목록 -->
+  <div class="card">
+    <div class="card-header">
+      <h5 class="mb-0">워크스페이스 목록</h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">#</th>
+              <th>워크스페이스명</th>
+              <th>Team ID</th>
+              <th class="text-center">상태</th>
+              <th>연결 고객사</th>
+              <th>등록일</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ws in workspaces %}
+            <tr>
+              <td class="ps-4 text-muted small">{{ forloop.counter }}</td>
+              <td>
+                <span class="fw-medium">{{ ws.team_name }}</span>
+              </td>
+              <td>
+                <code class="small">{{ ws.team_id }}</code>
+              </td>
+              <td class="text-center">
+                <select class="form-select form-select-sm d-inline-block status-select"
+                        style="width: 120px;"
+                        data-workspace-id="{{ ws.id }}">
+                  <option value="pending" {% if ws.status == 'pending' %}selected{% endif %}>승인 대기</option>
+                  <option value="approved" {% if ws.status == 'approved' %}selected{% endif %}>승인됨</option>
+                  <option value="rejected" {% if ws.status == 'rejected' %}selected{% endif %}>거부됨</option>
+                </select>
+              </td>
+              <td>
+                <select class="form-select form-select-sm d-inline-block customer-select"
+                        style="width: 180px;"
+                        data-workspace-id="{{ ws.id }}">
+                  <option value="">— 미연결 —</option>
+                  {% for c in customers %}
+                  <option value="{{ c.id }}" {% if ws.customer_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td class="text-muted small">
+                {{ ws.created_at|date:"Y-m-d H:i" }}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="6" class="text-center py-5 text-muted">
+                <i class="bx bx-message-square-dots fs-2 d-block mb-2"></i>
+                등록된 워크스페이스가 없습니다.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block page_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const CSRF_TOKEN = '{{ csrf_token }}';
+  const STATUS_URL   = '{% url "slack_app:update_workspace_status" %}';
+  const CUSTOMER_URL = '{% url "slack_app:link_workspace_customer" %}';
+
+  // 상태 변경
+  document.querySelectorAll('.status-select').forEach(select => {
+    select.addEventListener('change', function () {
+      const workspaceId = this.dataset.workspaceId;
+      const status = this.value;
+
+      fetch(STATUS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
+        body: new URLSearchParams({ workspace_id: workspaceId, status })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: data.message, showConfirmButton: false, timer: 2000, timerProgressBar: true });
+          setTimeout(() => location.reload(), 1500);
+        } else {
+          Swal.fire({ icon: 'error', title: data.error, timer: 2000, showConfirmButton: false });
+        }
+      });
+    });
+  });
+
+  // 고객사 연결
+  document.querySelectorAll('.customer-select').forEach(select => {
+    select.addEventListener('change', function () {
+      const workspaceId = this.dataset.workspaceId;
+      const customerId = this.value;
+
+      fetch(CUSTOMER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
+        body: new URLSearchParams({ workspace_id: workspaceId, customer_id: customerId })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: data.message, showConfirmButton: false, timer: 2000, timerProgressBar: true });
+        } else {
+          Swal.fire({ icon: 'error', title: data.error, timer: 2000, showConfirmButton: false });
+        }
+      });
+    });
+  });
+
+});
+</script>
+{% endblock %}
