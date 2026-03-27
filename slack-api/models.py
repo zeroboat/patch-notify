@@ -27,7 +27,6 @@ subscription = Table(
     Column('product_id', Integer, ForeignKey('product_product.id')),
     Column('channel', String),                                   # email / slack
     Column('is_active', Boolean),
-    Column('frequency', String),                                 # weekly / monthly / quarterly
     Column('max_items', Integer),
     Column('slack_channel', String, nullable=True),
     Column('created_at', DateTime(timezone=True)),

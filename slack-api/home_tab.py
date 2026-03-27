@@ -1,24 +1,39 @@
 """Slack Home Tab & Modal Block Kit 빌더"""
 import re
-import html2text
 from sqlalchemy.orm import Session
 from sqlalchemy import select, and_
 
-_h2t = html2text.HTML2Text()
-_h2t.ignore_links = False
-_h2t.ignore_images = True
-_h2t.body_width = 0  # 줄바꿈 없음
-
 
 def html_to_mrkdwn(html: str) -> str:
-    """HTML → Slack mrkdwn 변환"""
+    """HTML → Slack mrkdwn 변환 (<ul> 깊이 기반 들여쓰기)"""
     if not html:
         return ''
-    md = _h2t.handle(html).strip()
-    md = re.sub(r'\*\*(.+?)\*\*', r'*\1*', md)
-    md = re.sub(r'__(.+?)__', r'_\1_', md)
-    md = re.sub(r'\[(.+?)\]\((https?://[^\)]+)\)', r'<\2|\1>', md)
-    return md
+    # bold / code 먼저 변환
+    html = re.sub(r'<(strong|b)[^>]*>(.+?)</(strong|b)>', r'*\2*', html, flags=re.DOTALL)
+    html = re.sub(r'<code[^>]*>(.+?)</code>', r'`\1`', html, flags=re.DOTALL)
+
+    result = []
+    ul_depth = 0
+    for token in re.split(r'(</?[a-zA-Z][^>]*>)', html):
+        if not token:
+            continue
+        m = re.match(r'^<(/?)(\w+)', token)
+        if m:
+            closing, tag = m.group(1), m.group(2).lower()
+            if tag in ('ul', 'ol'):
+                ul_depth = max(0, ul_depth + (-1 if closing else 1))
+            elif tag == 'li' and not closing:
+                result.append(f'\n{"  " * ul_depth}- ')
+            elif tag == 'br':
+                result.append('\n')
+            elif tag in ('p', 'div') and closing:
+                result.append('\n')
+        else:
+            token = token.replace('&nbsp;', ' ').replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+            result.append(token)
+
+    text = re.sub(r'\n{3,}', '\n\n', ''.join(result))
+    return text.lstrip('\n').rstrip()
 
 
 from models import (
@@ -27,13 +42,6 @@ from models import (
     product as product_table, patchnote as patchnote_table,
     patchnote_feature, patchnote_improvement, patchnote_bugfix, patchnote_remark,
 )
-
-_FREQ_OPTIONS = [
-    {"text": {"type": "plain_text", "text": "즉시"}, "value": "immediate"},
-    {"text": {"type": "plain_text", "text": "매주"}, "value": "weekly"},
-    {"text": {"type": "plain_text", "text": "매월"}, "value": "monthly"},
-    {"text": {"type": "plain_text", "text": "분기"}, "value": "quarterly"},
-]
 
 _MAX_ITEMS_OPTIONS = [
     {"text": {"type": "plain_text", "text": f"{n}개"}, "value": str(n)}
@@ -48,10 +56,6 @@ _CATEGORY_LABEL = {
     'LIB': 'Library', 'PLG': 'Plugin', 'BND': 'Backend',
     'FND': 'Frontend', 'MOD': 'Module',
 }
-
-
-def _freq_initial(value):
-    return next((o for o in _FREQ_OPTIONS if o["value"] == value), _FREQ_OPTIONS[0])
 
 
 def _max_initial(value):
@@ -176,19 +180,16 @@ def build_subscription_modal(db: Session, customer_id: int, solution_id: int, so
 
     # 현재 활성화된 제품 및 공통 설정 수집
     email_active_opts, slack_active_opts = [], []
-    email_freq, email_max = 'weekly', '5'
-    slack_freq, slack_max, slack_channel = 'weekly', '5', ''
+    email_max, slack_max, slack_channel = '5', '5', ''
 
     for p, opt in zip(products, product_options):
         email_sub = _get_subscription(db, customer_id, p.id, 'email')
         slack_sub = _get_subscription(db, customer_id, p.id, 'slack')
         if email_sub and email_sub.is_active:
             email_active_opts.append(opt)
-            email_freq = email_sub.frequency
             email_max = str(email_sub.max_items)
         if slack_sub and slack_sub.is_active:
             slack_active_opts.append(opt)
-            slack_freq = slack_sub.frequency
             slack_max = str(slack_sub.max_items)
             if slack_sub.slack_channel:
                 slack_channel = slack_sub.slack_channel
@@ -220,18 +221,6 @@ def build_subscription_modal(db: Session, customer_id: int, solution_id: int, so
         },
         {
             "type": "input",
-            "block_id": "email_frequency",
-            "label": {"type": "plain_text", "text": "전달 주기"},
-            "element": {
-                "type": "static_select",
-                "action_id": "email_freq_select",
-                "options": _FREQ_OPTIONS,
-                "initial_option": _freq_initial(email_freq),
-            },
-            "optional": True,
-        },
-        {
-            "type": "input",
             "block_id": "email_max_items",
             "label": {"type": "plain_text", "text": "최대 건수"},
             "element": {
@@ -256,18 +245,6 @@ def build_subscription_modal(db: Session, customer_id: int, solution_id: int, so
             "block_id": "slack_channel_input",
             "label": {"type": "plain_text", "text": "알림 채널"},
             "element": channel_element,
-            "optional": True,
-        },
-        {
-            "type": "input",
-            "block_id": "slack_frequency",
-            "label": {"type": "plain_text", "text": "전달 주기"},
-            "element": {
-                "type": "static_select",
-                "action_id": "slack_freq_select",
-                "options": _FREQ_OPTIONS,
-                "initial_option": _freq_initial(slack_freq),
-            },
             "optional": True,
         },
         {
@@ -343,7 +320,7 @@ def _fetch_items(db, table, note_id):
 
 def _items_text(rows) -> str:
     if not rows:
-        return "N/A"
+        return "  - N/A"
     return '\n'.join(html_to_mrkdwn(r.content) for r in rows)
 
 
@@ -385,9 +362,9 @@ def build_patchnote_blocks(db: Session, product_id: int, solution_name: str) -> 
 
         body = (
             f"[Patch Note]\n"
-            f"• 기능 추가\n{_items_text(features)}\n\n"
-            f"• 기능 개선\n{_items_text(improves)}\n\n"
-            f"• 버그 수정\n{_items_text(bugfixes)}"
+            f"기능 추가\n{_items_text(features)}\n\n"
+            f"기능 개선\n{_items_text(improves)}\n\n"
+            f"버그 수정\n{_items_text(bugfixes)}"
         )
         if remarks:
             body += f"\n\n[Remarks]\n{_items_text(remarks)}"

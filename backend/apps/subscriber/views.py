@@ -70,12 +70,10 @@ def get_customer_subscriptions(request, customer_id):
                 'category': prod.get_category_display(),
                 'email': {
                     'active': email_sub.is_active if email_sub else False,
-                    'frequency': email_sub.frequency if email_sub else Subscription.FREQUENCY_WEEKLY,
                     'max_items': email_sub.max_items if email_sub else 5,
                 },
                 'slack': {
                     'active': slack_sub.is_active if slack_sub else False,
-                    'frequency': slack_sub.frequency if slack_sub else Subscription.FREQUENCY_WEEKLY,
                     'max_items': slack_sub.max_items if slack_sub else 5,
                     'slack_channel': slack_sub.slack_channel or '' if slack_sub else '',
                 },
@@ -115,7 +113,6 @@ def save_customer_subscription(request):
 
     # Gmail
     email_active = request.POST.get('email_active') == 'true'
-    email_frequency = request.POST.get('email_frequency', Subscription.FREQUENCY_WEEKLY)
     email_max_items = int(request.POST.get('email_max_items', 5))
 
     if email_active:
@@ -125,7 +122,6 @@ def save_customer_subscription(request):
             channel=Subscription.CHANNEL_EMAIL,
             defaults={
                 'is_active': True,
-                'frequency': email_frequency,
                 'max_items': max(1, min(10, email_max_items)),
             },
         )
@@ -136,7 +132,6 @@ def save_customer_subscription(request):
 
     # Slack
     slack_active = request.POST.get('slack_active') == 'true'
-    slack_frequency = request.POST.get('slack_frequency', Subscription.FREQUENCY_WEEKLY)
     slack_max_items = int(request.POST.get('slack_max_items', 5))
     slack_channel = request.POST.get('slack_channel', '').strip()
 
@@ -147,7 +142,6 @@ def save_customer_subscription(request):
             channel=Subscription.CHANNEL_SLACK,
             defaults={
                 'is_active': True,
-                'frequency': slack_frequency,
                 'max_items': max(1, min(10, slack_max_items)),
                 'slack_channel': slack_channel or None,
             },
