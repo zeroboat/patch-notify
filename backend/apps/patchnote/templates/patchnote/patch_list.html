@@ -63,7 +63,7 @@
                 <button type="button" class="btn btn-sm btn-primary active" data-lang="ko">KO</button>
                 <button type="button" class="btn btn-sm btn-outline-primary" data-lang="en">EN</button>
             </div>
-            {% if user_role == 'admin' or user_role == 'dev' %}
+            {% if user_role == 'admin' or user_role == 'manager' or user_role == 'dev' %}
             <button type="button" class="btn btn-primary flex-shrink-0"
                     data-bs-toggle="modal" data-bs-target="#patchAppendModal">
                 <i class="bx bx-plus me-1"></i>패치노트 등록
@@ -351,7 +351,7 @@
                             <span class="badge bg-label-secondary fs-small">
                                 <i class="bx bx-calendar me-1"></i>{{ note.release_date|date:"Y년 m월 d일" }}
                             </span>
-                            {% if user_role == 'admin' or user_role == 'dev' %}
+                            {% if user_role == 'admin' or user_role == 'manager' or user_role == 'dev' %}
                             {% if not note.is_published %}
                             <button class="btn btn-sm btn-label-success btn-publish-note"
                                     data-id="{{ note.id }}" data-version="{{ note.version }}" title="발행">
@@ -461,7 +461,7 @@
                         <div class="patch-section border-start border-3 border-secondary ps-3 mb-2">
                             <div class="d-flex align-items-center justify-content-between mb-2">
                                 <span class="fw-bold text-secondary small text-uppercase">📎 첨부 파일</span>
-                                {% if user_role == 'admin' or user_role == 'dev' %}
+                                {% if user_role == 'admin' or user_role == 'manager' or user_role == 'dev' %}
                                 <button class="btn btn-xs btn-label-primary btn-file-upload"
                                         data-id="{{ note.id }}" data-version="{{ note.version }}"
                                         style="font-size:0.7rem; padding: 2px 8px;">
@@ -471,7 +471,7 @@
                             </div>
                             <div id="file-list-{{ note.id }}">
                                 {% for pf in note.files.all %}
-                                    {% if pf.file_type == 'release' or user_role == 'admin' or user_role == 'dev' %}
+                                    {% if pf.file_type == 'release' or user_role == 'admin' or user_role == 'manager' or user_role == 'dev' %}
                                     <div class="d-flex align-items-center gap-2 mb-1 file-item" data-file-id="{{ pf.id }}">
                                         <span class="badge {% if pf.file_type == 'release' %}bg-label-success{% else %}bg-label-danger{% endif %}" style="font-size:0.65rem;">
                                             {{ pf.get_file_type_display }}
@@ -487,7 +487,7 @@
                                             <i class="bx bx-link"></i>
                                         </button>
                                         {% endif %}
-                                        {% if user_role == 'admin' or user_role == 'dev' %}
+                                        {% if user_role == 'admin' or user_role == 'manager' or user_role == 'dev' %}
                                         <button class="btn btn-xs btn-icon btn-label-danger btn-file-delete"
                                                 data-file-id="{{ pf.id }}" data-filename="{{ pf.original_filename }}"
                                                 style="width:20px; height:20px; font-size:0.6rem;" title="삭제">
