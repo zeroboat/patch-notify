@@ -12,7 +12,7 @@ from django.views.generic import TemplateView
 from web_project import TemplateLayout
 from apps.base.mixins import role_required, get_user_role
 from apps.product.models import Product
-from .models import PatchNote, Feature, Improvement, BugFix, Remark, PatchNoteFile
+from .models import PatchNote, Feature, Improvement, BugFix, Remark, Internal, PatchNoteFile
 from .nextcloud import upload_to_nextcloud, create_share_link, delete_from_nextcloud
 from .translation import start_translation
 
@@ -134,7 +134,7 @@ def _send_slack_notifications(patch_note):
                 [:sub.max_items]
             )
 
-            blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"{product_label} 최근 패치노트"}}]
+            blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} Release 안내]"}}]
             for note in recent_notes:
                 blocks.extend(_build_patchnote_slack_blocks(note))
 
@@ -175,7 +175,7 @@ class PatchNoteDetailView(LoginRequiredMixin, TemplateView):
         product = get_object_or_404(Product, id=product_id)
 
         patch_notes = PatchNote.objects.filter(product=product).prefetch_related(
-            'features', 'improvements', 'bugfixes', 'remarks', 'files'
+            'features', 'improvements', 'bugfixes', 'remarks', 'internals', 'files'
         ).order_by('-release_date', '-version')
 
         context.update({
@@ -226,10 +226,11 @@ def patch_note_append(request):
         version     = request.POST.get('version', '').strip()
         patch_date  = request.POST.get('patch_date', '').strip()
 
-        new_features_html  = request.POST.get('new_features', '')
-        improvements_html  = request.POST.get('improvements', '')
-        bug_fixes_html     = request.POST.get('bug_fixes', '')
-        special_notes_html = request.POST.get('special_notes', '')
+        new_features_html    = request.POST.get('new_features', '')
+        improvements_html    = request.POST.get('improvements', '')
+        bug_fixes_html       = request.POST.get('bug_fixes', '')
+        special_notes_html   = request.POST.get('special_notes', '')
+        internal_notes_html  = request.POST.get('internal_notes', '')
 
         if not product_id:
             return JsonResponse({'error': '제품 정보가 누락되었습니다.'}, status=400)
@@ -258,6 +259,7 @@ def patch_note_append(request):
         _save_section(patch_note, improvements_html,  Improvement)
         _save_section(patch_note, bug_fixes_html,     BugFix)
         _save_section(patch_note, special_notes_html, Remark)
+        _save_section(patch_note, internal_notes_html, Internal)
 
         patch_note.translation_status = PatchNote.TRANSLATION_PENDING
         patch_note.save(update_fields=["translation_status", "updated_at"])
@@ -278,7 +280,7 @@ def patch_note_append(request):
 def get_patch_note_data(request, patch_note_id):
     try:
         note = PatchNote.objects.prefetch_related(
-            'features', 'improvements', 'bugfixes', 'remarks',
+            'features', 'improvements', 'bugfixes', 'remarks', 'internals',
         ).get(id=patch_note_id)
     except PatchNote.DoesNotExist:
         return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
@@ -291,6 +293,7 @@ def get_patch_note_data(request, patch_note_id):
         'improvements_html': _get_section_html(note.improvements),
         'bugfixes_html':     _get_section_html(note.bugfixes),
         'remarks_html':      _get_section_html(note.remarks),
+        'internals_html':    _get_section_html(note.internals),
     })
 
 
@@ -302,14 +305,15 @@ def get_patch_note_data(request, patch_note_id):
 @role_required('dev')
 def patch_note_update(request):
     try:
-        patch_note_id      = request.POST.get('patch_note_id', '').strip()
-        version            = request.POST.get('version', '').strip()
-        patch_date         = request.POST.get('patch_date', '').strip()
+        patch_note_id        = request.POST.get('patch_note_id', '').strip()
+        version              = request.POST.get('version', '').strip()
+        patch_date           = request.POST.get('patch_date', '').strip()
 
-        new_features_html  = request.POST.get('new_features', '')
-        improvements_html  = request.POST.get('improvements', '')
-        bug_fixes_html     = request.POST.get('bug_fixes', '')
-        special_notes_html = request.POST.get('special_notes', '')
+        new_features_html    = request.POST.get('new_features', '')
+        improvements_html    = request.POST.get('improvements', '')
+        bug_fixes_html       = request.POST.get('bug_fixes', '')
+        special_notes_html   = request.POST.get('special_notes', '')
+        internal_notes_html  = request.POST.get('internal_notes', '')
 
         if not patch_note_id:
             return JsonResponse({'error': '패치노트 ID가 누락되었습니다.'}, status=400)
@@ -334,11 +338,13 @@ def patch_note_update(request):
         note.improvements.all().delete()
         note.bugfixes.all().delete()
         note.remarks.all().delete()
+        note.internals.all().delete()
 
         _save_section(note, new_features_html,  Feature)
         _save_section(note, improvements_html,  Improvement)
         _save_section(note, bug_fixes_html,     BugFix)
         _save_section(note, special_notes_html, Remark)
+        _save_section(note, internal_notes_html, Internal)
 
         note.translation_status = PatchNote.TRANSLATION_PENDING
         note.save(update_fields=["translation_status", "updated_at"])

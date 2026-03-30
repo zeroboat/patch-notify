@@ -66,6 +66,11 @@ class Remark(PatchItemBase):
     patch_note = models.ForeignKey(PatchNote, on_delete=models.CASCADE, related_name='remarks', verbose_name="특이사항")
     class Meta(PatchItemBase.Meta): verbose_name = "특이사항"
 
+class Internal(PatchItemBase):
+    """내부 공유 사항 (웹 페이지에서만 표시, 외부 공유 제외)"""
+    patch_note = models.ForeignKey(PatchNote, on_delete=models.CASCADE, related_name='internals', verbose_name="내부 공유")
+    class Meta(PatchItemBase.Meta): verbose_name = "내부 공유"
+
 
 def patchnote_file_upload_path(instance, filename):
     note = instance.patch_note

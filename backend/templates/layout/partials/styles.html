@@ -14,3 +14,20 @@
 <!--Core CSS -->
 <link rel="stylesheet" href="{% static 'vendor/css/core.css' %}" />
 <link rel="stylesheet" href="{% static 'css/swal.css' %}" />
+
+<!-- Sidebar brand 스크롤 겹침 방지 -->
+<style>
+  #layout-menu.menu-vertical {
+    overflow: hidden !important;
+  }
+  #layout-menu .app-brand {
+    position: relative;
+    z-index: 4;
+    flex-shrink: 0;
+    background-color: var(--bs-menu-bg, #fff);
+  }
+  #layout-menu .menu-inner {
+    min-height: 0;
+    overflow-y: auto;
+  }
+</style>

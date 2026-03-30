@@ -12,7 +12,7 @@ from slack_sdk.oauth.installation_store.models.installation import Installation
 
 from database import SessionLocal
 from models import slack_workspace, subscription, solution as sol_table, product as product_table
-from home_tab import build_home_tab, build_subscription_modal, build_patchnote_blocks, build_product_select_modal
+from home_tab import build_home_tab, build_subscription_modal, build_patchnote_blocks, build_product_select_modal, build_email_modal
 
 
 # ── Installation Store ─────────────────────────────────────────────────────────
@@ -266,6 +266,26 @@ def _upsert_subscription(db, customer_id, product_id, channel, enabled, max_item
         if slack_ch is not None:
             insert_vals['slack_channel'] = slack_ch
         db.execute(subscription.insert().values(**insert_vals))
+
+
+# ── 수신 이메일 확인 버튼 → 이메일 목록 모달 ─────────────────────────────────
+
+@bolt_app.action("view_emails")
+def handle_view_emails(ack, body, client):
+    ack()
+
+    team_id = body['team']['id']
+    workspace = _get_approved_workspace(team_id)
+    if not workspace or not workspace.customer_id:
+        return
+
+    db = SessionLocal()
+    try:
+        modal = build_email_modal(db, workspace.customer_id)
+    finally:
+        db.close()
+
+    client.views_open(trigger_id=body['trigger_id'], view=modal)
 
 
 # ── 최근 패치노트 보기 → 제품 선택 모달 ──────────────────────────────────────

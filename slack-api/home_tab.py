@@ -83,21 +83,39 @@ def get_customer_solutions(db: Session, customer_id: int):
 
 
 def build_home_tab(db: Session, customer_id: int, customer_name: str) -> list:
-    emails = db.execute(
-        select(email_table).where(email_table.c.customer_id == customer_id)
-    ).fetchall()
-
-    email_lines = '\n'.join(
-        f"• {r.email}" + (f" ({r.name})" if r.name else "")
-        for r in emails
-    )
-    customer_text = f"*고객사:* {customer_name}"
-    if email_lines:
-        customer_text += f"\n*수신 이메일:*\n{email_lines}"
-
     blocks = [
         {"type": "header", "text": {"type": "plain_text", "text": "📋 Patch Notify 구독 관리"}},
-        {"type": "section", "text": {"type": "mrkdwn", "text": customer_text}},
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*고객사:* {customer_name}"},
+            "accessory": {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "📧 수신 이메일 확인"},
+                "action_id": "view_emails",
+            },
+        },
+        {"type": "divider"},
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*💡 사용 안내*",
+            },
+        },
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": (
+                        "• Slack 알림을 받으려면 이 봇을 알림 받을 *채널에 먼저 초대*해야 합니다.\n"
+                        "  채널에서 `/invite @Patch Notify` 를 입력하거나, 채널 멤버 추가에서 봇을 검색해 추가하세요.\n"
+                        "• 채널 초대 후 아래 *설정 변경*에서 해당 채널을 선택하고 저장하면 알림이 활성화됩니다.\n"
+                        "• 알림은 새 패치노트가 발행될 때마다 선택한 채널로 자동 전송됩니다."
+                    ),
+                }
+            ],
+        },
         {"type": "divider"},
     ]
 
@@ -380,6 +398,28 @@ def build_patchnote_blocks(db: Session, product_id: int, solution_name: str) -> 
         blocks.append({"type": "divider"})
 
     return blocks
+
+
+def build_email_modal(db: Session, customer_id: int) -> dict:
+    """수신 이메일 목록을 보여주는 모달"""
+    emails = db.execute(
+        select(email_table).where(email_table.c.customer_id == customer_id)
+    ).fetchall()
+
+    if not emails:
+        message = "등록된 수신 이메일이 없습니다.\n담당자에게 문의해 주세요."
+    else:
+        message = '\n'.join(
+            f"• {r.email}" + (f"  ({r.name})" if r.name else "")
+            for r in emails
+        )
+
+    return {
+        "type": "modal",
+        "title": {"type": "plain_text", "text": "수신 이메일 목록"},
+        "close": {"type": "plain_text", "text": "닫기"},
+        "blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": message}}],
+    }
 
 
 def _simple_modal(title: str, message: str) -> dict:
