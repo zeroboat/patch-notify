@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       const section = this.getAttribute('data-section');
       const wrapper = document.getElementById(`wrapper-${section}`);
       // 모달 내 textarea ID 매칭
-      const editorId = `#editor-${section === 'new' ? 'features' : section === 'improve' ? 'improvements' : section === 'bug' ? 'bugfixes' : 'remarks'}`;
+      const editorId = `#editor-${section === 'new' ? 'features' : section === 'improve' ? 'improvements' : section === 'bug' ? 'bugfixes' : section === 'note' ? 'remarks' : 'internals'}`;
 
       if (this.checked) {
         wrapper.style.display = 'block';

@@ -1,6 +1,6 @@
-<aside id="layout-menu" class="layout-menu menu-vertical menu bg-menu-theme">
+<aside id="layout-menu" class="layout-menu menu-vertical menu bg-menu-theme" style="overflow: hidden !important;">
     {% if not navbar_full %}
-        <div class="app-brand demo" style="padding-top: 1.2rem;">
+        <div class="app-brand demo" style="padding-top: 1.2rem; position: relative; z-index: 4; background-color: inherit; flex-shrink: 0;">
             <a href="{% url 'index' %}" class="app-brand-link">
       <span class="app-brand-logo demo">
         {% include 'partials/logo.html' %}
@@ -16,7 +16,7 @@
 
     <div class="menu-inner-shadow"></div>
 
-    <ul class="menu-inner py-1">
+    <ul class="menu-inner py-1" style="flex: 1 1 0 !important; min-height: 0 !important;">
 
         <li class="menu-header small text-uppercase">
             <span class="menu-header-text">Dashboards</span>

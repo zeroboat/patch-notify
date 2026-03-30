@@ -138,6 +138,14 @@
                                     </div>
                                 </div>
                             </div>
+                            <div class="row mt-2">
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch" type="checkbox" id="switch-internal" data-section="internal">
+                                        <label class="form-check-label" for="switch-internal">🔒 내부 공유</label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -165,6 +173,10 @@
                         <div id="wrapper-note" class="editor-wrapper mb-3" style="display:none;">
                             <label class="form-label fw-bold mb-1">📝 특이 사항</label>
                             <textarea id="editor-remarks" name="special_notes"></textarea>
+                        </div>
+                        <div id="wrapper-internal" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🔒 내부 공유 <span class="badge bg-label-dark" style="font-size:0.65rem;">외부 미공유</span></label>
+                            <textarea id="editor-internals" name="internal_notes"></textarea>
                         </div>
                     </div>
                 </div>
@@ -244,6 +256,14 @@
                                     </div>
                                 </div>
                             </div>
+                            <div class="row mt-2">
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch-edit" type="checkbox" id="switch-edit-internal" data-section="edit-internal">
+                                        <label class="form-check-label" for="switch-edit-internal">🔒 내부 공유</label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -271,6 +291,10 @@
                         <div id="wrapper-edit-note" class="editor-wrapper mb-3" style="display:none;">
                             <label class="form-label fw-bold mb-1">📝 특이 사항</label>
                             <textarea id="editor-edit-remarks" name="special_notes"></textarea>
+                        </div>
+                        <div id="wrapper-edit-internal" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🔒 내부 공유 <span class="badge bg-label-dark" style="font-size:0.65rem;">외부 미공유</span></label>
+                            <textarea id="editor-edit-internals" name="internal_notes"></textarea>
                         </div>
                     </div>
                 </div>
@@ -414,6 +438,23 @@
                         {% endif %}
                         {% endwith %}
 
+                        {% with intl=note.internals.first %}
+                        {% if intl and intl.content %}
+                        {% if note.features.exists or note.improvements.exists or note.bugfixes.exists or note.remarks.exists %}<hr class="my-3 opacity-25">{% endif %}
+                        <div class="patch-section border-start border-3 border-dark ps-3 mb-4">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="fw-bold text-dark small text-uppercase">🔒 내부 공유</span>
+                                <span class="badge bg-label-dark" style="font-size:0.6rem;">외부 미공유</span>
+                            </div>
+                            <div class="patch-html-body lang-ko">{{ intl.content|safe }}</div>
+                            <div class="patch-html-body lang-en d-none">
+                                {% if intl.content_en %}{{ intl.content_en|safe }}
+                                {% else %}{{ intl.content|safe }}<span class="badge bg-label-warning ms-2" style="font-size:0.65rem;">번역 중</span>{% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endwith %}
+
                         <!-- 첨부 파일 섹션 -->
                         {% with release_files=note.files.all debug_files=note.files.all %}
                         <hr class="my-3 opacity-25">
@@ -538,10 +579,11 @@
 
         // 수정 모달 섹션 스위치
         const editEditorMap = {
-            'edit-new':     'editor-edit-features',
-            'edit-improve': 'editor-edit-improvements',
-            'edit-bug':     'editor-edit-bugfixes',
-            'edit-note':    'editor-edit-remarks',
+            'edit-new':      'editor-edit-features',
+            'edit-improve':  'editor-edit-improvements',
+            'edit-bug':      'editor-edit-bugfixes',
+            'edit-note':     'editor-edit-remarks',
+            'edit-internal': 'editor-edit-internals',
         };
         document.querySelectorAll('.section-switch-edit').forEach(sw => {
             sw.addEventListener('change', async function () {
@@ -588,10 +630,11 @@
 
                 // 섹션 스위치 초기화
                 const sectionMap = {
-                    'edit-new':     { switchId: 'switch-edit-new',     html: data.features_html,     editorId: 'editor-edit-features' },
-                    'edit-improve': { switchId: 'switch-edit-improve',  html: data.improvements_html, editorId: 'editor-edit-improvements' },
-                    'edit-bug':     { switchId: 'switch-edit-bug',      html: data.bugfixes_html,     editorId: 'editor-edit-bugfixes' },
-                    'edit-note':    { switchId: 'switch-edit-note',     html: data.remarks_html,      editorId: 'editor-edit-remarks' },
+                    'edit-new':      { switchId: 'switch-edit-new',      html: data.features_html,     editorId: 'editor-edit-features' },
+                    'edit-improve':  { switchId: 'switch-edit-improve',  html: data.improvements_html, editorId: 'editor-edit-improvements' },
+                    'edit-bug':      { switchId: 'switch-edit-bug',      html: data.bugfixes_html,     editorId: 'editor-edit-bugfixes' },
+                    'edit-note':     { switchId: 'switch-edit-note',     html: data.remarks_html,      editorId: 'editor-edit-remarks' },
+                    'edit-internal': { switchId: 'switch-edit-internal', html: data.internals_html,    editorId: 'editor-edit-internals' },
                 };
 
                 for (const [section, cfg] of Object.entries(sectionMap)) {
@@ -636,10 +679,11 @@
 
             // 숨겨진 섹션은 비워두기
             const sectionMap = {
-                'switch-edit-new':     'editor-edit-features',
-                'switch-edit-improve': 'editor-edit-improvements',
-                'switch-edit-bug':     'editor-edit-bugfixes',
-                'switch-edit-note':    'editor-edit-remarks',
+                'switch-edit-new':      'editor-edit-features',
+                'switch-edit-improve':  'editor-edit-improvements',
+                'switch-edit-bug':      'editor-edit-bugfixes',
+                'switch-edit-note':     'editor-edit-remarks',
+                'switch-edit-internal': 'editor-edit-internals',
             };
             for (const [switchId, editorId] of Object.entries(sectionMap)) {
                 if (!document.getElementById(switchId).checked) {

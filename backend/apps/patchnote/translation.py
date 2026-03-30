@@ -69,7 +69,7 @@ def _call_ollama_batch(sections: dict[str, str]) -> dict[str, str]:
 
 def _run_translation(patch_note_id: int):
     """백그라운드 스레드 진입점 — 4개 섹션을 단일 배치 호출로 번역"""
-    from .models import PatchNote, Feature, Improvement, BugFix, Remark
+    from .models import PatchNote, Feature, Improvement, BugFix, Remark, Internal
 
     try:
         patch_note = PatchNote.objects.get(id=patch_note_id)
@@ -80,6 +80,7 @@ def _run_translation(patch_note_id: int):
             'improvements': (Improvement, patch_note.improvements.filter(content_en__isnull=True).first()),
             'bugfixes':     (BugFix,      patch_note.bugfixes.filter(content_en__isnull=True).first()),
             'remarks':      (Remark,      patch_note.remarks.filter(content_en__isnull=True).first()),
+            'internals':    (Internal,    patch_note.internals.filter(content_en__isnull=True).first()),
         }
 
         # 실제 내용이 있는 섹션만 번역 대상으로
