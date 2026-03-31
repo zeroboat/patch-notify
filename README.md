@@ -185,7 +185,18 @@ NEXTCLOUD_UPLOAD_PATH=/PatchFiles
 # DATABASE_URL=sqlite:///C:/절대경로/patch-notify/backend/db.sqlite3
 ```
 
-### 2. Docker 실행
+### 2. 이메일 템플릿 설정
+
+공문 발송에 사용되는 이메일 템플릿은 git에서 제외되어 있습니다. 예시 파일을 복사해서 사용하세요.
+
+```bash
+cp backend/apps/notification/templates/notification/email/official_notice_email.html.example \
+   backend/apps/notification/templates/notification/email/official_notice_email.html
+```
+
+이후 `official_notice_email.html`을 자유롭게 수정하세요. `git pull`을 당겨도 덮어씌워지지 않습니다.
+
+### 3. Docker 실행
 
 ```bash
 docker compose up --build -d
@@ -199,7 +210,7 @@ docker compose up --build -d
 docker compose logs -f backend   # 로그 확인
 ```
 
-### 3. 로컬 개발 실행
+### 4. 로컬 개발 실행
 
 **Django (백엔드)**
 ```bash

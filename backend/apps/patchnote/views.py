@@ -135,7 +135,11 @@ def _send_slack_notifications(patch_note):
             )
 
             blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} Release 안내]"}}]
+            prev_header_added = False
             for note in recent_notes:
+                if note.id != patch_note.id and not prev_header_added:
+                    blocks.append({"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} 이전 패치노트]"}})
+                    prev_header_added = True
                 blocks.extend(_build_patchnote_slack_blocks(note))
 
             fallback_text = f"{product_label} v{patch_note.version} 패치노트가 발행되었습니다."
