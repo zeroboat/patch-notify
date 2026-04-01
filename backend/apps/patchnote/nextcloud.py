@@ -9,29 +9,30 @@ import logging
 from pathlib import PurePosixPath
 
 import requests
-from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
 
+def _cfg():
+    from apps.config.models import SiteConfig
+    return SiteConfig.get()
+
+
 def _is_enabled():
-    return bool(getattr(settings, 'NEXTCLOUD_ENABLED', False))
+    return bool(_cfg().nextcloud_enabled)
 
 
 def _base_url():
-    return getattr(settings, 'NEXTCLOUD_URL', '').rstrip('/')
+    return _cfg().nextcloud_url.rstrip('/')
 
 
 def _auth():
-    return (
-        getattr(settings, 'NEXTCLOUD_USER', ''),
-        getattr(settings, 'NEXTCLOUD_PASSWORD', ''),
-    )
+    cfg = _cfg()
+    return (cfg.nextcloud_user, cfg.nextcloud_password)
 
 
 def _upload_base():
-    """Nextcloud 내부 저장 루트 경로 (예: /patch-notify/media)"""
-    return getattr(settings, 'NEXTCLOUD_UPLOAD_PATH', '/patch-notify/media')
+    return _cfg().nextcloud_upload_path or '/patch-notify/media'
 
 
 def _webdav_url(remote_path):

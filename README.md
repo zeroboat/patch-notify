@@ -12,7 +12,7 @@
 | **패치노트 관리** | 제품별 버전/기능추가/기능개선/버그수정/특이사항/내부사항 등록·수정·삭제 (내부사항은 외부 발송 제외) |
 | **파일 첨부** | 패치노트당 Release/Debug 파일 첨부 및 다운로드, Nextcloud(NAS) 자동 이중 저장 및 공유 링크 생성 |
 | **패치노트 발행** | 작성 후 명시적 발행 처리 — 발행 시 구독자에게 자동 알림 전송 |
-| **Notion 동기화** | Notion Markdown API 기반 패치노트 자동 동기화 (변경 감지 + 파일 캐싱), Nextcloud(NAS) 이중 저장 지원 |
+| **Notion 동기화** | Notion Markdown API 기반 패치노트 자동 동기화 (변경 감지 + 파일 캐싱) |
 | **영문 자동 번역** | 패치노트 등록·수정 시 내부 Ollama AI 서버로 한→영 번역 (백그라운드) |
 | **고객사 관리** | 고객사 정보 및 솔루션 구독 현황 관리, Google 연락처 CSV 가져오기 |
 | **구독 관리** | 고객사별 제품 단위 Gmail / Slack 채널 구독 설정 (최대 건수 지정) |
@@ -156,36 +156,35 @@ DB_NAME=patchnotify
 DB_USER=patchuser
 DB_PASSWORD=...
 
-# Ollama 번역 서버
-OLLAMA_HOST=http://your-ollama-server:11434
-OLLAMA_MODEL=your-model-name
-
-# Gmail SMTP (Google 계정 > 보안 > 앱 비밀번호)
-GMAIL_USER=your@gmail.com
-GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
-
 # Slack App (FastAPI, 포트 8001)
 SLACK_CLIENT_ID=...
 SLACK_CLIENT_SECRET=...
 SLACK_SIGNING_SECRET=...
 SLACK_REDIRECT_URI=https://slack-api.yourdomain.com/slack/oauth/callback/
 
-# Notion 연동
-NOTION_ENABLED=false
-NOTION_TOKEN=your-notion-integration-token
-
-# Nextcloud (NAS 이중 저장 — 선택 사항)
-NEXTCLOUD_ENABLED=false
-NEXTCLOUD_URL=https://nas.example.com
-NEXTCLOUD_USER=your-nextcloud-user
-NEXTCLOUD_PASSWORD=your-app-password
-NEXTCLOUD_UPLOAD_PATH=/PatchFiles
-
 # [로컬 테스트 전용] SQLite 사용 시 주석 해제
 # DATABASE_URL=sqlite:///C:/절대경로/patch-notify/backend/db.sqlite3
 ```
 
-### 2. 이메일 템플릿 설정
+> Gmail, Ollama, Notion, Nextcloud 설정은 env 파일에 넣지 않습니다. 서버 기동 후 아래 **서비스 설정(Admin)** 단계에서 입력하세요.
+
+### 2. 서비스 설정 (Admin)
+
+Gmail, Ollama, Notion, Nextcloud 설정은 **env 파일 대신 Django Admin에서 관리**합니다.
+
+1. 서버 기동 후 `/admin/` 접속
+2. **서비스 설정** 메뉴에서 아래 항목 입력:
+
+| 항목 | 설명 |
+|------|------|
+| Gmail 계정 / 앱 비밀번호 | Google 계정 > 보안 > 앱 비밀번호에서 발급 |
+| Ollama 서버 주소 / 모델명 | 내부 번역 서버 주소 (예: `http://192.168.0.10:11434`) |
+| Notion 연동 활성화 / 토큰 | [notion.so/my-integrations](https://www.notion.so/my-integrations) 에서 발급 |
+| Nextcloud 연동 활성화 / URL / 계정 / 비밀번호 / 경로 | NAS 파일 이중 저장 설정 |
+
+설정값은 DB에 저장되므로 **변경 후 서버 재시작 없이 즉시 반영**됩니다.
+
+### 4. 이메일 템플릿 설정
 
 공문 발송에 사용되는 이메일 템플릿은 git에서 제외되어 있습니다. 예시 파일을 복사해서 사용하세요.
 
@@ -196,7 +195,7 @@ cp backend/apps/notification/templates/notification/email/official_notice_email.
 
 이후 `official_notice_email.html`을 자유롭게 수정하세요. `git pull`을 당겨도 덮어씌워지지 않습니다.
 
-### 3. Docker 실행
+### 5. Docker 실행
 
 ```bash
 docker compose up --build -d
@@ -210,7 +209,7 @@ docker compose up --build -d
 docker compose logs -f backend   # 로그 확인
 ```
 
-### 4. 로컬 개발 실행
+### 6. 로컬 개발 실행
 
 **Django (백엔드)**
 ```bash

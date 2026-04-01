@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "apps.slack_app",
     "apps.authentication",
     "apps.notion",
+    "apps.config",
 ]
 
 MIDDLEWARE = [
@@ -188,10 +189,6 @@ LOGIN_URL = '/auth/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/auth/login/'
 
-# ── Ollama (내부 AI 번역 서버) ────────────────────────────────────────────────
-OLLAMA_HOST = os.getenv('OLLAMA_HOST', '')
-OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', '')
-
 # ── Slack App ────────────────────────────────────────────────────────────────
 # Slack App 설정: https://api.slack.com/apps 에서 발급
 SLACK_CLIENT_ID = os.getenv('SLACK_CLIENT_ID', '')
@@ -200,22 +197,12 @@ SLACK_SIGNING_SECRET = os.getenv('SLACK_SIGNING_SECRET', '')
 SLACK_REDIRECT_URI = os.getenv('SLACK_REDIRECT_URI', 'http://localhost:8000/slack/oauth/callback/')
 
 # ── Email (Gmail SMTP) ──────────────────────────────────────────────────────
+# 계정 정보는 Django Admin > 서비스 설정에서 관리
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.getenv('GMAIL_USER', '')
-EMAIL_HOST_PASSWORD = os.getenv('GMAIL_APP_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.getenv('GMAIL_USER', '')
 
-# ── Notion ─────────────────────────────────────────────────────────────────
-NOTION_ENABLED = os.getenv('NOTION_ENABLED', 'false').lower() in ('true', '1', 'yes')
-NOTION_TOKEN = os.getenv('NOTION_TOKEN', '')
+# ── Notion / Nextcloud / Ollama ─────────────────────────────────────────────
+# Django Admin > 서비스 설정에서 관리
 NOTION_MD_DIR = Path(os.getenv('NOTION_MD_DIR', BASE_DIR / 'notion_md'))
-
-# ── Nextcloud (파일 이중 저장) ────────────────────────────────────────────
-NEXTCLOUD_ENABLED = os.getenv('NEXTCLOUD_ENABLED', 'false').lower() in ('true', '1', 'yes')
-NEXTCLOUD_URL = os.getenv('NEXTCLOUD_URL', '')           # https://cloud.example.com
-NEXTCLOUD_USER = os.getenv('NEXTCLOUD_USER', '')
-NEXTCLOUD_PASSWORD = os.getenv('NEXTCLOUD_PASSWORD', '')  # 앱 비밀번호 권장
-NEXTCLOUD_UPLOAD_PATH = os.getenv('NEXTCLOUD_UPLOAD_PATH', '/patch-notify/media')

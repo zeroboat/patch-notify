@@ -35,7 +35,7 @@
                 <div class="text-truncate">Product Management</div>
             </a>
         </li>
-        {% if MY_SETTING.NOTION_ENABLED %}
+        {% if NOTION_ENABLED %}
         <li class="menu-item {% if '/notion/' in request.path %}active open{% endif %}">
             <a href="{% url 'notion:notion_management' %}" class="menu-link">
                 <i class="menu-icon icon-base bx bx-link"></i>

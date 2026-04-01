@@ -61,8 +61,9 @@ SECTION_MAP = {
 # ──────────────────────────────────────────────
 
 def _get_notion_headers():
+    from apps.config.models import SiteConfig
     return {
-        'Authorization': f'Bearer {settings.NOTION_TOKEN}',
+        'Authorization': f'Bearer {SiteConfig.get().notion_token}',
         'Notion-Version': NOTION_API_VERSION,
         'Content-Type': 'application/json',
     }
@@ -811,7 +812,9 @@ def push_patch_note_to_notion(patch_note: PatchNote, is_new: bool = True) -> dic
     Returns:
         Notion API 응답 (한국어 페이지)
     """
-    if not settings.NOTION_ENABLED or not settings.NOTION_TOKEN:
+    from apps.config.models import SiteConfig
+    cfg = SiteConfig.get()
+    if not cfg.notion_enabled or not cfg.notion_token:
         raise ValueError('Notion 연동이 비활성화되어 있습니다.')
 
     try:
@@ -855,7 +858,9 @@ def push_patch_note_to_notion(patch_note: PatchNote, is_new: bool = True) -> dic
 
 def push_en_to_notion(patch_note: PatchNote, is_new: bool = True) -> dict:
     """번역 완료 후 영문 페이지만 push (KO는 건드리지 않음)"""
-    if not settings.NOTION_ENABLED or not settings.NOTION_TOKEN:
+    from apps.config.models import SiteConfig
+    cfg = SiteConfig.get()
+    if not cfg.notion_enabled or not cfg.notion_token:
         raise ValueError('Notion 연동이 비활성화되어 있습니다.')
 
     try:

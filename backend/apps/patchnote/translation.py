@@ -12,7 +12,6 @@ import re
 import threading
 
 import requests
-from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +45,14 @@ def _call_ollama_batch(sections: dict[str, str]) -> dict[str, str]:
     """
     json_input = json.dumps(sections, ensure_ascii=False, indent=2)
     try:
+        from apps.config.models import SiteConfig
+        cfg = SiteConfig.get()
+        if not cfg.ollama_host or not cfg.ollama_model:
+            return {}
         resp = requests.post(
-            f"{settings.OLLAMA_HOST}/api/generate",
+            f"{cfg.ollama_host}/api/generate",
             json={
-                "model": settings.OLLAMA_MODEL,
+                "model": cfg.ollama_model,
                 "prompt": _BATCH_PROMPT_TEMPLATE.format(json_input=json_input),
                 "stream": False,
             },

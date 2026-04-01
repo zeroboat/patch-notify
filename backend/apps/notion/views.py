@@ -1,6 +1,5 @@
 import logging
 
-from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
@@ -118,11 +117,12 @@ def delete_mapping(request):
 @role_required('dev')
 def notion_sync(request):
     """특정 Product의 Notion 데이터를 동기화"""
-    if not settings.NOTION_ENABLED:
+    from apps.config.models import SiteConfig
+    cfg = SiteConfig.get()
+    if not cfg.notion_enabled:
         return JsonResponse({'error': 'Notion 연동이 비활성화되어 있습니다.'}, status=400)
-
-    if not settings.NOTION_TOKEN:
-        return JsonResponse({'error': 'NOTION_TOKEN이 설정되지 않았습니다.'}, status=400)
+    if not cfg.notion_token:
+        return JsonResponse({'error': 'Notion 토큰이 설정되지 않았습니다.'}, status=400)
 
     product_id = request.POST.get('product_id', '').strip()
     version = request.POST.get('version', '').strip() or None
@@ -157,7 +157,8 @@ def notion_sync(request):
 @role_required('dev')
 def notion_push(request):
     """특정 패치노트를 Notion에 push"""
-    if not settings.NOTION_ENABLED:
+    from apps.config.models import SiteConfig
+    if not SiteConfig.get().notion_enabled:
         return JsonResponse({'error': 'Notion 연동이 비활성화되어 있습니다.'}, status=400)
 
     patch_note_id = request.POST.get('patch_note_id', '').strip()
