@@ -25,16 +25,31 @@ from .models import OfficialNotice
 def _send_official_email(to_emails, subject, body_html):
     """Gmail SMTP로 공문 이메일 발송. to_emails는 리스트. (성공 여부, 에러 메시지) 반환"""
     try:
+        from django.core.mail import get_connection
+        from apps.config.models import SiteConfig
+        cfg = SiteConfig.get()
+
         html_body = render_to_string(
             'notification/email/official_notice_email.html',
             {'subject': subject, 'body': body_html},
         )
         text_body = strip_tags(body_html)
 
+        connection = get_connection(
+            backend='django.core.mail.backends.smtp.EmailBackend',
+            host='smtp.gmail.com',
+            port=587,
+            use_tls=True,
+            username=cfg.gmail_user,
+            password=cfg.gmail_app_password,
+        )
+
         msg = EmailMultiAlternatives(
             subject=subject,
             body=text_body,
+            from_email=cfg.gmail_user,
             to=to_emails,
+            connection=connection,
         )
         msg.attach_alternative(html_body, 'text/html')
         sent = msg.send(fail_silently=False)

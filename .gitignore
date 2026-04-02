@@ -284,3 +284,7 @@ media/
 
 # Notion MD cache (Docker volume)
 notion_md/
+
+# Official notice email template (customize locally, do not commit)
+# Copy from official_notice_email.html.example to get started
+backend/apps/notification/templates/notification/email/official_notice_email.html

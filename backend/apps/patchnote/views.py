@@ -1,7 +1,6 @@
 import logging
 import re
 
-from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse, FileResponse, Http404
@@ -135,7 +134,11 @@ def _send_slack_notifications(patch_note):
             )
 
             blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} Release 안내]"}}]
+            prev_header_added = False
             for note in recent_notes:
+                if note.id != patch_note.id and not prev_header_added:
+                    blocks.append({"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} 이전 패치노트]"}})
+                    prev_header_added = True
                 blocks.extend(_build_patchnote_slack_blocks(note))
 
             fallback_text = f"{product_label} v{patch_note.version} 패치노트가 발행되었습니다."
@@ -155,7 +158,8 @@ def _send_slack_notifications(patch_note):
 
 def _push_to_notion_safe(patch_note, is_new=True):
     """Notion push를 시도하되, 실패해도 DB 저장에는 영향 없게 처리"""
-    if not settings.NOTION_ENABLED:
+    from apps.config.models import SiteConfig
+    if not SiteConfig.get().notion_enabled:
         return
     try:
         from apps.notion.services import push_patch_note_to_notion

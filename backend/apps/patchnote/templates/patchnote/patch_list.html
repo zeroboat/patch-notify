@@ -713,16 +713,67 @@
             btn.addEventListener('click', async function () {
                 const noteId = this.dataset.id;
                 const version = this.dataset.version;
-                const result = await Swal.fire({
-                    title: `버전 ${version} 발행`,
-                    text: '발행 후에는 즉시 주기 구독자에게 Slack 알림이 전송됩니다. 발행하시겠습니까?',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: '발행',
-                    cancelButtonText: '취소',
-                    confirmButtonColor: '#28a745',
+
+                // 번역 상태 확인
+                try {
+                    const statusRes = await fetch(`{% url "patchnote:translation_status" 0 %}`.replace('/0/', `/${noteId}/`));
+                    const statusData = await statusRes.json();
+                    const ts = statusData.status;
+
+                    if (ts === 'translating') {
+                        Swal.fire({
+                            icon: 'info',
+                            title: '번역 진행 중',
+                            text: '현재 영문 번역이 진행 중입니다. 잠시 후 다시 시도해주세요.',
+                        });
+                        return;
+                    }
+
+                    if (ts === 'failed') {
+                        const failResult = await Swal.fire({
+                            icon: 'warning',
+                            title: '번역 실패',
+                            text: '영문 번역에 실패했습니다. 번역 없이 발행하시겠습니까?',
+                            showCancelButton: true,
+                            confirmButtonText: '발행',
+                            cancelButtonText: '취소',
+                            confirmButtonColor: '#28a745',
+                        });
+                        if (!failResult.isConfirmed) return;
+                    } else {
+                        const result = await Swal.fire({
+                            title: `버전 ${version} 발행`,
+                            text: '발행 후에는 즉시 구독자에게 Slack 알림이 전송됩니다. 발행하시겠습니까?',
+                            icon: 'question',
+                            showCancelButton: true,
+                            confirmButtonText: '발행',
+                            cancelButtonText: '취소',
+                            confirmButtonColor: '#28a745',
+                        });
+                        if (!result.isConfirmed) return;
+                    }
+                } catch (e) {
+                    // 번역 상태 조회 실패 시 그냥 일반 발행 확인으로 진행
+                    const result = await Swal.fire({
+                        title: `버전 ${version} 발행`,
+                        text: '발행 후에는 즉시 구독자에게 Slack 알림이 전송됩니다. 발행하시겠습니까?',
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: '발행',
+                        cancelButtonText: '취소',
+                        confirmButtonColor: '#28a745',
+                    });
+                    if (!result.isConfirmed) return;
+                }
+
+                Swal.fire({
+                    title: '발행 중...',
+                    text: '구독자에게 알림을 전송하고 있습니다. 잠시만 기다려주세요.',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => Swal.showLoading(),
                 });
-                if (!result.isConfirmed) return;
 
                 const formData = new FormData();
                 formData.append('patch_note_id', noteId);
