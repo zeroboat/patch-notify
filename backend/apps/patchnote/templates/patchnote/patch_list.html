@@ -63,7 +63,7 @@
                 <button type="button" class="btn btn-sm btn-primary active" data-lang="ko">KO</button>
                 <button type="button" class="btn btn-sm btn-outline-primary" data-lang="en">EN</button>
             </div>
-            {% if user_role == 'admin' or user_role == 'dev' %}
+            {% if user_role == 'admin' or user_role == 'manager' or user_role == 'dev' %}
             <button type="button" class="btn btn-primary flex-shrink-0"
                     data-bs-toggle="modal" data-bs-target="#patchAppendModal">
                 <i class="bx bx-plus me-1"></i>패치노트 등록
@@ -138,6 +138,14 @@
                                     </div>
                                 </div>
                             </div>
+                            <div class="row mt-2">
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch" type="checkbox" id="switch-internal" data-section="internal">
+                                        <label class="form-check-label" for="switch-internal">🔒 내부 공유</label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -165,6 +173,10 @@
                         <div id="wrapper-note" class="editor-wrapper mb-3" style="display:none;">
                             <label class="form-label fw-bold mb-1">📝 특이 사항</label>
                             <textarea id="editor-remarks" name="special_notes"></textarea>
+                        </div>
+                        <div id="wrapper-internal" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🔒 내부 공유 <span class="badge bg-label-dark" style="font-size:0.65rem;">외부 미공유</span></label>
+                            <textarea id="editor-internals" name="internal_notes"></textarea>
                         </div>
                     </div>
                 </div>
@@ -244,6 +256,14 @@
                                     </div>
                                 </div>
                             </div>
+                            <div class="row mt-2">
+                                <div class="col-md-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input section-switch-edit" type="checkbox" id="switch-edit-internal" data-section="edit-internal">
+                                        <label class="form-check-label" for="switch-edit-internal">🔒 내부 공유</label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -271,6 +291,10 @@
                         <div id="wrapper-edit-note" class="editor-wrapper mb-3" style="display:none;">
                             <label class="form-label fw-bold mb-1">📝 특이 사항</label>
                             <textarea id="editor-edit-remarks" name="special_notes"></textarea>
+                        </div>
+                        <div id="wrapper-edit-internal" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🔒 내부 공유 <span class="badge bg-label-dark" style="font-size:0.65rem;">외부 미공유</span></label>
+                            <textarea id="editor-edit-internals" name="internal_notes"></textarea>
                         </div>
                     </div>
                 </div>
@@ -327,7 +351,7 @@
                             <span class="badge bg-label-secondary fs-small">
                                 <i class="bx bx-calendar me-1"></i>{{ note.release_date|date:"Y년 m월 d일" }}
                             </span>
-                            {% if user_role == 'admin' or user_role == 'dev' %}
+                            {% if user_role == 'admin' or user_role == 'manager' or user_role == 'dev' %}
                             {% if not note.is_published %}
                             <button class="btn btn-sm btn-label-success btn-publish-note"
                                     data-id="{{ note.id }}" data-version="{{ note.version }}" title="발행">
@@ -414,13 +438,30 @@
                         {% endif %}
                         {% endwith %}
 
+                        {% with intl=note.internals.first %}
+                        {% if intl and intl.content %}
+                        {% if note.features.exists or note.improvements.exists or note.bugfixes.exists or note.remarks.exists %}<hr class="my-3 opacity-25">{% endif %}
+                        <div class="patch-section border-start border-3 border-dark ps-3 mb-4">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="fw-bold text-dark small text-uppercase">🔒 내부 공유</span>
+                                <span class="badge bg-label-dark" style="font-size:0.6rem;">외부 미공유</span>
+                            </div>
+                            <div class="patch-html-body lang-ko">{{ intl.content|safe }}</div>
+                            <div class="patch-html-body lang-en d-none">
+                                {% if intl.content_en %}{{ intl.content_en|safe }}
+                                {% else %}{{ intl.content|safe }}<span class="badge bg-label-warning ms-2" style="font-size:0.65rem;">번역 중</span>{% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endwith %}
+
                         <!-- 첨부 파일 섹션 -->
                         {% with release_files=note.files.all debug_files=note.files.all %}
                         <hr class="my-3 opacity-25">
                         <div class="patch-section border-start border-3 border-secondary ps-3 mb-2">
                             <div class="d-flex align-items-center justify-content-between mb-2">
                                 <span class="fw-bold text-secondary small text-uppercase">📎 첨부 파일</span>
-                                {% if user_role == 'admin' or user_role == 'dev' %}
+                                {% if user_role == 'admin' or user_role == 'manager' or user_role == 'dev' %}
                                 <button class="btn btn-xs btn-label-primary btn-file-upload"
                                         data-id="{{ note.id }}" data-version="{{ note.version }}"
                                         style="font-size:0.7rem; padding: 2px 8px;">
@@ -430,7 +471,7 @@
                             </div>
                             <div id="file-list-{{ note.id }}">
                                 {% for pf in note.files.all %}
-                                    {% if pf.file_type == 'release' or user_role == 'admin' or user_role == 'dev' %}
+                                    {% if pf.file_type == 'release' or user_role == 'admin' or user_role == 'manager' or user_role == 'dev' %}
                                     <div class="d-flex align-items-center gap-2 mb-1 file-item" data-file-id="{{ pf.id }}">
                                         <span class="badge {% if pf.file_type == 'release' %}bg-label-success{% else %}bg-label-danger{% endif %}" style="font-size:0.65rem;">
                                             {{ pf.get_file_type_display }}
@@ -439,7 +480,14 @@
                                             {{ pf.original_filename }}
                                         </a>
                                         <span class="text-muted" style="font-size:0.7rem;">{{ pf.file_size|filesizeformat }}</span>
-                                        {% if user_role == 'admin' or user_role == 'dev' %}
+                                        {% if pf.nextcloud_url %}
+                                        <button class="btn btn-xs btn-icon btn-label-info btn-copy-nas"
+                                                style="width:20px; height:20px; font-size:0.6rem;" title="NAS 링크 복사"
+                                                data-url="{{ pf.nextcloud_url }}">
+                                            <i class="bx bx-link"></i>
+                                        </button>
+                                        {% endif %}
+                                        {% if user_role == 'admin' or user_role == 'manager' or user_role == 'dev' %}
                                         <button class="btn btn-xs btn-icon btn-label-danger btn-file-delete"
                                                 data-file-id="{{ pf.id }}" data-filename="{{ pf.original_filename }}"
                                                 style="width:20px; height:20px; font-size:0.6rem;" title="삭제">
@@ -531,10 +579,11 @@
 
         // 수정 모달 섹션 스위치
         const editEditorMap = {
-            'edit-new':     'editor-edit-features',
-            'edit-improve': 'editor-edit-improvements',
-            'edit-bug':     'editor-edit-bugfixes',
-            'edit-note':    'editor-edit-remarks',
+            'edit-new':      'editor-edit-features',
+            'edit-improve':  'editor-edit-improvements',
+            'edit-bug':      'editor-edit-bugfixes',
+            'edit-note':     'editor-edit-remarks',
+            'edit-internal': 'editor-edit-internals',
         };
         document.querySelectorAll('.section-switch-edit').forEach(sw => {
             sw.addEventListener('change', async function () {
@@ -581,10 +630,11 @@
 
                 // 섹션 스위치 초기화
                 const sectionMap = {
-                    'edit-new':     { switchId: 'switch-edit-new',     html: data.features_html,     editorId: 'editor-edit-features' },
-                    'edit-improve': { switchId: 'switch-edit-improve',  html: data.improvements_html, editorId: 'editor-edit-improvements' },
-                    'edit-bug':     { switchId: 'switch-edit-bug',      html: data.bugfixes_html,     editorId: 'editor-edit-bugfixes' },
-                    'edit-note':    { switchId: 'switch-edit-note',     html: data.remarks_html,      editorId: 'editor-edit-remarks' },
+                    'edit-new':      { switchId: 'switch-edit-new',      html: data.features_html,     editorId: 'editor-edit-features' },
+                    'edit-improve':  { switchId: 'switch-edit-improve',  html: data.improvements_html, editorId: 'editor-edit-improvements' },
+                    'edit-bug':      { switchId: 'switch-edit-bug',      html: data.bugfixes_html,     editorId: 'editor-edit-bugfixes' },
+                    'edit-note':     { switchId: 'switch-edit-note',     html: data.remarks_html,      editorId: 'editor-edit-remarks' },
+                    'edit-internal': { switchId: 'switch-edit-internal', html: data.internals_html,    editorId: 'editor-edit-internals' },
                 };
 
                 for (const [section, cfg] of Object.entries(sectionMap)) {
@@ -629,10 +679,11 @@
 
             // 숨겨진 섹션은 비워두기
             const sectionMap = {
-                'switch-edit-new':     'editor-edit-features',
-                'switch-edit-improve': 'editor-edit-improvements',
-                'switch-edit-bug':     'editor-edit-bugfixes',
-                'switch-edit-note':    'editor-edit-remarks',
+                'switch-edit-new':      'editor-edit-features',
+                'switch-edit-improve':  'editor-edit-improvements',
+                'switch-edit-bug':      'editor-edit-bugfixes',
+                'switch-edit-note':     'editor-edit-remarks',
+                'switch-edit-internal': 'editor-edit-internals',
             };
             for (const [switchId, editorId] of Object.entries(sectionMap)) {
                 if (!document.getElementById(switchId).checked) {
@@ -662,16 +713,67 @@
             btn.addEventListener('click', async function () {
                 const noteId = this.dataset.id;
                 const version = this.dataset.version;
-                const result = await Swal.fire({
-                    title: `버전 ${version} 발행`,
-                    text: '발행 후에는 즉시 주기 구독자에게 Slack 알림이 전송됩니다. 발행하시겠습니까?',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: '발행',
-                    cancelButtonText: '취소',
-                    confirmButtonColor: '#28a745',
+
+                // 번역 상태 확인
+                try {
+                    const statusRes = await fetch(`{% url "patchnote:translation_status" 0 %}`.replace('/0/', `/${noteId}/`));
+                    const statusData = await statusRes.json();
+                    const ts = statusData.status;
+
+                    if (ts === 'translating') {
+                        Swal.fire({
+                            icon: 'info',
+                            title: '번역 진행 중',
+                            text: '현재 영문 번역이 진행 중입니다. 잠시 후 다시 시도해주세요.',
+                        });
+                        return;
+                    }
+
+                    if (ts === 'failed') {
+                        const failResult = await Swal.fire({
+                            icon: 'warning',
+                            title: '번역 실패',
+                            text: '영문 번역에 실패했습니다. 번역 없이 발행하시겠습니까?',
+                            showCancelButton: true,
+                            confirmButtonText: '발행',
+                            cancelButtonText: '취소',
+                            confirmButtonColor: '#28a745',
+                        });
+                        if (!failResult.isConfirmed) return;
+                    } else {
+                        const result = await Swal.fire({
+                            title: `버전 ${version} 발행`,
+                            text: '발행 후에는 즉시 구독자에게 Slack 알림이 전송됩니다. 발행하시겠습니까?',
+                            icon: 'question',
+                            showCancelButton: true,
+                            confirmButtonText: '발행',
+                            cancelButtonText: '취소',
+                            confirmButtonColor: '#28a745',
+                        });
+                        if (!result.isConfirmed) return;
+                    }
+                } catch (e) {
+                    // 번역 상태 조회 실패 시 그냥 일반 발행 확인으로 진행
+                    const result = await Swal.fire({
+                        title: `버전 ${version} 발행`,
+                        text: '발행 후에는 즉시 구독자에게 Slack 알림이 전송됩니다. 발행하시겠습니까?',
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: '발행',
+                        cancelButtonText: '취소',
+                        confirmButtonColor: '#28a745',
+                    });
+                    if (!result.isConfirmed) return;
+                }
+
+                Swal.fire({
+                    title: '발행 중...',
+                    text: '구독자에게 알림을 전송하고 있습니다. 잠시만 기다려주세요.',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => Swal.showLoading(),
                 });
-                if (!result.isConfirmed) return;
 
                 const formData = new FormData();
                 formData.append('patch_note_id', noteId);
@@ -984,10 +1086,18 @@
                     const newItem = document.createElement('div');
                     newItem.className = 'd-flex align-items-center gap-2 mb-1 file-item';
                     newItem.dataset.fileId = f.id;
+                    const nasBtn = f.nextcloud_url
+                        ? `<button class="btn btn-xs btn-icon btn-label-info btn-copy-nas"
+                              style="width:20px; height:20px; font-size:0.6rem;" title="NAS 링크 복사"
+                              data-url="${f.nextcloud_url}">
+                              <i class="bx bx-link"></i>
+                           </button>`
+                        : '';
                     newItem.innerHTML = `
                         <span class="badge ${badgeClass}" style="font-size:0.65rem;">${typeLabel}</span>
                         <a href="/patchnote/file/download/${f.id}/" class="text-body small text-truncate" style="max-width:300px;" title="${f.original_filename}">${f.original_filename}</a>
                         <span class="text-muted" style="font-size:0.7rem;">${f.file_size_display}</span>
+                        ${nasBtn}
                         <button class="btn btn-xs btn-icon btn-label-danger btn-file-delete"
                                 data-file-id="${f.id}" data-filename="${f.original_filename}"
                                 style="width:20px; height:20px; font-size:0.6rem;" title="삭제">
@@ -1047,6 +1157,18 @@
         }
 
         document.querySelectorAll('.btn-file-delete').forEach(bindFileDeleteBtn);
+
+        // NAS 링크 복사
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('.btn-copy-nas');
+            if (!btn) return;
+            const url = btn.dataset.url;
+            navigator.clipboard.writeText(url).then(() => {
+                const icon = btn.querySelector('i');
+                icon.className = 'bx bx-check';
+                setTimeout(() => { icon.className = 'bx bx-link'; }, 1500);
+            });
+        });
     });
     </script>
 

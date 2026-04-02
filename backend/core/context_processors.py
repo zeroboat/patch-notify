@@ -4,7 +4,13 @@ from apps.base.mixins import get_user_role
 
 
 def my_setting(request):
-    return {'MY_SETTING': settings}
+    from apps.config.models import SiteConfig
+    try:
+        cfg = SiteConfig.get()
+        notion_enabled = cfg.notion_enabled
+    except Exception:
+        notion_enabled = False
+    return {'MY_SETTING': settings, 'NOTION_ENABLED': notion_enabled}
 
 
 # Add the 'ENVIRONMENT' setting to the template context

@@ -12,7 +12,7 @@ from slack_sdk.oauth.installation_store.models.installation import Installation
 
 from database import SessionLocal
 from models import slack_workspace, subscription, solution as sol_table, product as product_table
-from home_tab import build_home_tab, build_subscription_modal, build_patchnote_blocks, build_product_select_modal
+from home_tab import build_home_tab, build_subscription_modal, build_patchnote_blocks, build_product_select_modal, build_email_modal
 
 
 # ── Installation Store ─────────────────────────────────────────────────────────
@@ -191,10 +191,6 @@ def handle_save_subscription(ack, body, view, client):
     }
 
     # 공통 설정
-    email_freq = (
-        values.get('email_frequency', {}).get('email_freq_select', {})
-        .get('selected_option', {}).get('value', 'weekly')
-    )
     email_max = int(
         values.get('email_max_items', {}).get('email_max_select', {})
         .get('selected_option', {}).get('value', '5')
@@ -202,10 +198,6 @@ def handle_save_subscription(ack, body, view, client):
     slack_ch = (
         values.get('slack_channel_input', {}).get('slack_channel_value', {})
         .get('selected_conversation') or ''
-    )
-    slack_freq = (
-        values.get('slack_frequency', {}).get('slack_freq_select', {})
-        .get('selected_option', {}).get('value', 'weekly')
     )
     slack_max = int(
         values.get('slack_max_items', {}).get('slack_max_select', {})
@@ -219,8 +211,8 @@ def handle_save_subscription(ack, body, view, client):
         ).fetchall()
 
         for p in products:
-            _upsert_subscription(db, customer_id, p.id, 'email', p.id in email_selected, email_freq, email_max, None)
-            _upsert_subscription(db, customer_id, p.id, 'slack', p.id in slack_selected, slack_freq, slack_max, slack_ch)
+            _upsert_subscription(db, customer_id, p.id, 'email', p.id in email_selected, email_max, None)
+            _upsert_subscription(db, customer_id, p.id, 'slack', p.id in slack_selected, slack_max, slack_ch)
 
         db.commit()
 
@@ -236,7 +228,7 @@ def handle_save_subscription(ack, body, view, client):
     client.views_publish(user_id=user_id, view={"type": "home", "blocks": blocks})
 
 
-def _upsert_subscription(db, customer_id, product_id, channel, enabled, freq, max_items, slack_ch):
+def _upsert_subscription(db, customer_id, product_id, channel, enabled, max_items, slack_ch):
     existing = db.execute(
         select(subscription).where(
             and_(
@@ -250,7 +242,6 @@ def _upsert_subscription(db, customer_id, product_id, channel, enabled, freq, ma
     if existing:
         update_vals = {
             'is_active': enabled,
-            'frequency': freq,
             'max_items': max_items,
             'updated_at': datetime.now(timezone.utc),
         }
@@ -268,7 +259,6 @@ def _upsert_subscription(db, customer_id, product_id, channel, enabled, freq, ma
             'product_id': product_id,
             'channel': channel,
             'is_active': True,
-            'frequency': freq,
             'max_items': max_items,
             'created_at': now,
             'updated_at': now,
@@ -276,6 +266,26 @@ def _upsert_subscription(db, customer_id, product_id, channel, enabled, freq, ma
         if slack_ch is not None:
             insert_vals['slack_channel'] = slack_ch
         db.execute(subscription.insert().values(**insert_vals))
+
+
+# ── 수신 이메일 확인 버튼 → 이메일 목록 모달 ─────────────────────────────────
+
+@bolt_app.action("view_emails")
+def handle_view_emails(ack, body, client):
+    ack()
+
+    team_id = body['team']['id']
+    workspace = _get_approved_workspace(team_id)
+    if not workspace or not workspace.customer_id:
+        return
+
+    db = SessionLocal()
+    try:
+        modal = build_email_modal(db, workspace.customer_id)
+    finally:
+        db.close()
+
+    client.views_open(trigger_id=body['trigger_id'], view=modal)
 
 
 # ── 최근 패치노트 보기 → 제품 선택 모달 ──────────────────────────────────────

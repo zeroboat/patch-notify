@@ -1,6 +1,6 @@
-<aside id="layout-menu" class="layout-menu menu-vertical menu bg-menu-theme">
+<aside id="layout-menu" class="layout-menu menu-vertical menu bg-menu-theme" style="overflow: hidden !important;">
     {% if not navbar_full %}
-        <div class="app-brand demo" style="padding-top: 1.2rem;">
+        <div class="app-brand demo" style="padding-top: 1.2rem; position: relative; z-index: 4; background-color: inherit; flex-shrink: 0;">
             <a href="{% url 'index' %}" class="app-brand-link">
       <span class="app-brand-logo demo">
         {% include 'partials/logo.html' %}
@@ -16,7 +16,7 @@
 
     <div class="menu-inner-shadow"></div>
 
-    <ul class="menu-inner py-1">
+    <ul class="menu-inner py-1" style="flex: 1 1 0 !important; min-height: 0 !important;">
 
         <li class="menu-header small text-uppercase">
             <span class="menu-header-text">Dashboards</span>
@@ -28,14 +28,14 @@
             </a>
         </li>
 
-        {% if user_role == 'admin' %}
+        {% if user_role == 'admin' or user_role == 'manager' %}
         <li class="menu-item {% if 'product/management' in request.path %}active open{% endif %}">
             <a href="{% url 'product:product_management' %}" class="menu-link">
                 <i class="menu-icon icon-base bx bx-cube-alt"></i>
                 <div class="text-truncate">Product Management</div>
             </a>
         </li>
-        {% if MY_SETTING.NOTION_ENABLED %}
+        {% if NOTION_ENABLED %}
         <li class="menu-item {% if '/notion/' in request.path %}active open{% endif %}">
             <a href="{% url 'notion:notion_management' %}" class="menu-link">
                 <i class="menu-icon icon-base bx bx-link"></i>
@@ -43,6 +43,12 @@
             </a>
         </li>
         {% endif %}
+        <li class="menu-item {% if '/slack/' in request.path %}active{% endif %}">
+            <a href="{% url 'slack_app:slack_workspace_management' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-message-square-dots"></i>
+                <div class="text-truncate">Slack Workspaces</div>
+            </a>
+        </li>
         {% endif %}
 
         <li class="menu-header small text-uppercase">
@@ -73,7 +79,7 @@
             <span class="menu-header-text">Notification</span>
         </li>
 
-        {% if user_role == 'admin' %}
+        {% if user_role == 'admin' or user_role == 'manager' %}
         <li class="menu-item {% if 'official_notice' in request.path %}active{% endif %}">
             <a href="{% url 'notification:official_notice' %}" class="menu-link">
                 <i class="menu-icon icon-base bx bx-mail-send"></i>
@@ -82,7 +88,7 @@
         </li>
         {% endif %}
 
-        {% if user_role == 'admin' or user_role == 'se' %}
+        {% if user_role == 'admin' or user_role == 'manager' or user_role == 'se' %}
         <li class="menu-item {% if '/customer/' in request.path %}active{% endif %}">
             <a href="{% url 'customer:customer_management' %}" class="menu-link">
                 <i class="menu-icon icon-base bx bx-buildings"></i>

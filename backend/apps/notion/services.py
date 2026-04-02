@@ -61,8 +61,9 @@ SECTION_MAP = {
 # ──────────────────────────────────────────────
 
 def _get_notion_headers():
+    from apps.config.models import SiteConfig
     return {
-        'Authorization': f'Bearer {settings.NOTION_TOKEN}',
+        'Authorization': f'Bearer {SiteConfig.get().notion_token}',
         'Notion-Version': NOTION_API_VERSION,
         'Content-Type': 'application/json',
     }
@@ -518,12 +519,13 @@ def sync_product(mapping: NotionPageMapping, version: str = None, force: bool = 
         patch_note, created = PatchNote.objects.get_or_create(
             product=product,
             version=v,
-            defaults={'release_date': patch_date},
+            defaults={'release_date': patch_date, 'is_published': True},
         )
 
         if not created:
             patch_note.release_date = patch_date
-            patch_note.save()
+            patch_note.is_published = True
+            patch_note.save(update_fields=['release_date', 'is_published', 'updated_at'])
             patch_note.features.all().delete()
             patch_note.improvements.all().delete()
             patch_note.bugfixes.all().delete()
@@ -626,16 +628,28 @@ def _html_to_md_bullets(html: str, indent: int = 0, plain: bool = False) -> str:
             placeholder = f'__CODE_BLOCK_{idx}__'
             if placeholder in text_part:
                 text_part = text_part.replace(placeholder, '')
-                # 코드 블록은 bullet 아래에 별도 줄로
-                text_md = _inline_fn(text_part)
-                md_lines = text_md.split('\n')
-                lines.append(f'{prefix}- {md_lines[0]}')
-                for cont in md_lines[1:]:
-                    lines.append(f'{prefix}  {cont}')
-                lines.append(f'{prefix}  ```')
-                for code_line in code.strip().split('\n'):
-                    lines.append(f'{prefix}  {code_line}')
-                lines.append(f'{prefix}  ```')
+                text_md = _inline_fn(text_part).strip()
+                code_lines = code.strip().split('\n')
+                if plain:
+                    # 이미 코드블록 안 — text_part가 비어있으면 코드 내용을 bullet 텍스트로 직접 사용
+                    if text_md:
+                        lines.append(f'{prefix}- {text_md}')
+                        for code_line in code_lines:
+                            lines.append(f'{prefix}  {code_line}')
+                    else:
+                        lines.append(f'{prefix}- {code_lines[0]}')
+                        for code_line in code_lines[1:]:
+                            lines.append(f'{prefix}  {code_line}')
+                else:
+                    if text_md:
+                        md_lines = text_md.split('\n')
+                        lines.append(f'{prefix}- {md_lines[0]}')
+                        for cont in md_lines[1:]:
+                            lines.append(f'{prefix}  {cont}')
+                    lines.append(f'{prefix}  ```')
+                    for code_line in code_lines:
+                        lines.append(f'{prefix}  {code_line}')
+                    lines.append(f'{prefix}  ```')
                 if sub_html:
                     lines.append(_html_to_md_bullets(sub_html, indent + 1, plain=plain))
                 break
@@ -759,7 +773,6 @@ def _find_supported_anchor(md: str) -> str | None:
 def _push_to_page(page_id: str, md_content: str, is_new: bool, version: str):
     """단일 Notion 페이지에 패치노트 push"""
     current_md = fetch_page_markdown(page_id)
-    
 
     if is_new:
         anchor = _find_supported_anchor(current_md)
@@ -811,7 +824,9 @@ def push_patch_note_to_notion(patch_note: PatchNote, is_new: bool = True) -> dic
     Returns:
         Notion API 응답 (한국어 페이지)
     """
-    if not settings.NOTION_ENABLED or not settings.NOTION_TOKEN:
+    from apps.config.models import SiteConfig
+    cfg = SiteConfig.get()
+    if not cfg.notion_enabled or not cfg.notion_token:
         raise ValueError('Notion 연동이 비활성화되어 있습니다.')
 
     try:
@@ -855,7 +870,9 @@ def push_patch_note_to_notion(patch_note: PatchNote, is_new: bool = True) -> dic
 
 def push_en_to_notion(patch_note: PatchNote, is_new: bool = True) -> dict:
     """번역 완료 후 영문 페이지만 push (KO는 건드리지 않음)"""
-    if not settings.NOTION_ENABLED or not settings.NOTION_TOKEN:
+    from apps.config.models import SiteConfig
+    cfg = SiteConfig.get()
+    if not cfg.notion_enabled or not cfg.notion_token:
         raise ValueError('Notion 연동이 비활성화되어 있습니다.')
 
     try:

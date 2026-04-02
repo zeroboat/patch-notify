@@ -187,13 +187,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('summaryEmailCount').textContent = emailTotal;
   document.getElementById('summarySlackCount').textContent = slackTotal;
 
-  // ── FREQUENCY / MAX_ITEMS 선택지 ──────────────────
-  const frequencyOptions = [
-    { value: 'immediate', label: '즉시' },
-    { value: 'weekly',    label: '매주' },
-    { value: 'monthly',   label: '매월' },
-    { value: 'quarterly', label: '분기' },
-  ];
+  // ── MAX_ITEMS 선택지 ──────────────────
   const maxItemsOptions = [1, 2, 3, 5, 7, 10];
 
   function buildSelect(name, options, selectedValue, cls) {
@@ -251,8 +245,6 @@ document.addEventListener('DOMContentLoaded', function () {
         html += '</div>';
         html += '<div class="channel-settings ps-4 ' + (emailActive ? '' : 'd-none') + '" data-channel="email">';
         html += '<div class="row g-2 align-items-center">';
-        html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">전달 주기</label></div>';
-        html += '<div class="col-auto">' + buildSelect('email_frequency', frequencyOptions, prod.email.frequency) + '</div>';
         html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">최대 건수</label></div>';
         html += '<div class="col-auto">' + buildSelect('email_max_items', maxItemsOptions, prod.email.max_items) + '</div>';
         html += '</div>';
@@ -277,8 +269,6 @@ document.addEventListener('DOMContentLoaded', function () {
         html += ' placeholder="#channel-name" value="' + (prod.slack.slack_channel || '') + '">';
         html += '</div>';
         html += '<div class="row g-2 align-items-center">';
-        html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">전달 주기</label></div>';
-        html += '<div class="col-auto">' + buildSelect('slack_frequency', frequencyOptions, prod.slack.frequency) + '</div>';
         html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">최대 건수</label></div>';
         html += '<div class="col-auto">' + buildSelect('slack_max_items', maxItemsOptions, prod.slack.max_items) + '</div>';
         html += '</div>';
@@ -335,10 +325,8 @@ document.addEventListener('DOMContentLoaded', function () {
       customer_id: customerId,
       product_id: productId,
       email_active: emailToggle.checked ? 'true' : 'false',
-      email_frequency: emailSettings.querySelector('[name="email_frequency"]').value,
       email_max_items: emailSettings.querySelector('[name="email_max_items"]').value,
       slack_active: slackToggle.checked ? 'true' : 'false',
-      slack_frequency: slackSettings.querySelector('[name="slack_frequency"]').value,
       slack_max_items: slackSettings.querySelector('[name="slack_max_items"]').value,
       slack_channel: slackSettings.querySelector('[name="slack_channel"]').value,
     });
