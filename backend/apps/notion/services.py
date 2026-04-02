@@ -628,16 +628,28 @@ def _html_to_md_bullets(html: str, indent: int = 0, plain: bool = False) -> str:
             placeholder = f'__CODE_BLOCK_{idx}__'
             if placeholder in text_part:
                 text_part = text_part.replace(placeholder, '')
-                # 코드 블록은 bullet 아래에 별도 줄로
-                text_md = _inline_fn(text_part)
-                md_lines = text_md.split('\n')
-                lines.append(f'{prefix}- {md_lines[0]}')
-                for cont in md_lines[1:]:
-                    lines.append(f'{prefix}  {cont}')
-                lines.append(f'{prefix}  ```')
-                for code_line in code.strip().split('\n'):
-                    lines.append(f'{prefix}  {code_line}')
-                lines.append(f'{prefix}  ```')
+                text_md = _inline_fn(text_part).strip()
+                code_lines = code.strip().split('\n')
+                if plain:
+                    # 이미 코드블록 안 — text_part가 비어있으면 코드 내용을 bullet 텍스트로 직접 사용
+                    if text_md:
+                        lines.append(f'{prefix}- {text_md}')
+                        for code_line in code_lines:
+                            lines.append(f'{prefix}  {code_line}')
+                    else:
+                        lines.append(f'{prefix}- {code_lines[0]}')
+                        for code_line in code_lines[1:]:
+                            lines.append(f'{prefix}  {code_line}')
+                else:
+                    if text_md:
+                        md_lines = text_md.split('\n')
+                        lines.append(f'{prefix}- {md_lines[0]}')
+                        for cont in md_lines[1:]:
+                            lines.append(f'{prefix}  {cont}')
+                    lines.append(f'{prefix}  ```')
+                    for code_line in code_lines:
+                        lines.append(f'{prefix}  {code_line}')
+                    lines.append(f'{prefix}  ```')
                 if sub_html:
                     lines.append(_html_to_md_bullets(sub_html, indent + 1, plain=plain))
                 break
