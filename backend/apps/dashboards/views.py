@@ -30,12 +30,26 @@ class DashboardsView(LoginRequiredMixin, TemplateView):
             .order_by('order', 'id')
         )
 
-        # 최근 패치노트 5건
-        recent_patches = (
+        # 최근 패치노트 5건 (카테고리 존재 여부 포함)
+        recent_patch_qs = (
             PatchNote.objects
             .select_related('product__solution')
+            .prefetch_related('features', 'improvements', 'bugfixes', 'remarks')
             .order_by('-release_date')[:5]
         )
+        recent_patches = []
+        for patch in recent_patch_qs:
+            categories = []
+            if patch.features.filter(parent__isnull=True).exists():
+                categories.append('기능 추가')
+            if patch.improvements.filter(parent__isnull=True).exists():
+                categories.append('기능 개선')
+            if patch.bugfixes.filter(parent__isnull=True).exists():
+                categories.append('버그 수정')
+            if patch.remarks.filter(parent__isnull=True).exists():
+                categories.append('특이사항')
+            patch.categories = categories
+            recent_patches.append(patch)
 
         # 이메일 미등록 고객사
         no_email_customers = (
