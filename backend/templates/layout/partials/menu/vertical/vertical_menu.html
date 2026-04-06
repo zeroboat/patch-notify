@@ -55,15 +55,16 @@
             <span class="menu-header-text">Patch Notes</span>
         </li>
         {% for solution in side_solutions %}
-            <li class="menu-item">
+            <li class="menu-item {% for product in solution.products.all %}{% url 'patchnote:product_patch_detail' product.id as product_url %}{% if request.path == product_url %}active open{% endif %}{% endfor %}">
                 <a href="javascript:void(0);" class="menu-link menu-toggle">
                     <i class="menu-icon tf-icons bx bx-collection"></i>
                     <div data-i18n="{{ solution.name }}">{{ solution.name }}</div>
                 </a>
                 <ul class="menu-sub">
                     {% for product in solution.products.all %}
-                        <li class="menu-item {% if product.id in request.path %}active{% endif %}">
-                            <a href="{% url 'patchnote:product_patch_detail' product.id %}" class="menu-link">
+                        {% url 'patchnote:product_patch_detail' product.id as product_url %}
+                        <li class="menu-item {% if request.path == product_url %}active{% endif %}">
+                            <a href="{{ product_url }}" class="menu-link">
                                 <div class="text-truncate">
                                     {{ product.get_platform_display }} {{ product.get_category_display }}
                                 </div>
