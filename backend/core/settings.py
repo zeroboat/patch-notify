@@ -62,7 +62,25 @@ INSTALLED_APPS = [
     "apps.authentication",
     "apps.notion",
     "apps.config",
+    "apps.feedback",
+    "django_q",
 ]
+
+# Django-Q2 (외부 발송 지연 처리용)
+Q_CLUSTER = {
+    'name': 'patch_notify',
+    'workers': 2,
+    'recycle': 500,
+    'timeout': 300,
+    'retry': 360,
+    'compress': True,
+    'save_limit': 250,
+    'queue_limit': 500,
+    'cpu_affinity': 1,
+    'label': 'Patch Notify Q',
+    'orm': 'default',  # ORM broker (별도 Redis 불필요)
+    'catch_up': False,  # 워커 다운 중 누락된 작업은 즉시 실행하지 않고 정상 처리
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -93,6 +111,7 @@ TEMPLATES = [
                 "core.context_processors.my_setting",
                 "core.context_processors.environment",
                 "core.context_processors.user_role",
+                "core.context_processors.open_feedback_count",
                 "apps.product.context_processors.sidebar_menu",
             ],
             "libraries": {

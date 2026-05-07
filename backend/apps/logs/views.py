@@ -2,8 +2,9 @@ from django.views.generic import TemplateView
 from django.core.paginator import Paginator
 
 from web_project import TemplateLayout
-from apps.base.mixins import RoleRequiredMixin
+from apps.base.mixins import RoleRequiredMixin, get_user_role
 from apps.customer.models import Customer
+from apps.patchnote.models import PatchNote
 from .models import DispatchLog
 
 
@@ -14,6 +15,16 @@ class DispatchLogView(RoleRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+
+        # 외부 발송 대기 중인 패치노트 (지연 발송 대기열)
+        pending_external = (
+            PatchNote.objects
+            .filter(external_send_status=PatchNote.EXTERNAL_SEND_PENDING)
+            .select_related('product__solution')
+            .order_by('external_send_scheduled_at')
+        )
+        user_role = get_user_role(self.request.user) if self.request.user.is_authenticated else 'guest'
+        can_control_external = user_role in ('admin', 'manager')
 
         qs = DispatchLog.objects.select_related('customer', 'solution', 'official_notice')
 
@@ -50,6 +61,8 @@ class DispatchLogView(RoleRequiredMixin, TemplateView):
         page_obj = paginator.get_page(page_number)
 
         context.update({
+            'pending_external': pending_external,
+            'can_control_external': can_control_external,
             'page_obj': page_obj,
             'total': total,
             'success_count': success_count,

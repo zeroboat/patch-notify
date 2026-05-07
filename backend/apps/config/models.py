@@ -29,6 +29,15 @@ class SiteConfig(models.Model):
         max_length=200, default='/patch-notify/media', verbose_name='Nextcloud 업로드 경로'
     )
 
+    # 사내 Slack 알림 (발행 시 즉시, Internal 항목 포함)
+    internal_slack_enabled = models.BooleanField(default=False, verbose_name='사내 Slack 알림 활성화')
+
+    # 외부 발송 지연 (Phase 2)
+    external_send_delay_minutes = models.PositiveIntegerField(
+        default=30, verbose_name='외부 발송 지연 (분)',
+        help_text='발행 후 고객사로 Slack/Gmail 발송까지의 지연 시간 (0이면 즉시 발송)',
+    )
+
     class Meta:
         verbose_name = '서비스 설정'
         verbose_name_plural = '서비스 설정'
