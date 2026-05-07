@@ -20,13 +20,14 @@ services:
   backend:
     container_name: patch-web
     build: ./backend
-    command: sh -c "python manage.py migrate --noinput && (python manage.py createsuperuser --noinput || true) && gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 2"
+    command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && (python manage.py createsuperuser --noinput || true) && gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 2"
     ports:
       - "8000:8000"
     env_file: .env
     volumes:
       - notion_md_data:/app/notion_md
       - patchnote_files:/app/media/patchnotes
+      - feedback_files:/app/media/feedback
     depends_on:
       db:
         condition: service_healthy
@@ -59,3 +60,4 @@ volumes:
   postgres_data:
   notion_md_data:
   patchnote_files:
+  feedback_files:
