@@ -38,6 +38,7 @@ class PatchNote(BaseModel):
         verbose_name="번역 상태",
     )
     is_published = models.BooleanField(default=False, verbose_name="발행 여부")
+    notion_pushed_at = models.DateTimeField(null=True, blank=True, verbose_name="Notion Push 일시")
 
     # 외부 발송 (고객사 Slack/Gmail) 지연 처리
     external_send_status = models.CharField(
