@@ -102,16 +102,37 @@ def _build_patchnote_slack_blocks(patch_note, *, include_internal: bool = False)
 
 
 def _send_internal_slack_notification(patch_note):
-    """발행 시 사내 Slack 채널에 패치노트 전송 (Internal 항목 포함, 즉시)"""
+    """발행 시 사내 구독 채널에 패치노트 전송 (Internal 항목 포함, 즉시)"""
     try:
         from apps.config.models import SiteConfig
+        from apps.slack_app.models import SlackWorkspace
+        from apps.subscriber.models import Subscription
         from slack_sdk import WebClient
 
-        config = SiteConfig.get()
-        if not config.internal_slack_enabled:
+        if not SiteConfig.get().internal_slack_enabled:
             return
-        if not config.internal_slack_bot_token or not config.internal_slack_channel:
-            logger.warning('사내 Slack 설정 누락 — bot_token 또는 channel 미입력')
+
+        internal_workspace = SlackWorkspace.objects.filter(
+            is_internal=True,
+            status=SlackWorkspace.STATUS_APPROVED,
+        ).first()
+        if not internal_workspace:
+            logger.warning('사내 Slack 워크스페이스 미설정 — Admin에서 is_internal 체크 필요')
+            return
+
+        subs = (
+            Subscription.objects
+            .filter(
+                product=patch_note.product,
+                channel=Subscription.CHANNEL_SLACK,
+                is_active=True,
+                slack_channel__isnull=False,
+                customer=internal_workspace.customer,
+            )
+            .exclude(slack_channel='')
+        )
+
+        if not subs.exists():
             return
 
         solution_name = patch_note.product.solution.name
@@ -119,30 +140,34 @@ def _send_internal_slack_notification(patch_note):
         category = patch_note.product.get_category_display()
         product_label = f"{solution_name} {platform} {category}"
 
-        blocks = [
-            {
-                "type": "header",
-                "text": {
-                    "type": "plain_text",
-                    "text": f"[INTERNAL] {product_label} v{patch_note.version} 발행",
-                },
-            },
-        ]
-        blocks.extend(_build_patchnote_slack_blocks(patch_note, include_internal=True))
-
-        fallback_text = (
-            f"[사내] {product_label} v{patch_note.version} 패치노트가 발행되었습니다."
-        )
-
-        try:
-            client = WebClient(token=config.internal_slack_bot_token)
-            client.chat_postMessage(
-                channel=config.internal_slack_channel,
-                text=fallback_text,
-                blocks=blocks,
+        for sub in subs:
+            recent_notes = (
+                PatchNote.objects
+                .filter(product=patch_note.product, is_published=True)
+                .prefetch_related('features', 'improvements', 'bugfixes', 'remarks', 'internals')
+                .order_by('-release_date', '-version')
+                [:sub.max_items]
             )
-        except Exception as e:
-            logger.warning(f'사내 Slack 알림 발송 실패: {e}')
+
+            blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[INTERNAL] [{product_label} Release 안내]"}}]
+            prev_header_added = False
+            for note in recent_notes:
+                if note.id != patch_note.id and not prev_header_added:
+                    blocks.append({"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} 이전 패치노트]"}})
+                    prev_header_added = True
+                blocks.extend(_build_patchnote_slack_blocks(note, include_internal=True))
+
+            fallback_text = f"[사내] {product_label} v{patch_note.version} 패치노트가 발행되었습니다."
+
+            try:
+                client = WebClient(token=internal_workspace.bot_token)
+                client.chat_postMessage(
+                    channel=sub.slack_channel,
+                    text=fallback_text,
+                    blocks=blocks,
+                )
+            except Exception as e:
+                logger.warning(f'사내 Slack 알림 실패 (channel={sub.slack_channel}): {e}')
     except Exception as e:
         logger.warning(f'사내 Slack 알림 처리 실패: {e}')
 
@@ -178,6 +203,7 @@ def _send_slack_notifications(patch_note):
             workspace = SlackWorkspace.objects.filter(
                 customer=sub.customer,
                 status=SlackWorkspace.STATUS_APPROVED,
+                is_internal=False,
             ).first()
             if not workspace:
                 continue

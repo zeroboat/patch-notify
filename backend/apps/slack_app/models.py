@@ -29,6 +29,11 @@ class SlackWorkspace(BaseModel):
         related_name='slack_workspaces',
         verbose_name="고객사",
     )
+    is_internal = models.BooleanField(
+        default=False,
+        verbose_name="사내 워크스페이스",
+        help_text="체크 시 사내 알림 발송에 사용됩니다. 1개만 활성화하세요.",
+    )
 
     class Meta:
         verbose_name = "Slack 워크스페이스"

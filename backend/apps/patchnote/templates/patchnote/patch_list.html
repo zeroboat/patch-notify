@@ -337,6 +337,23 @@
                             <span class="badge bg-label-success fs-small">
                                 <i class="bx bx-send me-1"></i>발행됨
                             </span>
+                            {% if note.external_send_status == 'pending' %}
+                            <span class="badge bg-label-warning fs-small" title="외부 발송 예정">
+                                <i class="bx bx-time me-1"></i>발송 대기 · {{ note.external_send_scheduled_at|date:"H:i" }}
+                            </span>
+                            {% elif note.external_send_status == 'sent' %}
+                            <span class="badge bg-label-info fs-small">
+                                <i class="bx bx-check-double me-1"></i>외부 발송 완료
+                            </span>
+                            {% elif note.external_send_status == 'cancelled' %}
+                            <span class="badge bg-label-secondary fs-small">
+                                <i class="bx bx-block me-1"></i>발송 취소됨
+                            </span>
+                            {% elif note.external_send_status == 'failed' %}
+                            <span class="badge bg-label-danger fs-small" title="{{ note.external_send_error }}">
+                                <i class="bx bx-error me-1"></i>발송 실패
+                            </span>
+                            {% endif %}
                             {% else %}
                             <span class="badge bg-label-warning fs-small">
                                 <i class="bx bx-edit-alt me-1"></i>미발행
@@ -356,6 +373,16 @@
                             <button class="btn btn-sm btn-label-success btn-publish-note"
                                     data-id="{{ note.id }}" data-version="{{ note.version }}" title="발행">
                                 <i class="bx bx-send me-1"></i>발행
+                            </button>
+                            {% endif %}
+                            {% if note.external_send_status == 'pending' and user_role in 'admin manager' %}
+                            <button class="btn btn-sm btn-label-primary btn-ext-send-now"
+                                    data-id="{{ note.id }}" data-version="{{ note.version }}" title="지금 바로 외부 발송">
+                                <i class="bx bx-fast-forward me-1"></i>지금 발송
+                            </button>
+                            <button class="btn btn-sm btn-label-danger btn-ext-send-cancel"
+                                    data-id="{{ note.id }}" data-version="{{ note.version }}" title="외부 발송 취소">
+                                <i class="bx bx-x me-1"></i>발송 취소
                             </button>
                             {% endif %}
                             <button class="btn btn-sm btn-icon btn-label-success btn-push-notion"
@@ -790,6 +817,59 @@
                     }
                 } catch (e) {
                     Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
+                }
+            });
+        });
+
+        // ── 외부 발송 즉시 실행 / 취소 버튼 ─────────────────────────────────────
+        document.querySelectorAll('.btn-ext-send-now').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                const noteId = this.dataset.id;
+                const version = this.dataset.version;
+                const result = await Swal.fire({
+                    title: `버전 ${version} 즉시 발송`,
+                    text: '예약 시각 이전에 지금 바로 고객사로 발송합니다. 계속하시겠습니까?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: '지금 발송',
+                    cancelButtonText: '취소',
+                    confirmButtonColor: '#0d6efd',
+                });
+                if (!result.isConfirmed) return;
+                const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                const res = await fetch(`/patchnote/external-send/${noteId}/now/`, { method: 'POST', headers: {'X-CSRFToken': csrf} });
+                const data = await res.json();
+                if (res.ok) {
+                    await Swal.fire({ icon: 'success', title: '발송 완료', text: data.message, timer: 1500, showConfirmButton: false });
+                    location.reload();
+                } else {
+                    Swal.fire('오류', data.error || '발송 중 오류가 발생했습니다.', 'error');
+                }
+            });
+        });
+
+        document.querySelectorAll('.btn-ext-send-cancel').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                const noteId = this.dataset.id;
+                const version = this.dataset.version;
+                const result = await Swal.fire({
+                    title: `버전 ${version} 발송 취소`,
+                    text: '고객사로의 외부 발송을 취소합니다. 취소 후에는 다시 발송할 수 없습니다.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: '발송 취소',
+                    cancelButtonText: '닫기',
+                    confirmButtonColor: '#d33',
+                });
+                if (!result.isConfirmed) return;
+                const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                const res = await fetch(`/patchnote/external-send/${noteId}/cancel/`, { method: 'POST', headers: {'X-CSRFToken': csrf} });
+                const data = await res.json();
+                if (res.ok) {
+                    await Swal.fire({ icon: 'success', title: '취소 완료', text: data.message, timer: 1500, showConfirmButton: false });
+                    location.reload();
+                } else {
+                    Swal.fire('오류', data.error || '취소 중 오류가 발생했습니다.', 'error');
                 }
             });
         });

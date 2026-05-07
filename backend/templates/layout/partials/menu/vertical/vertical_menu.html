@@ -109,6 +109,17 @@
             </a>
         </li>
         {% endif %}
+        {% if user_role != 'guest' %}
+        <li class="menu-item {% if '/feedback/' in request.path %}active{% endif %}">
+            <a href="{% url 'feedback:feedback_list' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-message-square-detail"></i>
+                <div class="text-truncate">Feedback</div>
+                {% if open_feedback_count %}
+                <div class="badge bg-danger rounded-pill ms-auto">{{ open_feedback_count }}</div>
+                {% endif %}
+            </a>
+        </li>
+        {% endif %}
         {% endif %}{# end user_role != 'guest' #}
 
     </ul>

@@ -22,8 +22,8 @@ class SiteConfigAdmin(admin.ModelAdmin):
             'description': 'Nextcloud 앱 비밀번호 사용을 권장합니다. (설정 > 보안 > 앱 비밀번호)',
         }),
         ('사내 Slack 알림', {
-            'fields': ('internal_slack_enabled', 'internal_slack_bot_token', 'internal_slack_channel'),
-            'description': '발행 시 사내 채널에 즉시 알림 (내부 공유 항목 포함). 사내 워크스페이스에 앱 설치 후 Bot Token을 입력하세요.',
+            'fields': ('internal_slack_enabled',),
+            'description': 'Slack 워크스페이스 관리에서 사내 워크스페이스에 "사내 워크스페이스"를 체크한 뒤 활성화하세요. 사내 구독에 등록된 채널로 Internal 항목 포함 발송됩니다.',
         }),
         ('외부 발송 (고객사 Slack / Gmail)', {
             'fields': ('external_send_delay_minutes',),

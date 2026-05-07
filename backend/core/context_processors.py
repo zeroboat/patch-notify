@@ -22,3 +22,14 @@ def user_role(request):
     if request.user.is_authenticated:
         return {'user_role': get_user_role(request.user)}
     return {'user_role': 'anonymous'}
+
+
+def open_feedback_count(request):
+    if not request.user.is_authenticated:
+        return {'open_feedback_count': 0}
+    try:
+        from apps.feedback.models import Feedback
+        count = Feedback.objects.filter(status='open').count()
+        return {'open_feedback_count': count}
+    except Exception:
+        return {'open_feedback_count': 0}

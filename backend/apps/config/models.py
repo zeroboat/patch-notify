@@ -31,14 +31,6 @@ class SiteConfig(models.Model):
 
     # 사내 Slack 알림 (발행 시 즉시, Internal 항목 포함)
     internal_slack_enabled = models.BooleanField(default=False, verbose_name='사내 Slack 알림 활성화')
-    internal_slack_bot_token = models.CharField(
-        max_length=200, blank=True, verbose_name='사내 Slack Bot Token',
-        help_text='xoxb- 로 시작하는 Bot User OAuth Token',
-    )
-    internal_slack_channel = models.CharField(
-        max_length=100, blank=True, verbose_name='사내 Slack 채널',
-        help_text='채널 ID 또는 채널명 (예: C0123ABCD 또는 #patch-notify-internal)',
-    )
 
     # 외부 발송 지연 (Phase 2)
     external_send_delay_minutes = models.PositiveIntegerField(

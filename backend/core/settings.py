@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     "apps.authentication",
     "apps.notion",
     "apps.config",
+    "apps.feedback",
     "django_q",
 ]
 
@@ -110,6 +111,7 @@ TEMPLATES = [
                 "core.context_processors.my_setting",
                 "core.context_processors.environment",
                 "core.context_processors.user_role",
+                "core.context_processors.open_feedback_count",
                 "apps.product.context_processors.sidebar_menu",
             ],
             "libraries": {
