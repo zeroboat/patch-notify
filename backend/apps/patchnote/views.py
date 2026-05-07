@@ -1,10 +1,12 @@
 import logging
 import re
+from datetime import timedelta
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse, FileResponse, Http404
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.views.decorators.http import require_POST, require_GET
 from django.views.generic import TemplateView
 
@@ -51,8 +53,11 @@ def _html_to_plain(html: str) -> str:
     return text.lstrip('\n').rstrip()
 
 
-def _build_patchnote_slack_blocks(patch_note) -> list:
-    """단일 패치노트를 Slack Block Kit 블록으로 변환"""
+def _build_patchnote_slack_blocks(patch_note, *, include_internal: bool = False) -> list:
+    """단일 패치노트를 Slack Block Kit 블록으로 변환
+
+    include_internal=True 일 경우 [Internal] 섹션을 본문에 추가 (사내 발송 전용).
+    """
     def _section_text(manager):
         obj = manager.filter(parent__isnull=True).order_by('order', 'id').first()
         if not obj or not obj.content:
@@ -76,6 +81,13 @@ def _build_patchnote_slack_blocks(patch_note) -> list:
         if remarks_text:
             body += f"\n\n[Remarks]\n{remarks_text}"
 
+    if include_internal:
+        internal_obj = patch_note.internals.filter(parent__isnull=True).order_by('order', 'id').first()
+        if internal_obj and internal_obj.content:
+            internal_text = _html_to_plain(internal_obj.content)
+            if internal_text:
+                body += f"\n\n[Internal · 사내 공유 전용]\n{internal_text}"
+
     return [
         {
             "type": "section",
@@ -89,8 +101,54 @@ def _build_patchnote_slack_blocks(patch_note) -> list:
     ]
 
 
+def _send_internal_slack_notification(patch_note):
+    """발행 시 사내 Slack 채널에 패치노트 전송 (Internal 항목 포함, 즉시)"""
+    try:
+        from apps.config.models import SiteConfig
+        from slack_sdk import WebClient
+
+        config = SiteConfig.get()
+        if not config.internal_slack_enabled:
+            return
+        if not config.internal_slack_bot_token or not config.internal_slack_channel:
+            logger.warning('사내 Slack 설정 누락 — bot_token 또는 channel 미입력')
+            return
+
+        solution_name = patch_note.product.solution.name
+        platform = patch_note.product.get_platform_display()
+        category = patch_note.product.get_category_display()
+        product_label = f"{solution_name} {platform} {category}"
+
+        blocks = [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": f"[INTERNAL] {product_label} v{patch_note.version} 발행",
+                },
+            },
+        ]
+        blocks.extend(_build_patchnote_slack_blocks(patch_note, include_internal=True))
+
+        fallback_text = (
+            f"[사내] {product_label} v{patch_note.version} 패치노트가 발행되었습니다."
+        )
+
+        try:
+            client = WebClient(token=config.internal_slack_bot_token)
+            client.chat_postMessage(
+                channel=config.internal_slack_channel,
+                text=fallback_text,
+                blocks=blocks,
+            )
+        except Exception as e:
+            logger.warning(f'사내 Slack 알림 발송 실패: {e}')
+    except Exception as e:
+        logger.warning(f'사내 Slack 알림 처리 실패: {e}')
+
+
 def _send_slack_notifications(patch_note):
-    """발행 시 활성 Slack 구독자에게 최근 max_items건 패치노트 전송"""
+    """발행 시 활성 Slack 구독자에게 최근 max_items건 패치노트 전송 (고객사용)"""
     try:
         from slack_sdk import WebClient
         from apps.slack_app.models import SlackWorkspace
@@ -166,6 +224,90 @@ def _push_to_notion_safe(patch_note, is_new=True):
         push_patch_note_to_notion(patch_note, is_new=is_new)
     except Exception as e:
         logger.warning(f'Notion push 실패 (v{patch_note.version}): {e}')
+
+
+# ──────────────────────────────────────────────
+# 외부 발송 지연 처리 (Django-Q2 워커가 호출)
+# ──────────────────────────────────────────────
+
+def dispatch_external_notifications(patch_note_id: int):
+    """[Q2 Task] 예약 시각에 도달했을 때 외부(고객사 Slack/Gmail) 발송 실행.
+
+    워커 프로세스가 import 가능해야 하므로 모듈 최상위 함수로 정의.
+    호출 시점에 DB 상태를 다시 읽어 상태가 'pending'이 아니면 skip (취소/중복 방지).
+    """
+    try:
+        note = (
+            PatchNote.objects
+            .select_related('product__solution')
+            .prefetch_related('features', 'improvements', 'bugfixes', 'remarks')
+            .get(id=patch_note_id)
+        )
+    except PatchNote.DoesNotExist:
+        logger.warning(f'외부 발송 task: 패치노트 없음 (id={patch_note_id})')
+        return
+
+    if note.external_send_status != PatchNote.EXTERNAL_SEND_PENDING:
+        logger.info(
+            f'외부 발송 task: 상태가 pending 아님 (id={patch_note_id}, '
+            f'status={note.external_send_status}) — skip'
+        )
+        return
+
+    try:
+        _send_slack_notifications(note)
+        # TODO: Gmail 발송 함수가 별도 존재한다면 여기서 호출
+        note.external_send_status = PatchNote.EXTERNAL_SEND_SENT
+        note.external_send_error = ''
+        note.save(update_fields=['external_send_status', 'external_send_error', 'updated_at'])
+    except Exception as e:
+        logger.exception(f'외부 발송 task 실패 (id={patch_note_id})')
+        note.external_send_status = PatchNote.EXTERNAL_SEND_FAILED
+        note.external_send_error = str(e)[:1000]
+        note.save(update_fields=['external_send_status', 'external_send_error', 'updated_at'])
+
+
+def _schedule_external_send(note):
+    """발행 시 호출 — 지연 시간에 맞춰 Q2 task 등록.
+    delay=0 이면 즉시 실행되도록 task 큐에 넣음 (워커가 처리)."""
+    from apps.config.models import SiteConfig
+    from django_q.tasks import async_task, schedule
+    from django_q.models import Schedule
+
+    delay_minutes = SiteConfig.get().external_send_delay_minutes or 0
+    scheduled_at = timezone.now() + timedelta(minutes=delay_minutes)
+
+    note.external_send_scheduled_at = scheduled_at
+    note.external_send_status = PatchNote.EXTERNAL_SEND_PENDING
+    note.external_send_error = ''
+
+    if delay_minutes <= 0:
+        # 즉시 실행 — 워커에 바로 큐잉
+        task_id = async_task(
+            'apps.patchnote.views.dispatch_external_notifications',
+            note.id,
+            task_name=f'patchnote-extsend-{note.id}',
+        )
+        note.external_send_task_id = task_id or ''
+    else:
+        # 지연 실행 — Schedule 1회성 등록
+        sched = schedule(
+            'apps.patchnote.views.dispatch_external_notifications',
+            note.id,
+            schedule_type=Schedule.ONCE,
+            next_run=scheduled_at,
+            name=f'patchnote-extsend-{note.id}',
+            repeats=-1,
+        )
+        note.external_send_task_id = str(sched.id) if sched else ''
+
+    note.save(update_fields=[
+        'external_send_scheduled_at',
+        'external_send_status',
+        'external_send_task_id',
+        'external_send_error',
+        'updated_at',
+    ])
 
 
 class PatchNoteDetailView(LoginRequiredMixin, TemplateView):
@@ -410,10 +552,30 @@ def patch_note_publish(request):
     note.is_published = True
     note.save(update_fields=['is_published', 'updated_at'])
 
+    # 즉시 처리: Notion 등록, 사내 Slack 알림 (Internal 항목 포함)
     _push_to_notion_safe(note, is_new=True)
-    _send_slack_notifications(note)
+    _send_internal_slack_notification(note)
 
-    return JsonResponse({'message': f'버전 {note.version} 이(가) 발행되었습니다.'})
+    # 외부 발송 (고객사 Slack/Gmail) — SiteConfig 의 지연 시간만큼 미뤄서 Q2 task로 처리
+    try:
+        _schedule_external_send(note)
+    except Exception as e:
+        logger.exception(f'외부 발송 예약 실패 (id={note.id}): {e}')
+        note.external_send_status = PatchNote.EXTERNAL_SEND_FAILED
+        note.external_send_error = f'예약 실패: {e}'[:1000]
+        note.save(update_fields=['external_send_status', 'external_send_error', 'updated_at'])
+
+    msg = f'버전 {note.version} 이(가) 발행되었습니다.'
+    if note.external_send_status == PatchNote.EXTERNAL_SEND_PENDING and note.external_send_scheduled_at:
+        msg += f" 외부 발송 예정 시각: {timezone.localtime(note.external_send_scheduled_at):%Y-%m-%d %H:%M}"
+    return JsonResponse({
+        'message': msg,
+        'external_send_status': note.external_send_status,
+        'external_send_scheduled_at': (
+            timezone.localtime(note.external_send_scheduled_at).isoformat()
+            if note.external_send_scheduled_at else None
+        ),
+    })
 
 
 @require_GET
@@ -428,6 +590,78 @@ def translation_status(request, patch_note_id):
         'patch_note_id': note.id,
         'status': note.translation_status,
     })
+
+
+# ──────────────────────────────────────────────
+# 외부 발송 제어 (즉시 발송 / 취소)
+# ──────────────────────────────────────────────
+
+def _delete_q2_schedule(task_id: str):
+    """Q2 Schedule 레코드를 삭제 (취소/즉시발송 시 중복 실행 방지)."""
+    if not task_id:
+        return
+    try:
+        from django_q.models import Schedule
+        Schedule.objects.filter(id=task_id).delete()
+    except Exception as e:
+        logger.warning(f'Q2 Schedule 삭제 실패 (task_id={task_id}): {e}')
+
+
+@require_POST
+@role_required('manager')
+def external_send_now(request, patch_note_id):
+    """대기 중인 외부 발송을 즉시 실행"""
+    try:
+        note = PatchNote.objects.get(id=patch_note_id)
+    except PatchNote.DoesNotExist:
+        return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
+
+    if note.external_send_status != PatchNote.EXTERNAL_SEND_PENDING:
+        return JsonResponse({
+            'error': f'대기 중인 발송이 아닙니다. (현재 상태: {note.get_external_send_status_display()})'
+        }, status=400)
+
+    _delete_q2_schedule(note.external_send_task_id)
+
+    try:
+        from django_q.tasks import async_task
+        task_id = async_task(
+            'apps.patchnote.views.dispatch_external_notifications',
+            note.id,
+            task_name=f'patchnote-extsend-now-{note.id}',
+        )
+        note.external_send_task_id = task_id or ''
+        note.external_send_scheduled_at = timezone.now()
+        note.save(update_fields=[
+            'external_send_task_id', 'external_send_scheduled_at', 'updated_at',
+        ])
+        return JsonResponse({'message': f'버전 {note.version} 외부 발송을 즉시 실행했습니다.'})
+    except Exception as e:
+        logger.exception(f'외부 즉시 발송 실패 (id={note.id})')
+        return JsonResponse({'error': f'발송 실행 중 오류: {e}'}, status=500)
+
+
+@require_POST
+@role_required('manager')
+def external_send_cancel(request, patch_note_id):
+    """대기 중인 외부 발송을 취소"""
+    try:
+        note = PatchNote.objects.get(id=patch_note_id)
+    except PatchNote.DoesNotExist:
+        return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
+
+    if note.external_send_status != PatchNote.EXTERNAL_SEND_PENDING:
+        return JsonResponse({
+            'error': f'대기 중인 발송이 아닙니다. (현재 상태: {note.get_external_send_status_display()})'
+        }, status=400)
+
+    _delete_q2_schedule(note.external_send_task_id)
+
+    note.external_send_status = PatchNote.EXTERNAL_SEND_CANCELLED
+    note.external_send_task_id = ''
+    note.save(update_fields=['external_send_status', 'external_send_task_id', 'updated_at'])
+
+    return JsonResponse({'message': f'버전 {note.version} 외부 발송이 취소되었습니다.'})
 
 
 # ──────────────────────────────────────────────

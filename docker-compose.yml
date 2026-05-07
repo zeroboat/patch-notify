@@ -31,6 +31,20 @@ services:
       db:
         condition: service_healthy
 
+  qcluster:
+    container_name: patch-qcluster
+    build: ./backend
+    command: sh -c "python manage.py qcluster"
+    env_file: .env
+    volumes:
+      - notion_md_data:/app/notion_md
+      - patchnote_files:/app/media/patchnotes
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_started
+
   slack-api:
     container_name: patch-slack
     build: ./slack-api

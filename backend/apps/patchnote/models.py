@@ -15,6 +15,19 @@ class PatchNote(BaseModel):
         ('skipped',     'Skipped'),
     ]
 
+    EXTERNAL_SEND_NONE      = 'none'
+    EXTERNAL_SEND_PENDING   = 'pending'
+    EXTERNAL_SEND_SENT      = 'sent'
+    EXTERNAL_SEND_CANCELLED = 'cancelled'
+    EXTERNAL_SEND_FAILED    = 'failed'
+    EXTERNAL_SEND_STATUS_CHOICES = [
+        (EXTERNAL_SEND_NONE,      '미발행'),
+        (EXTERNAL_SEND_PENDING,   '발송 대기'),
+        (EXTERNAL_SEND_SENT,      '발송 완료'),
+        (EXTERNAL_SEND_CANCELLED, '발송 취소'),
+        (EXTERNAL_SEND_FAILED,    '발송 실패'),
+    ]
+
     product = models.ForeignKey('product.Product', on_delete=models.CASCADE, related_name='patch_notes', verbose_name="제품")
     version = models.CharField(max_length=30, verbose_name="버전")
     release_date = models.DateField(verbose_name="배포일")
@@ -25,6 +38,23 @@ class PatchNote(BaseModel):
         verbose_name="번역 상태",
     )
     is_published = models.BooleanField(default=False, verbose_name="발행 여부")
+
+    # 외부 발송 (고객사 Slack/Gmail) 지연 처리
+    external_send_status = models.CharField(
+        max_length=15,
+        choices=EXTERNAL_SEND_STATUS_CHOICES,
+        default=EXTERNAL_SEND_NONE,
+        verbose_name="외부 발송 상태",
+    )
+    external_send_scheduled_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="외부 발송 예약 시각",
+    )
+    external_send_task_id = models.CharField(
+        max_length=64, blank=True, verbose_name="외부 발송 작업 ID",
+    )
+    external_send_error = models.TextField(
+        blank=True, verbose_name="외부 발송 오류",
+    )
 
     class Meta:
         verbose_name = "패치노트"

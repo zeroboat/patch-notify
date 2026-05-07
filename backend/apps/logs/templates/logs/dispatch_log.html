@@ -7,6 +7,7 @@
 
 {% block content %}
 <div class="container-xxl flex-grow-1 container-p-y">
+  {% csrf_token %}
 
   <!-- 페이지 헤더 -->
   <div class="mb-4">
@@ -77,6 +78,65 @@
       </div>
     </div>
   </div>
+
+  <!-- 외부 발송 대기 패널 -->
+  {% if pending_external %}
+  <div class="card mb-4 border-warning">
+    <div class="card-header d-flex justify-content-between align-items-center bg-label-warning">
+      <h5 class="mb-0"><i class="bx bx-time-five me-2"></i>외부 발송 대기 중</h5>
+      <span class="badge bg-warning">{{ pending_external|length }}건</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>제품</th>
+            <th>버전</th>
+            <th>발행일</th>
+            <th>예약 시각</th>
+            <th class="text-center">상태</th>
+            {% if can_control_external %}
+            <th class="text-end pe-3">동작</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for note in pending_external %}
+          <tr data-pending-id="{{ note.id }}">
+            <td class="align-middle small">
+              {{ note.product.solution.name }} · {{ note.product.get_platform_display }} {{ note.product.get_category_display }}
+            </td>
+            <td class="align-middle small fw-semibold">v{{ note.version }}</td>
+            <td class="align-middle small text-muted">{{ note.release_date|date:"Y.m.d" }}</td>
+            <td class="align-middle small">
+              {% if note.external_send_scheduled_at %}
+                <span class="text-warning">{{ note.external_send_scheduled_at|date:"Y.m.d H:i" }}</span>
+              {% else %}
+                <span class="text-muted">-</span>
+              {% endif %}
+            </td>
+            <td class="align-middle text-center">
+              <span class="badge bg-warning"><i class="bx bx-time me-1"></i>대기</span>
+            </td>
+            {% if can_control_external %}
+            <td class="align-middle text-end pe-3">
+              <button type="button" class="btn btn-sm btn-primary btn-extsend-now me-1"
+                      data-patchnote-id="{{ note.id }}" data-version="{{ note.version }}">
+                <i class="bx bx-send me-1"></i>지금 보내기
+              </button>
+              <button type="button" class="btn btn-sm btn-label-danger btn-extsend-cancel"
+                      data-patchnote-id="{{ note.id }}" data-version="{{ note.version }}">
+                <i class="bx bx-x me-1"></i>취소
+              </button>
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
 
   <!-- 필터 -->
   <div class="card mb-4">
@@ -337,6 +397,45 @@ document.addEventListener('DOMContentLoaded', function () {
       .catch(function () {
         noticeSpinner.innerHTML = '<span class="text-danger">공문을 불러오지 못했습니다.</span>';
       });
+  });
+
+  // 외부 발송 즉시 실행 / 취소
+  function getCsrfToken() {
+    const el = document.querySelector('[name=csrfmiddlewaretoken]');
+    return el ? el.value : '';
+  }
+
+  function postExternalAction(url, version, confirmMsg) {
+    if (!confirm(confirmMsg)) return;
+    fetch(url, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCsrfToken() },
+      credentials: 'same-origin',
+    })
+      .then(function (r) { return r.json().then(j => ({ ok: r.ok, body: j })); })
+      .then(function (res) {
+        alert(res.body.message || res.body.error || (res.ok ? '완료' : '실패'));
+        if (res.ok) location.reload();
+      })
+      .catch(function (err) { alert('요청 실패: ' + err); });
+  }
+
+  document.addEventListener('click', function (e) {
+    const sendBtn = e.target.closest('.btn-extsend-now');
+    if (sendBtn) {
+      const id = sendBtn.dataset.patchnoteId;
+      const version = sendBtn.dataset.version;
+      postExternalAction(`/patchnote/external-send/${id}/now/`, version,
+        `버전 ${version} 외부 발송을 지금 보내시겠습니까?`);
+      return;
+    }
+    const cancelBtn = e.target.closest('.btn-extsend-cancel');
+    if (cancelBtn) {
+      const id = cancelBtn.dataset.patchnoteId;
+      const version = cancelBtn.dataset.version;
+      postExternalAction(`/patchnote/external-send/${id}/cancel/`, version,
+        `버전 ${version} 외부 발송을 취소하시겠습니까?`);
+    }
   });
 });
 </script>

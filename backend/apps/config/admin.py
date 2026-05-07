@@ -21,6 +21,14 @@ class SiteConfigAdmin(admin.ModelAdmin):
             'fields': ('nextcloud_enabled', 'nextcloud_url', 'nextcloud_user', 'nextcloud_password', 'nextcloud_upload_path'),
             'description': 'Nextcloud 앱 비밀번호 사용을 권장합니다. (설정 > 보안 > 앱 비밀번호)',
         }),
+        ('사내 Slack 알림', {
+            'fields': ('internal_slack_enabled', 'internal_slack_bot_token', 'internal_slack_channel'),
+            'description': '발행 시 사내 채널에 즉시 알림 (내부 공유 항목 포함). 사내 워크스페이스에 앱 설치 후 Bot Token을 입력하세요.',
+        }),
+        ('외부 발송 (고객사 Slack / Gmail)', {
+            'fields': ('external_send_delay_minutes',),
+            'description': '발행 후 고객사 발송까지 지연 시간을 분 단위로 설정합니다. 0이면 즉시 발송됩니다.',
+        }),
     )
 
     def has_add_permission(self, request):
