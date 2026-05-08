@@ -86,10 +86,10 @@ _INSTALL_PAGE = """\
   <p>설치할 워크스페이스의 Team ID를 입력하세요.<br>
      여러 워크스페이스에 로그인된 경우 올바른 워크스페이스가 자동 선택됩니다.</p>
 
-  <form onsubmit="return handleSubmit(event)">
-    <label for="workspace">Team ID</label>
+  <form method="get" action="/slack/install/">
+    <label for="team">Team ID</label>
     <div class="input-wrap">
-      <input id="workspace" type="text" placeholder="T01234ABCDE"
+      <input id="team" name="team" type="text" placeholder="T01234ABCDE"
              autocomplete="off" spellcheck="false" style="font-family:monospace;">
     </div>
     <p class="hint">
@@ -100,29 +100,10 @@ _INSTALL_PAGE = """\
   </form>
 
   <div class="divider">또는</div>
-  <a href="#" class="btn-direct" onclick="return directInstall(event)">
-    워크스페이스 URL 없이 설치
+  <a href="/slack/install/?team=" class="btn-direct">
+    Team ID 없이 설치
   </a>
 </div>
-
-<script>
-function handleSubmit(e) {
-  e.preventDefault();
-  const val = document.getElementById('workspace').value.trim().toUpperCase();
-  if (!val) { document.getElementById('workspace').focus(); return false; }
-  if (!val.match(/^T[A-Z0-9]{8,}$/)) {
-    alert('올바른 Team ID를 입력하세요.\n예: T01234ABCDE (T로 시작하는 영숫자)');
-    return false;
-  }
-  window.location.href = '?team=' + encodeURIComponent(val);
-  return false;
-}
-function directInstall(e) {
-  e.preventDefault();
-  window.location.href = '?team=';
-  return false;
-}
-</script>
 </body>
 </html>"""
 
@@ -142,7 +123,7 @@ def slack_install(team: str = None):
     )
     if team:
         url += f"&team={team}"
-    return RedirectResponse(url)
+    return RedirectResponse(url, status_code=302)
 
 
 @app.get("/slack/oauth/callback/")
