@@ -128,18 +128,32 @@ def build_home_tab(db: Session, customer_id: int, customer_name: str) -> list:
         })
         return blocks
 
+    sol_ids = [s.id for s in solutions]
+
+    all_products = db.execute(
+        select(product_table)
+        .where(product_table.c.solution_id.in_(sol_ids))
+        .order_by(product_table.c.order, product_table.c.platform, product_table.c.category)
+    ).fetchall()
+    products_by_sol: dict[int, list] = {}
+    for p in all_products:
+        products_by_sol.setdefault(p.solution_id, []).append(p)
+
+    all_subs = db.execute(
+        select(sub_table).where(sub_table.c.customer_id == customer_id)
+    ).fetchall()
+    sub_map: dict[tuple, object] = {(s.product_id, s.channel): s for s in all_subs}
+
     for sol in solutions:
-        products = db.execute(
-            select(product_table).where(product_table.c.solution_id == sol.id).order_by(product_table.c.order, product_table.c.platform, product_table.c.category)
-        ).fetchall()
+        products = products_by_sol.get(sol.id, [])
 
         email_active = sum(
             1 for p in products
-            if (s := _get_subscription(db, customer_id, p.id, 'email')) and s.is_active
+            if (s := sub_map.get((p.id, 'email'))) and s.is_active
         )
         slack_active = sum(
             1 for p in products
-            if (s := _get_subscription(db, customer_id, p.id, 'slack')) and s.is_active
+            if (s := sub_map.get((p.id, 'slack'))) and s.is_active
         )
         total = len(products)
 
@@ -197,13 +211,21 @@ def build_subscription_modal(db: Session, customer_id: int, solution_id: int, so
         for p in products
     ]
 
+    product_ids = [p.id for p in products]
+    subs = db.execute(
+        select(sub_table).where(
+            and_(sub_table.c.customer_id == customer_id, sub_table.c.product_id.in_(product_ids))
+        )
+    ).fetchall()
+    sub_map = {(s.product_id, s.channel): s for s in subs}
+
     # 현재 활성화된 제품 및 공통 설정 수집
     email_active_opts, slack_active_opts = [], []
     email_max, slack_max, slack_channel = '5', '5', ''
 
     for p, opt in zip(products, product_options):
-        email_sub = _get_subscription(db, customer_id, p.id, 'email')
-        slack_sub = _get_subscription(db, customer_id, p.id, 'slack')
+        email_sub = sub_map.get((p.id, 'email'))
+        slack_sub = sub_map.get((p.id, 'slack'))
         if email_sub and email_sub.is_active:
             email_active_opts.append(opt)
             email_max = str(email_sub.max_items)
@@ -380,23 +402,25 @@ def build_patchnote_blocks(db: Session, product_id: int, solution_name: str) -> 
         bugfixes = _fetch_items(db, patchnote_bugfix, note.id)
         remarks  = _fetch_items(db, patchnote_remark, note.id)
 
-        body = (
-            f"[Patch Note]\n"
-            f"기능 추가\n{_items_text(features)}\n\n"
-            f"기능 개선\n{_items_text(improves)}\n\n"
-            f"버그 수정\n{_items_text(bugfixes)}"
-        )
-        if remarks:
-            body += f"\n\n[Remarks]\n{_items_text(remarks)}"
-
         blocks.append({
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"*Version: {note.version}*  ·  {note.release_date}"},
         })
-        blocks.append({
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": f"```{body}```"},
-        })
+
+        sections = [
+            ("기능 추가", features),
+            ("기능 개선", improves),
+            ("버그 수정", bugfixes),
+        ]
+        if remarks:
+            sections.append(("Remarks", remarks))
+
+        for section_title, rows in sections:
+            text = f"*{section_title}*\n{_items_text(rows)}"
+            if len(text) > 2990:
+                text = text[:2987] + "…"
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": text}})
+
         blocks.append({"type": "divider"})
 
     return blocks

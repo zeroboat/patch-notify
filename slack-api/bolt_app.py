@@ -335,4 +335,10 @@ def handle_send_patchnote_dm(ack, body, view, client):
     finally:
         db.close()
 
-    client.chat_postMessage(channel=user_id, blocks=blocks, text=f"{solution_name} 최근 패치노트")
+    try:
+        client.chat_postMessage(channel=user_id, blocks=blocks, text=f"{solution_name} 최근 패치노트")
+    except Exception as e:
+        client.chat_postMessage(
+            channel=user_id,
+            text=f"패치노트 전송 중 오류가 발생했습니다: {e}",
+        )
