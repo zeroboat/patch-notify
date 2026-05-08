@@ -173,7 +173,7 @@ async def slack_oauth_callback(request: Request):
             now = datetime.now(timezone.utc)
             db.execute(slack_workspace.insert().values(
                 team_id=team_id, team_name=team_name, bot_token=bot_token, status='pending',
-                created_at=now, updated_at=now,
+                is_internal=False, created_at=now, updated_at=now,
             ))
         db.commit()
     finally:
