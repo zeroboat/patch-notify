@@ -35,7 +35,7 @@ _INSTALL_PAGE = """<!DOCTYPE html>
             background: #f4f5f7; display: flex; align-items: center;
             justify-content: center; min-height: 100vh; padding: 20px; }}
     .card {{ background: #fff; border-radius: 12px; padding: 40px 36px;
-             max-width: 460px; width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,.08); }}
+             max-width: 440px; width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,.08); }}
     .logo {{ display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }}
     .logo svg {{ width: 32px; height: 32px; }}
     .logo span {{ font-size: 1.2rem; font-weight: 700; color: #1a1a2e; }}
@@ -43,17 +43,19 @@ _INSTALL_PAGE = """<!DOCTYPE html>
     p {{ font-size: 0.875rem; color: #6b7280; margin-bottom: 24px; line-height: 1.6; }}
     label {{ display: block; font-size: 0.8rem; font-weight: 600;
              color: #374151; margin-bottom: 6px; }}
-    input {{ width: 100%; border: 1.5px solid #d1d5db; border-radius: 8px;
-             padding: 0 14px; height: 44px; font-size: 0.875rem; outline: none;
-             transition: border-color .15s; font-family: monospace; letter-spacing: .05em; }}
-    input:focus {{ border-color: #4a154b; }}
-    .hint {{ font-size: 0.75rem; color: #9ca3af; margin-top: 8px; line-height: 1.6; }}
-    .how-to {{ background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;
-               padding: 14px 16px; margin-top: 16px; }}
-    .how-to p {{ font-size: 0.78rem; color: #6b7280; margin-bottom: 8px; font-weight: 600; }}
-    .how-to ol {{ padding-left: 18px; font-size: 0.78rem; color: #6b7280; line-height: 1.8; }}
-    .how-to code {{ background: #e5e7eb; padding: 1px 5px; border-radius: 4px;
-                    font-size: 0.75rem; color: #374151; }}
+    .input-wrap {{ display: flex; align-items: center; border: 1.5px solid #d1d5db;
+                   border-radius: 8px; overflow: hidden; background: #fff;
+                   transition: border-color .15s; }}
+    .input-wrap:focus-within {{ border-color: #4a154b; }}
+    .prefix {{ padding: 0 10px; color: #9ca3af; font-size: 0.875rem;
+               border-right: 1.5px solid #d1d5db; background: #f9fafb;
+               height: 44px; display: flex; align-items: center; white-space: nowrap; }}
+    input {{ border: none; outline: none; padding: 0 12px; height: 44px;
+             font-size: 0.875rem; flex: 1; min-width: 0; }}
+    .suffix {{ padding: 0 10px; color: #9ca3af; font-size: 0.875rem;
+               border-left: 1.5px solid #d1d5db; background: #f9fafb;
+               height: 44px; display: flex; align-items: center; white-space: nowrap; }}
+    .hint {{ font-size: 0.75rem; color: #9ca3af; margin-top: 6px; }}
     .btn {{ display: block; width: 100%; margin-top: 24px; padding: 12px;
             background: #4a154b; color: #fff; border: none; border-radius: 8px;
             font-size: 0.9rem; font-weight: 600; cursor: pointer;
@@ -67,9 +69,6 @@ _INSTALL_PAGE = """<!DOCTYPE html>
                    font-size: 0.85rem; font-weight: 600; cursor: pointer;
                    transition: background .15s; text-align: center; text-decoration: none; }}
     .btn-direct:hover {{ background: #f9f0fa; }}
-    .error {{ background: #fef2f2; border: 1px solid #fecaca; color: #dc2626;
-              border-radius: 6px; padding: 10px 14px; font-size: 0.8rem;
-              margin-bottom: 16px; display: {error_display}; }}
   </style>
 </head>
 <body>
@@ -83,43 +82,33 @@ _INSTALL_PAGE = """<!DOCTYPE html>
   </div>
 
   <h1>Slack 워크스페이스에 앱 설치</h1>
-  <p>설치할 워크스페이스의 Team ID를 입력하면 여러 워크스페이스에 로그인된 경우에도 정확히 선택됩니다.</p>
-
-  <div class="error">{error_msg}</div>
+  <p>설치할 Slack 워크스페이스 주소를 입력하세요.<br>
+     여러 워크스페이스에 로그인된 경우 올바른 워크스페이스가 자동 선택됩니다.</p>
 
   <form onsubmit="return handleSubmit(event)">
-    <label for="team_id">Slack Team ID</label>
-    <input id="team_id" type="text" placeholder="T01234ABCDE"
-           autocomplete="off" spellcheck="false" value="{team_id_value}">
-    <p class="hint">T로 시작하는 고유 ID입니다. 아래 방법으로 확인하세요.</p>
-
-    <div class="how-to">
-      <p>Team ID 확인 방법</p>
-      <ol>
-        <li>브라우저에서 Slack 열기 (<code>app.slack.com</code>)</li>
-        <li>설치할 워크스페이스 선택</li>
-        <li>주소창 URL에서 <code>/client/<strong>T01234ABCDE</strong>/...</code> 부분 복사</li>
-      </ol>
+    <label for="workspace">워크스페이스 URL</label>
+    <div class="input-wrap">
+      <span class="prefix">https://</span>
+      <input id="workspace" type="text" placeholder="mycompany"
+             autocomplete="off" spellcheck="false">
+      <span class="suffix">.slack.com</span>
     </div>
-
+    <p class="hint">예: mycompany.slack.com → <strong>mycompany</strong> 입력</p>
     <button type="submit" class="btn">설치하기</button>
   </form>
 
   <div class="divider">또는</div>
   <a href="#" class="btn-direct" onclick="return directInstall(event)">
-    Team ID 없이 설치 (워크스페이스 직접 선택)
+    워크스페이스 URL 없이 설치
   </a>
 </div>
 
 <script>
 function handleSubmit(e) {{
   e.preventDefault();
-  const val = document.getElementById('team_id').value.trim().toUpperCase();
-  if (!val) {{ document.getElementById('team_id').focus(); return false; }}
-  if (!val.startsWith('T')) {{
-    alert('Team ID는 T로 시작해야 합니다. (예: T01234ABCDE)');
-    return false;
-  }}
+  const val = document.getElementById('workspace').value.trim()
+    .replace(/\\.slack\\.com.*$/, '').replace(/^https?:\\/\\//, '').trim();
+  if (!val) {{ document.getElementById('workspace').focus(); return false; }}
   window.location.href = '?team=' + encodeURIComponent(val);
   return false;
 }}
@@ -135,10 +124,9 @@ function directInstall(e) {{
 
 @app.get("/slack/install/")
 def slack_install(team: str = None):
-    """Slack OAuth 설치 — team 미지정 시 Team ID 입력 페이지 표시"""
+    """Slack OAuth 설치 — team 미지정 시 워크스페이스 입력 페이지 표시"""
     if team is None:
-        html = _INSTALL_PAGE.format(error_display="none", error_msg="", team_id_value="")
-        return HTMLResponse(html)
+        return HTMLResponse(_INSTALL_PAGE)
 
     scopes = "chat:write,channels:read"
     url = (
