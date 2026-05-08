@@ -7,6 +7,7 @@ services:
       POSTGRES_USER: ${DB_USER:-patchuser}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-patchpass}
       PGDATA: /var/lib/postgresql/18/docker
+      TZ: Asia/Seoul
     volumes:
       - postgres_data:/var/lib/postgresql
     ports:
@@ -24,6 +25,8 @@ services:
     ports:
       - "8000:8000"
     env_file: .env
+    environment:
+      TZ: Asia/Seoul
     volumes:
       - notion_md_data:/app/notion_md
       - patchnote_files:/app/media/patchnotes
@@ -37,6 +40,8 @@ services:
     build: ./backend
     command: sh -c "python manage.py qcluster"
     env_file: .env
+    environment:
+      TZ: Asia/Seoul
     volumes:
       - notion_md_data:/app/notion_md
       - patchnote_files:/app/media/patchnotes
@@ -52,6 +57,8 @@ services:
     ports:
       - "8001:8001"
     env_file: .env
+    environment:
+      TZ: Asia/Seoul
     depends_on:
       db:
         condition: service_healthy
