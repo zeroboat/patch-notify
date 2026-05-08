@@ -15,6 +15,7 @@ slack_workspace = Table(
     Column('team_name', String),
     Column('bot_token', String),
     Column('status', String),                                    # pending / approved / rejected
+    Column('is_internal', Boolean, default=False),
     Column('customer_id', Integer, ForeignKey('customer_customer.id'), nullable=True),
     Column('created_at', DateTime(timezone=True)),
     Column('updated_at', DateTime(timezone=True)),
@@ -37,6 +38,7 @@ solution = Table(
     'product_solution', metadata,
     Column('id', Integer, primary_key=True),
     Column('name', String),
+    Column('order', Integer),
 )
 
 product = Table(
@@ -45,6 +47,7 @@ product = Table(
     Column('solution_id', Integer, ForeignKey('product_solution.id')),
     Column('platform', String),
     Column('category', String),
+    Column('order', Integer),
 )
 
 patchnote = Table(
