@@ -174,6 +174,9 @@ def notion_push(request):
 
     try:
         result = push_patch_note_to_notion(patch_note, is_new=is_new)
+        from django.utils import timezone
+        patch_note.notion_pushed_at = timezone.now()
+        patch_note.save(update_fields=['notion_pushed_at'])
         en_status = result.get('en_status', 'skipped')
         en_reason = result.get('en_reason', '')
         msg = f'v{patch_note.version} Notion push 완료 (KO: ✅'

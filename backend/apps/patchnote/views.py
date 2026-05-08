@@ -240,14 +240,22 @@ def _send_slack_notifications(patch_note):
         logger.warning(f'Slack 알림 처리 실패: {e}')
 
 
-def _push_to_notion_safe(patch_note, is_new=True):
-    """Notion push를 시도하되, 실패해도 DB 저장에는 영향 없게 처리"""
+def _push_to_notion_safe(patch_note, is_new=None):
+    """Notion push를 시도하되, 실패해도 DB 저장에는 영향 없게 처리.
+
+    is_new=None이면 notion_pushed_at 유무로 자동 판단:
+      - 이미 push된 적 있으면 Update(False), 없으면 Insert(True)
+    """
     from apps.config.models import SiteConfig
     if not SiteConfig.get().notion_enabled:
         return
+    if is_new is None:
+        is_new = patch_note.notion_pushed_at is None
     try:
         from apps.notion.services import push_patch_note_to_notion
         push_patch_note_to_notion(patch_note, is_new=is_new)
+        patch_note.notion_pushed_at = timezone.now()
+        patch_note.save(update_fields=['notion_pushed_at'])
     except Exception as e:
         logger.warning(f'Notion push 실패 (v{patch_note.version}): {e}')
 
