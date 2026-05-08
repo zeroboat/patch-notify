@@ -78,7 +78,7 @@ def get_customer_solutions(db: Session, customer_id: int):
     return db.execute(
         select(sol_table).join(
             cs_table, cs_table.c.solution_id == sol_table.c.id
-        ).where(cs_table.c.customer_id == customer_id).order_by(sol_table.c.name)
+        ).where(cs_table.c.customer_id == customer_id).order_by(sol_table.c.order, sol_table.c.id)
     ).fetchall()
 
 
@@ -130,7 +130,7 @@ def build_home_tab(db: Session, customer_id: int, customer_name: str) -> list:
 
     for sol in solutions:
         products = db.execute(
-            select(product_table).where(product_table.c.solution_id == sol.id)
+            select(product_table).where(product_table.c.solution_id == sol.id).order_by(product_table.c.order, product_table.c.platform, product_table.c.category)
         ).fetchall()
 
         email_active = sum(
@@ -183,6 +183,7 @@ def build_subscription_modal(db: Session, customer_id: int, solution_id: int, so
     """솔루션 단위 구독 설정 모달 — 제품 선택 + 공통 설정"""
     products = db.execute(
         select(product_table).where(product_table.c.solution_id == solution_id)
+        .order_by(product_table.c.order, product_table.c.platform, product_table.c.category)
     ).fetchall()
 
     if not products:
@@ -294,6 +295,7 @@ def build_product_select_modal(db: Session, solution_id: int, solution_name: str
     """패치노트 조회를 위한 제품 선택 모달"""
     products = db.execute(
         select(product_table).where(product_table.c.solution_id == solution_id)
+        .order_by(product_table.c.order, product_table.c.platform, product_table.c.category)
     ).fetchall()
 
     if not products:

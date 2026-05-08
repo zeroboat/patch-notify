@@ -38,6 +38,7 @@ solution = Table(
     'product_solution', metadata,
     Column('id', Integer, primary_key=True),
     Column('name', String),
+    Column('order', Integer),
 )
 
 product = Table(
@@ -46,6 +47,7 @@ product = Table(
     Column('solution_id', Integer, ForeignKey('product_solution.id')),
     Column('platform', String),
     Column('category', String),
+    Column('order', Integer),
 )
 
 patchnote = Table(
