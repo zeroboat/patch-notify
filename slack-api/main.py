@@ -23,52 +23,53 @@ app = FastAPI(title="Patch Notify — Slack API", redirect_slashes=False)
 handler = SlackRequestHandler(bolt_app)
 
 
-_INSTALL_PAGE = """<!DOCTYPE html>
+_INSTALL_PAGE = """\
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slack 앱 설치 — Patch Notify</title>
   <style>
-    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #f4f5f7; display: flex; align-items: center;
-            justify-content: center; min-height: 100vh; padding: 20px; }}
-    .card {{ background: #fff; border-radius: 12px; padding: 40px 36px;
-             max-width: 440px; width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,.08); }}
-    .logo {{ display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }}
-    .logo svg {{ width: 32px; height: 32px; }}
-    .logo span {{ font-size: 1.2rem; font-weight: 700; color: #1a1a2e; }}
-    h1 {{ font-size: 1.1rem; font-weight: 600; color: #1a1a2e; margin-bottom: 8px; }}
-    p {{ font-size: 0.875rem; color: #6b7280; margin-bottom: 24px; line-height: 1.6; }}
-    label {{ display: block; font-size: 0.8rem; font-weight: 600;
-             color: #374151; margin-bottom: 6px; }}
-    .input-wrap {{ display: flex; align-items: center; border: 1.5px solid #d1d5db;
-                   border-radius: 8px; overflow: hidden; background: #fff;
-                   transition: border-color .15s; }}
-    .input-wrap:focus-within {{ border-color: #4a154b; }}
-    .prefix {{ padding: 0 10px; color: #9ca3af; font-size: 0.875rem;
-               border-right: 1.5px solid #d1d5db; background: #f9fafb;
-               height: 44px; display: flex; align-items: center; white-space: nowrap; }}
-    input {{ border: none; outline: none; padding: 0 12px; height: 44px;
-             font-size: 0.875rem; flex: 1; min-width: 0; }}
-    .suffix {{ padding: 0 10px; color: #9ca3af; font-size: 0.875rem;
-               border-left: 1.5px solid #d1d5db; background: #f9fafb;
-               height: 44px; display: flex; align-items: center; white-space: nowrap; }}
-    .hint {{ font-size: 0.75rem; color: #9ca3af; margin-top: 6px; }}
-    .btn {{ display: block; width: 100%; margin-top: 24px; padding: 12px;
-            background: #4a154b; color: #fff; border: none; border-radius: 8px;
-            font-size: 0.9rem; font-weight: 600; cursor: pointer;
-            transition: background .15s; }}
-    .btn:hover {{ background: #611f69; }}
-    .divider {{ display: flex; align-items: center; gap: 12px;
-                margin: 20px 0; color: #d1d5db; font-size: 0.75rem; }}
-    .divider::before, .divider::after {{ content: ''; flex: 1; border-top: 1px solid #e5e7eb; }}
-    .btn-direct {{ display: block; width: 100%; padding: 11px; background: #fff;
-                   color: #4a154b; border: 1.5px solid #4a154b; border-radius: 8px;
-                   font-size: 0.85rem; font-weight: 600; cursor: pointer;
-                   transition: background .15s; text-align: center; text-decoration: none; }}
-    .btn-direct:hover {{ background: #f9f0fa; }}
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           background: #f4f5f7; display: flex; align-items: center;
+           justify-content: center; min-height: 100vh; padding: 20px; }
+    .card { background: #fff; border-radius: 12px; padding: 40px 36px;
+            max-width: 440px; width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,.08); }
+    .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+    .logo svg { width: 32px; height: 32px; }
+    .logo span { font-size: 1.2rem; font-weight: 700; color: #1a1a2e; }
+    h1 { font-size: 1.1rem; font-weight: 600; color: #1a1a2e; margin-bottom: 8px; }
+    p { font-size: 0.875rem; color: #6b7280; margin-bottom: 24px; line-height: 1.6; }
+    label { display: block; font-size: 0.8rem; font-weight: 600;
+            color: #374151; margin-bottom: 6px; }
+    .input-wrap { display: flex; align-items: center; border: 1.5px solid #d1d5db;
+                  border-radius: 8px; overflow: hidden; background: #fff;
+                  transition: border-color .15s; }
+    .input-wrap:focus-within { border-color: #4a154b; }
+    .prefix { padding: 0 10px; color: #9ca3af; font-size: 0.875rem;
+              border-right: 1.5px solid #d1d5db; background: #f9fafb;
+              height: 44px; display: flex; align-items: center; white-space: nowrap; }
+    input { border: none; outline: none; padding: 0 12px; height: 44px;
+            font-size: 0.875rem; flex: 1; min-width: 0; }
+    .suffix { padding: 0 10px; color: #9ca3af; font-size: 0.875rem;
+              border-left: 1.5px solid #d1d5db; background: #f9fafb;
+              height: 44px; display: flex; align-items: center; white-space: nowrap; }
+    .hint { font-size: 0.75rem; color: #9ca3af; margin-top: 6px; }
+    .btn { display: block; width: 100%; margin-top: 24px; padding: 12px;
+           background: #4a154b; color: #fff; border: none; border-radius: 8px;
+           font-size: 0.9rem; font-weight: 600; cursor: pointer;
+           transition: background .15s; }
+    .btn:hover { background: #611f69; }
+    .divider { display: flex; align-items: center; gap: 12px;
+               margin: 20px 0; color: #d1d5db; font-size: 0.75rem; }
+    .divider::before, .divider::after { content: ''; flex: 1; border-top: 1px solid #e5e7eb; }
+    .btn-direct { display: block; width: 100%; padding: 11px; background: #fff;
+                  color: #4a154b; border: 1.5px solid #4a154b; border-radius: 8px;
+                  font-size: 0.85rem; font-weight: 600; cursor: pointer;
+                  transition: background .15s; text-align: center; text-decoration: none; }
+    .btn-direct:hover { background: #f9f0fa; }
   </style>
 </head>
 <body>
@@ -104,19 +105,19 @@ _INSTALL_PAGE = """<!DOCTYPE html>
 </div>
 
 <script>
-function handleSubmit(e) {{
+function handleSubmit(e) {
   e.preventDefault();
   const val = document.getElementById('workspace').value.trim()
     .replace(/\\.slack\\.com.*$/, '').replace(/^https?:\\/\\//, '').trim();
-  if (!val) {{ document.getElementById('workspace').focus(); return false; }}
+  if (!val) { document.getElementById('workspace').focus(); return false; }
   window.location.href = '?team=' + encodeURIComponent(val);
   return false;
-}}
-function directInstall(e) {{
+}
+function directInstall(e) {
   e.preventDefault();
   window.location.href = '?team=';
   return false;
-}}
+}
 </script>
 </body>
 </html>"""
