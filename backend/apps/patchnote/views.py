@@ -10,8 +10,14 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST, require_GET
 from django.views.generic import TemplateView
 
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+
 from web_project import TemplateLayout
 from apps.base.mixins import role_required, get_user_role
+from apps.customer.models import CustomerEmail
+from apps.logs.models import DispatchLog
 from apps.product.models import Product
 from .models import PatchNote, Feature, Improvement, BugFix, Remark, Internal, PatchNoteFile
 from .nextcloud import upload_to_nextcloud, create_share_link, delete_from_nextcloud
@@ -227,6 +233,7 @@ def _send_slack_notifications(patch_note):
 
             fallback_text = f"{product_label} v{patch_note.version} 패치노트가 발행되었습니다."
 
+            sent_at = timezone.now()
             try:
                 client = WebClient(token=workspace.bot_token)
                 client.chat_postMessage(
@@ -234,10 +241,161 @@ def _send_slack_notifications(patch_note):
                     text=fallback_text,
                     blocks=blocks,
                 )
+                _log_dispatch(
+                    channel=DispatchLog.CHANNEL_SLACK,
+                    customer=sub.customer,
+                    solution=patch_note.product.solution,
+                    recipient=sub.slack_channel,
+                    subject=fallback_text,
+                    status=DispatchLog.STATUS_SUCCESS,
+                    sent_at=sent_at,
+                )
             except Exception as e:
                 logger.warning(f'Slack 알림 실패 (customer={sub.customer.name}): {e}')
+                _log_dispatch(
+                    channel=DispatchLog.CHANNEL_SLACK,
+                    customer=sub.customer,
+                    solution=patch_note.product.solution,
+                    recipient=sub.slack_channel,
+                    subject=fallback_text,
+                    status=DispatchLog.STATUS_FAILED,
+                    error_message=str(e)[:1000],
+                    sent_at=sent_at,
+                )
     except Exception as e:
         logger.warning(f'Slack 알림 처리 실패: {e}')
+
+
+def _log_dispatch(*, channel, customer, solution, recipient, subject,
+                  status, error_message='', sent_at=None):
+    """발송 결과를 DispatchLog에 기록. 실패해도 호출부 흐름에 영향 없음."""
+    try:
+        DispatchLog.objects.create(
+            log_type=DispatchLog.TYPE_SUBSCRIPTION,
+            channel=channel,
+            customer=customer,
+            solution=solution,
+            recipient=recipient,
+            subject=subject,
+            status=status,
+            error_message=error_message,
+            sent_at=sent_at or timezone.now(),
+        )
+    except Exception as e:
+        logger.warning(f'DispatchLog 기록 실패: {e}')
+
+
+def _send_email_notifications(patch_note):
+    """발행 시 활성 이메일 구독자에게 패치노트 발송 (고객사용)"""
+    try:
+        from apps.config.models import SiteConfig
+        from apps.subscriber.models import Subscription
+
+        cfg = SiteConfig.get()
+        if not cfg.gmail_user or not cfg.gmail_app_password:
+            logger.warning('Gmail 설정 누락 — 이메일 발송 건너뜀')
+            return
+
+        subs = (
+            Subscription.objects
+            .filter(
+                product=patch_note.product,
+                channel=Subscription.CHANNEL_EMAIL,
+                is_active=True,
+            )
+            .select_related('customer')
+        )
+
+        if not subs.exists():
+            return
+
+        solution_name = patch_note.product.solution.name
+        platform = patch_note.product.get_platform_display()
+        category = patch_note.product.get_category_display()
+        product_label = f"{solution_name} {platform} {category}"
+        subject_str = f"[Patch Notify] {product_label} v{patch_note.version} 패치노트"
+
+        for sub in subs:
+            emails = list(
+                CustomerEmail.objects
+                .filter(customer=sub.customer)
+                .values_list('email', flat=True)
+            )
+            if not emails:
+                continue
+
+            # max_items 건 내 최근 발행 패치노트
+            recent_notes = (
+                PatchNote.objects
+                .filter(product=patch_note.product, is_published=True)
+                .prefetch_related('features', 'improvements', 'bugfixes', 'remarks')
+                .order_by('-release_date', '-version')
+                [:sub.max_items]
+            )
+
+            notes_data = [
+                {
+                    'note': n,
+                    'is_new': n.id == patch_note.id,
+                    'features':     list(n.features.filter(parent__isnull=True).order_by('order', 'id')),
+                    'improvements': list(n.improvements.filter(parent__isnull=True).order_by('order', 'id')),
+                    'bugfixes':     list(n.bugfixes.filter(parent__isnull=True).order_by('order', 'id')),
+                    'remarks':      list(n.remarks.filter(parent__isnull=True).order_by('order', 'id')),
+                }
+                for n in recent_notes
+            ]
+            html_body = render_to_string(
+                'patchnote/email/patchnote_notification_email.html',
+                {
+                    'product_label': product_label,
+                    'notes_data': notes_data,
+                },
+            )
+            text_body = strip_tags(html_body)
+
+            sent_at = timezone.now()
+            try:
+                from django.core.mail import get_connection
+                connection = get_connection(
+                    backend='django.core.mail.backends.smtp.EmailBackend',
+                    host='smtp.gmail.com',
+                    port=587,
+                    use_tls=True,
+                    username=cfg.gmail_user,
+                    password=cfg.gmail_app_password,
+                )
+                msg = EmailMultiAlternatives(
+                    subject=subject_str,
+                    body=text_body,
+                    from_email=cfg.gmail_user,
+                    to=emails,
+                    connection=connection,
+                )
+                msg.attach_alternative(html_body, 'text/html')
+                msg.send(fail_silently=False)
+                _log_dispatch(
+                    channel=DispatchLog.CHANNEL_EMAIL,
+                    customer=sub.customer,
+                    solution=patch_note.product.solution,
+                    recipient=', '.join(emails),
+                    subject=subject_str,
+                    status=DispatchLog.STATUS_SUCCESS,
+                    sent_at=sent_at,
+                )
+            except Exception as e:
+                logger.warning(f'이메일 발송 실패 (customer={sub.customer.name}): {e}')
+                _log_dispatch(
+                    channel=DispatchLog.CHANNEL_EMAIL,
+                    customer=sub.customer,
+                    solution=patch_note.product.solution,
+                    recipient=', '.join(emails),
+                    subject=subject_str,
+                    status=DispatchLog.STATUS_FAILED,
+                    error_message=str(e)[:1000],
+                    sent_at=sent_at,
+                )
+    except Exception as e:
+        logger.warning(f'이메일 발송 처리 실패: {e}')
 
 
 def _push_to_notion_safe(patch_note, is_new=None):
@@ -290,7 +448,7 @@ def dispatch_external_notifications(patch_note_id: int):
 
     try:
         _send_slack_notifications(note)
-        # TODO: Gmail 발송 함수가 별도 존재한다면 여기서 호출
+        _send_email_notifications(note)
         note.external_send_status = PatchNote.EXTERNAL_SEND_SENT
         note.external_send_error = ''
         note.save(update_fields=['external_send_status', 'external_send_error', 'updated_at'])
@@ -587,7 +745,8 @@ def patch_note_publish(request):
     note.save(update_fields=['is_published', 'updated_at'])
 
     # 즉시 처리: Notion 등록, 사내 Slack 알림 (Internal 항목 포함)
-    _push_to_notion_safe(note, is_new=True)
+    # notion_pushed_at 유무로 Insert/Update 자동 판단 (수동 push 후 발행 시 중복 방지)
+    _push_to_notion_safe(note)
     _send_internal_slack_notification(note)
 
     # 외부 발송 (고객사 Slack/Gmail) — SiteConfig 의 지연 시간만큼 미뤄서 Q2 task로 처리
