@@ -83,18 +83,19 @@ _INSTALL_PAGE = """\
   </div>
 
   <h1>Slack 워크스페이스에 앱 설치</h1>
-  <p>설치할 Slack 워크스페이스 주소를 입력하세요.<br>
+  <p>설치할 워크스페이스의 Team ID를 입력하세요.<br>
      여러 워크스페이스에 로그인된 경우 올바른 워크스페이스가 자동 선택됩니다.</p>
 
   <form onsubmit="return handleSubmit(event)">
-    <label for="workspace">워크스페이스 URL</label>
+    <label for="workspace">Team ID</label>
     <div class="input-wrap">
-      <span class="prefix">https://</span>
-      <input id="workspace" type="text" placeholder="mycompany"
-             autocomplete="off" spellcheck="false">
-      <span class="suffix">.slack.com</span>
+      <input id="workspace" type="text" placeholder="T01234ABCDE"
+             autocomplete="off" spellcheck="false" style="font-family:monospace;">
     </div>
-    <p class="hint">예: mycompany.slack.com → <strong>mycompany</strong> 입력</p>
+    <p class="hint">
+      확인 방법: 브라우저에서 Slack 접속 후 주소창
+      <strong>app.slack.com/client/<u>T01234ABCDE</u>/...</strong> 에서 복사
+    </p>
     <button type="submit" class="btn">설치하기</button>
   </form>
 
@@ -107,9 +108,12 @@ _INSTALL_PAGE = """\
 <script>
 function handleSubmit(e) {
   e.preventDefault();
-  const val = document.getElementById('workspace').value.trim()
-    .replace(/\\.slack\\.com.*$/, '').replace(/^https?:\\/\\//, '').trim();
+  const val = document.getElementById('workspace').value.trim().toUpperCase();
   if (!val) { document.getElementById('workspace').focus(); return false; }
+  if (!val.match(/^T[A-Z0-9]{8,}$/)) {
+    alert('올바른 Team ID를 입력하세요.\n예: T01234ABCDE (T로 시작하는 영숫자)');
+    return false;
+  }
   window.location.href = '?team=' + encodeURIComponent(val);
   return false;
 }
