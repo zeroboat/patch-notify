@@ -11,7 +11,7 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', 'dev.env')
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from slack_bolt.adapter.fastapi import SlackRequestHandler
 from sqlalchemy import select
 
@@ -23,18 +23,135 @@ app = FastAPI(title="Patch Notify — Slack API", redirect_slashes=False)
 handler = SlackRequestHandler(bolt_app)
 
 
+_INSTALL_PAGE = """<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slack 앱 설치 — Patch Notify</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f4f5f7; display: flex; align-items: center;
+            justify-content: center; min-height: 100vh; padding: 20px; }}
+    .card {{ background: #fff; border-radius: 12px; padding: 40px 36px;
+             max-width: 440px; width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,.08); }}
+    .logo {{ display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }}
+    .logo svg {{ width: 32px; height: 32px; }}
+    .logo span {{ font-size: 1.2rem; font-weight: 700; color: #1a1a2e; }}
+    h1 {{ font-size: 1.1rem; font-weight: 600; color: #1a1a2e; margin-bottom: 8px; }}
+    p {{ font-size: 0.875rem; color: #6b7280; margin-bottom: 24px; line-height: 1.6; }}
+    label {{ display: block; font-size: 0.8rem; font-weight: 600;
+             color: #374151; margin-bottom: 6px; }}
+    .input-wrap {{ display: flex; align-items: center; border: 1.5px solid #d1d5db;
+                   border-radius: 8px; overflow: hidden; background: #fff;
+                   transition: border-color .15s; }}
+    .input-wrap:focus-within {{ border-color: #4a154b; }}
+    .prefix {{ padding: 0 10px; color: #9ca3af; font-size: 0.875rem;
+               border-right: 1.5px solid #d1d5db; background: #f9fafb;
+               height: 44px; display: flex; align-items: center; white-space: nowrap; }}
+    input {{ border: none; outline: none; padding: 0 12px; height: 44px;
+             font-size: 0.875rem; flex: 1; min-width: 0; }}
+    .suffix {{ padding: 0 10px; color: #9ca3af; font-size: 0.875rem;
+               border-left: 1.5px solid #d1d5db; background: #f9fafb;
+               height: 44px; display: flex; align-items: center; white-space: nowrap; }}
+    .hint {{ font-size: 0.75rem; color: #9ca3af; margin-top: 6px; }}
+    .btn {{ display: block; width: 100%; margin-top: 24px; padding: 12px;
+            background: #4a154b; color: #fff; border: none; border-radius: 8px;
+            font-size: 0.9rem; font-weight: 600; cursor: pointer;
+            transition: background .15s; }}
+    .btn:hover {{ background: #611f69; }}
+    .divider {{ display: flex; align-items: center; gap: 12px;
+                margin: 20px 0; color: #d1d5db; font-size: 0.75rem; }}
+    .divider::before, .divider::after {{ content: ''; flex: 1;
+                                         border-top: 1px solid #e5e7eb; }}
+    .btn-direct {{ display: block; width: 100%; padding: 11px;
+                   background: #fff; color: #4a154b; border: 1.5px solid #4a154b;
+                   border-radius: 8px; font-size: 0.85rem; font-weight: 600;
+                   cursor: pointer; transition: background .15s; text-align: center;
+                   text-decoration: none; }}
+    .btn-direct:hover {{ background: #f9f0fa; }}
+    .error {{ background: #fef2f2; border: 1px solid #fecaca; color: #dc2626;
+              border-radius: 6px; padding: 10px 14px; font-size: 0.8rem;
+              margin-bottom: 16px; display: {error_display}; }}
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="8" fill="#4a154b"/>
+      <path d="M8 10h16M8 16h10M8 22h12" stroke="#fff" stroke-width="2.2"
+            stroke-linecap="round"/>
+    </svg>
+    <span>Patch Notify</span>
+  </div>
+
+  <h1>Slack 워크스페이스에 앱 설치</h1>
+  <p>설치할 Slack 워크스페이스 주소를 입력하세요.<br>
+     여러 워크스페이스에 로그인된 경우 올바른 워크스페이스가 선택됩니다.</p>
+
+  <div class="error">{error_msg}</div>
+
+  <form method="get" action="" onsubmit="return handleSubmit(event)">
+    <label for="workspace">워크스페이스 URL</label>
+    <div class="input-wrap">
+      <span class="prefix">https://</span>
+      <input id="workspace" name="workspace" type="text"
+             placeholder="mycompany" autocomplete="off" spellcheck="false"
+             value="{workspace_value}">
+      <span class="suffix">.slack.com</span>
+    </div>
+    <p class="hint">예: mycompany.slack.com → <strong>mycompany</strong> 입력</p>
+    <button type="submit" class="btn">설치하기</button>
+  </form>
+
+  <div class="divider">또는</div>
+  <a href="?team=__skip__" class="btn-direct" onclick="return directInstall(event)">
+    워크스페이스 URL 없이 설치
+  </a>
+</div>
+
+<script>
+function handleSubmit(e) {{
+  e.preventDefault();
+  const val = document.getElementById('workspace').value.trim()
+    .replace(/\\.slack\\.com.*$/, '').replace(/^https?:\\/\\//, '').trim();
+  if (!val) {{ document.getElementById('workspace').focus(); return false; }}
+  window.location.href = '?team=' + encodeURIComponent(val);
+  return false;
+}}
+function directInstall(e) {{
+  e.preventDefault();
+  window.location.href = '?team=';
+  return false;
+}}
+</script>
+</body>
+</html>"""
+
+
 @app.get("/slack/install/")
-def slack_install(team: str = None):
-    """Slack OAuth 설치 시작 — Slack 인증 화면으로 리다이렉트"""
-    scopes = "chat:write,channels:read"
+def slack_install(team: str = None, workspace: str = None):
+    """Slack OAuth 설치 — team 미지정 시 워크스페이스 선택 페이지 표시"""
+    # workspace 파라미터는 form submit fallback (JS 없는 환경)
+    resolved_team = team if team is not None else workspace
+
+    if resolved_team is None:
+        # 처음 접속: 워크스페이스 입력 폼 표시
+        html = _INSTALL_PAGE.format(error_display="none", error_msg="", workspace_value="")
+        return HTMLResponse(html)
+
+    # team="" 이면 워크스페이스 미지정으로 바로 OAuth
+    scopes = "chat:write,channels:read,conversations.connect:read"
     url = (
         "https://slack.com/oauth/v2/authorize"
         f"?client_id={os.environ['SLACK_CLIENT_ID']}"
         f"&scope={scopes}"
         f"&redirect_uri={os.environ['SLACK_REDIRECT_URI']}"
     )
-    if team:
-        url += f"&team={team}"
+    if resolved_team:
+        url += f"&team={resolved_team}"
     return RedirectResponse(url)
 
 
