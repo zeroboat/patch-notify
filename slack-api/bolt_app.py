@@ -39,6 +39,7 @@ class SAInstallationStore(InstallationStore):
                     team_name=installation.team_name or '',
                     bot_token=installation.bot_token,
                     status='pending',
+                    is_internal=False,
                     created_at=now,
                     updated_at=now,
                 ))
