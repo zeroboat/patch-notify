@@ -15,6 +15,7 @@ slack_workspace = Table(
     Column('team_name', String),
     Column('bot_token', String),
     Column('status', String),                                    # pending / approved / rejected
+    Column('is_internal', Boolean, default=False),
     Column('customer_id', Integer, ForeignKey('customer_customer.id'), nullable=True),
     Column('created_at', DateTime(timezone=True)),
     Column('updated_at', DateTime(timezone=True)),
