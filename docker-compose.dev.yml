@@ -7,6 +7,7 @@ services:
       POSTGRES_USER: ${DB_USER:-patchuser}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-patchpass}
       PGDATA: /var/lib/postgresql/18/docker
+      TZ: Asia/Seoul
     volumes:
       - postgres_data_dev:/var/lib/postgresql
     ports:
@@ -30,6 +31,7 @@ services:
       - DEBUG=True
       - DB_HOST=db
       - DB_PORT=5432
+      - TZ=Asia/Seoul
     volumes:
       - ./backend:/app
       - notion_md_data_dev:/app/notion_md
@@ -49,6 +51,7 @@ services:
       - DEBUG=True
       - DB_HOST=db
       - DB_PORT=5432
+      - TZ=Asia/Seoul
     volumes:
       - ./backend:/app
     depends_on:
@@ -67,6 +70,7 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=5432
+      - TZ=Asia/Seoul
     volumes:
       - ./slack-api:/app
     depends_on:

@@ -10,8 +10,14 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST, require_GET
 from django.views.generic import TemplateView
 
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+
 from web_project import TemplateLayout
 from apps.base.mixins import role_required, get_user_role
+from apps.customer.models import CustomerEmail
+from apps.logs.models import DispatchLog
 from apps.product.models import Product
 from .models import PatchNote, Feature, Improvement, BugFix, Remark, Internal, PatchNoteFile
 from .nextcloud import upload_to_nextcloud, create_share_link, delete_from_nextcloud
@@ -53,20 +59,36 @@ def _html_to_plain(html: str) -> str:
     return text.lstrip('\n').rstrip()
 
 
-def _build_patchnote_slack_blocks(patch_note, *, include_internal: bool = False) -> list:
-    """단일 패치노트를 Slack Block Kit 블록으로 변환
+def _html_to_slack_mrkdwn(html: str) -> str:
+    """HTML → Slack mrkdwn。<a> 태그를 <url|text> 형식으로 보존한 뒤 _html_to_plain 적용."""
+    if not html:
+        return ''
+    links: dict[str, str] = {}
 
-    include_internal=True 일 경우 [Internal] 섹션을 본문에 추가 (사내 발송 전용).
-    """
+    def _replace_link(m):
+        key = f'\x00LINK{len(links)}\x00'
+        link_text = strip_tags(m.group(2)).strip() or m.group(1)
+        links[key] = f'<{m.group(1)}|{link_text}>'
+        return key
+
+    html = re.sub(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', _replace_link, html, flags=re.DOTALL)
+    text = _html_to_plain(html)
+    for key, val in links.items():
+        text = text.replace(key, val)
+    return text
+
+
+def _build_patchnote_slack_blocks(patch_note) -> list:
+    """단일 패치노트를 Slack Block Kit 블록으로 변환 (릴리즈 내용만, 고객사/사내 공통)"""
     def _section_text(manager):
         obj = manager.filter(parent__isnull=True).order_by('order', 'id').first()
         if not obj or not obj.content:
             return '  - N/A'
         return _html_to_plain(obj.content) or '  - N/A'
 
-    features_text   = _section_text(patch_note.features)
+    features_text     = _section_text(patch_note.features)
     improvements_text = _section_text(patch_note.improvements)
-    bugfixes_text   = _section_text(patch_note.bugfixes)
+    bugfixes_text     = _section_text(patch_note.bugfixes)
 
     body = (
         f"[Patch Note]\n"
@@ -75,20 +97,7 @@ def _build_patchnote_slack_blocks(patch_note, *, include_internal: bool = False)
         f"버그 수정\n{bugfixes_text}"
     )
 
-    remarks_obj = patch_note.remarks.filter(parent__isnull=True).order_by('order', 'id').first()
-    if remarks_obj and remarks_obj.content:
-        remarks_text = _html_to_plain(remarks_obj.content)
-        if remarks_text:
-            body += f"\n\n[Remarks]\n{remarks_text}"
-
-    if include_internal:
-        internal_obj = patch_note.internals.filter(parent__isnull=True).order_by('order', 'id').first()
-        if internal_obj and internal_obj.content:
-            internal_text = _html_to_plain(internal_obj.content)
-            if internal_text:
-                body += f"\n\n[Internal · 사내 공유 전용]\n{internal_text}"
-
-    return [
+    blocks = [
         {
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"*Version: {patch_note.version}*  ·  {patch_note.release_date}"},
@@ -97,12 +106,48 @@ def _build_patchnote_slack_blocks(patch_note, *, include_internal: bool = False)
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"```{body}```"},
         },
+    ]
+
+    remarks_obj = patch_note.remarks.filter(parent__isnull=True).order_by('order', 'id').first()
+    if remarks_obj and remarks_obj.content:
+        remarks_text = _html_to_slack_mrkdwn(remarks_obj.content)
+        if remarks_text:
+            blocks.append({
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": "*Remarks*"}],
+            })
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": remarks_text},
+            })
+
+    blocks.append({"type": "divider"})
+    return blocks
+
+
+def _build_internal_slack_blocks(patch_note) -> list:
+    """Internal 섹션 블록 — codeblock 없이 mrkdwn으로 렌더링, 링크 클릭 가능."""
+    internal_obj = patch_note.internals.filter(parent__isnull=True).order_by('order', 'id').first()
+    if not internal_obj or not internal_obj.content:
+        return []
+    internal_text = _html_to_slack_mrkdwn(internal_obj.content)
+    if not internal_text:
+        return []
+    return [
+        {
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": "*Internal · 사내 공유 전용*"}],
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": internal_text},
+        },
         {"type": "divider"},
     ]
 
 
 def _send_internal_slack_notification(patch_note):
-    """발행 시 사내 구독 채널에 패치노트 전송 (Internal 항목 포함, 즉시)"""
+    """발행 시 사내 구독 채널에 패치노트 전송 (릴리즈 내용 + Internal 블록, 즉시)"""
     try:
         from apps.config.models import SiteConfig
         from apps.slack_app.models import SlackWorkspace
@@ -140,27 +185,22 @@ def _send_internal_slack_notification(patch_note):
         category = patch_note.product.get_category_display()
         product_label = f"{solution_name} {platform} {category}"
 
+        # internals 접근을 위해 prefetch된 인스턴스를 별도로 조회
+        note = (
+            PatchNote.objects
+            .prefetch_related('features', 'improvements', 'bugfixes', 'remarks', 'internals')
+            .get(id=patch_note.id)
+        )
+
+        blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} Release 안내]"}}]
+        blocks.extend(_build_patchnote_slack_blocks(note))
+        blocks.extend(_build_internal_slack_blocks(note))
+
+        fallback_text = f"[사내] {product_label} v{patch_note.version} 패치노트가 발행되었습니다."
+
+        client = WebClient(token=internal_workspace.bot_token)
         for sub in subs:
-            recent_notes = (
-                PatchNote.objects
-                .filter(product=patch_note.product, is_published=True)
-                .prefetch_related('features', 'improvements', 'bugfixes', 'remarks', 'internals')
-                .order_by('-release_date', '-version')
-                [:sub.max_items]
-            )
-
-            blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[INTERNAL] [{product_label} Release 안내]"}}]
-            prev_header_added = False
-            for note in recent_notes:
-                if note.id != patch_note.id and not prev_header_added:
-                    blocks.append({"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} 이전 패치노트]"}})
-                    prev_header_added = True
-                blocks.extend(_build_patchnote_slack_blocks(note, include_internal=True))
-
-            fallback_text = f"[사내] {product_label} v{patch_note.version} 패치노트가 발행되었습니다."
-
             try:
-                client = WebClient(token=internal_workspace.bot_token)
                 client.chat_postMessage(
                     channel=sub.slack_channel,
                     text=fallback_text,
@@ -199,6 +239,10 @@ def _send_slack_notifications(patch_note):
         category = patch_note.product.get_category_display()
         product_label = f"{solution_name} {platform} {category}"
 
+        fallback_text = f"{product_label} v{patch_note.version} 패치노트가 발행되었습니다."
+        blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} Release 안내]"}}]
+        blocks.extend(_build_patchnote_slack_blocks(patch_note))
+
         for sub in subs:
             workspace = SlackWorkspace.objects.filter(
                 customer=sub.customer,
@@ -208,7 +252,98 @@ def _send_slack_notifications(patch_note):
             if not workspace:
                 continue
 
-            # 구독자별 max_items건 조회
+            sent_at = timezone.now()
+            try:
+                client = WebClient(token=workspace.bot_token)
+                client.chat_postMessage(
+                    channel=sub.slack_channel,
+                    text=fallback_text,
+                    blocks=blocks,
+                )
+                _log_dispatch(
+                    channel=DispatchLog.CHANNEL_SLACK,
+                    customer=sub.customer,
+                    solution=patch_note.product.solution,
+                    recipient=sub.slack_channel,
+                    subject=fallback_text,
+                    status=DispatchLog.STATUS_SUCCESS,
+                    sent_at=sent_at,
+                )
+            except Exception as e:
+                logger.warning(f'Slack 알림 실패 (customer={sub.customer.name}): {e}')
+                _log_dispatch(
+                    channel=DispatchLog.CHANNEL_SLACK,
+                    customer=sub.customer,
+                    solution=patch_note.product.solution,
+                    recipient=sub.slack_channel,
+                    subject=fallback_text,
+                    status=DispatchLog.STATUS_FAILED,
+                    error_message=str(e)[:1000],
+                    sent_at=sent_at,
+                )
+    except Exception as e:
+        logger.warning(f'Slack 알림 처리 실패: {e}')
+
+
+def _log_dispatch(*, channel, customer, solution, recipient, subject,
+                  status, error_message='', sent_at=None):
+    """발송 결과를 DispatchLog에 기록. 실패해도 호출부 흐름에 영향 없음."""
+    try:
+        DispatchLog.objects.create(
+            log_type=DispatchLog.TYPE_SUBSCRIPTION,
+            channel=channel,
+            customer=customer,
+            solution=solution,
+            recipient=recipient,
+            subject=subject,
+            status=status,
+            error_message=error_message,
+            sent_at=sent_at or timezone.now(),
+        )
+    except Exception as e:
+        logger.warning(f'DispatchLog 기록 실패: {e}')
+
+
+def _send_email_notifications(patch_note):
+    """발행 시 활성 이메일 구독자에게 패치노트 발송 (고객사용)"""
+    try:
+        from apps.config.models import SiteConfig
+        from apps.subscriber.models import Subscription
+
+        cfg = SiteConfig.get()
+        if not cfg.gmail_user or not cfg.gmail_app_password:
+            logger.warning('Gmail 설정 누락 — 이메일 발송 건너뜀')
+            return
+
+        subs = (
+            Subscription.objects
+            .filter(
+                product=patch_note.product,
+                channel=Subscription.CHANNEL_EMAIL,
+                is_active=True,
+            )
+            .select_related('customer')
+        )
+
+        if not subs.exists():
+            return
+
+        solution_name = patch_note.product.solution.name
+        platform = patch_note.product.get_platform_display()
+        category = patch_note.product.get_category_display()
+        product_label = f"{solution_name} {platform} {category}"
+        subject_str = f"[Patch Notify] {product_label} v{patch_note.version} 패치노트"
+
+        for sub in subs:
+            emails = list(
+                CustomerEmail.objects
+                .filter(customer=sub.customer)
+                .values_list('email', flat=True)
+            )
+            if not emails:
+                continue
+
+            # max_items 건 내 최근 발행 패치노트
             recent_notes = (
                 PatchNote.objects
                 .filter(product=patch_note.product, is_published=True)
@@ -217,27 +352,69 @@ def _send_slack_notifications(patch_note):
                 [:sub.max_items]
             )
 
-            blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} Release 안내]"}}]
-            prev_header_added = False
-            for note in recent_notes:
-                if note.id != patch_note.id and not prev_header_added:
-                    blocks.append({"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} 이전 패치노트]"}})
-                    prev_header_added = True
-                blocks.extend(_build_patchnote_slack_blocks(note))
+            notes_data = [
+                {
+                    'note': n,
+                    'is_new': n.id == patch_note.id,
+                    'features':     list(n.features.filter(parent__isnull=True).order_by('order', 'id')),
+                    'improvements': list(n.improvements.filter(parent__isnull=True).order_by('order', 'id')),
+                    'bugfixes':     list(n.bugfixes.filter(parent__isnull=True).order_by('order', 'id')),
+                    'remarks':      list(n.remarks.filter(parent__isnull=True).order_by('order', 'id')),
+                }
+                for n in recent_notes
+            ]
+            html_body = render_to_string(
+                'patchnote/email/patchnote_notification_email.html',
+                {
+                    'product_label': product_label,
+                    'notes_data': notes_data,
+                },
+            )
+            text_body = strip_tags(html_body)
 
-            fallback_text = f"{product_label} v{patch_note.version} 패치노트가 발행되었습니다."
-
+            sent_at = timezone.now()
             try:
-                client = WebClient(token=workspace.bot_token)
-                client.chat_postMessage(
-                    channel=sub.slack_channel,
-                    text=fallback_text,
-                    blocks=blocks,
+                from django.core.mail import get_connection
+                connection = get_connection(
+                    backend='django.core.mail.backends.smtp.EmailBackend',
+                    host='smtp.gmail.com',
+                    port=587,
+                    use_tls=True,
+                    username=cfg.gmail_user,
+                    password=cfg.gmail_app_password,
+                )
+                msg = EmailMultiAlternatives(
+                    subject=subject_str,
+                    body=text_body,
+                    from_email=cfg.gmail_user,
+                    to=emails,
+                    connection=connection,
+                )
+                msg.attach_alternative(html_body, 'text/html')
+                msg.send(fail_silently=False)
+                _log_dispatch(
+                    channel=DispatchLog.CHANNEL_EMAIL,
+                    customer=sub.customer,
+                    solution=patch_note.product.solution,
+                    recipient=', '.join(emails),
+                    subject=subject_str,
+                    status=DispatchLog.STATUS_SUCCESS,
+                    sent_at=sent_at,
                 )
             except Exception as e:
-                logger.warning(f'Slack 알림 실패 (customer={sub.customer.name}): {e}')
+                logger.warning(f'이메일 발송 실패 (customer={sub.customer.name}): {e}')
+                _log_dispatch(
+                    channel=DispatchLog.CHANNEL_EMAIL,
+                    customer=sub.customer,
+                    solution=patch_note.product.solution,
+                    recipient=', '.join(emails),
+                    subject=subject_str,
+                    status=DispatchLog.STATUS_FAILED,
+                    error_message=str(e)[:1000],
+                    sent_at=sent_at,
+                )
     except Exception as e:
-        logger.warning(f'Slack 알림 처리 실패: {e}')
+        logger.warning(f'이메일 발송 처리 실패: {e}')
 
 
 def _push_to_notion_safe(patch_note, is_new=None):
@@ -290,7 +467,7 @@ def dispatch_external_notifications(patch_note_id: int):
 
     try:
         _send_slack_notifications(note)
-        # TODO: Gmail 발송 함수가 별도 존재한다면 여기서 호출
+        _send_email_notifications(note)
         note.external_send_status = PatchNote.EXTERNAL_SEND_SENT
         note.external_send_error = ''
         note.save(update_fields=['external_send_status', 'external_send_error', 'updated_at'])
@@ -587,7 +764,8 @@ def patch_note_publish(request):
     note.save(update_fields=['is_published', 'updated_at'])
 
     # 즉시 처리: Notion 등록, 사내 Slack 알림 (Internal 항목 포함)
-    _push_to_notion_safe(note, is_new=True)
+    # notion_pushed_at 유무로 Insert/Update 자동 판단 (수동 push 후 발행 시 중복 방지)
+    _push_to_notion_safe(note)
     _send_internal_slack_notification(note)
 
     # 외부 발송 (고객사 Slack/Gmail) — SiteConfig 의 지연 시간만큼 미뤄서 Q2 task로 처리
