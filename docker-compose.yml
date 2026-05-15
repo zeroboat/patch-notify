@@ -1,6 +1,7 @@
 services:
   db:
     container_name: patch-db
+    restart: unless-stopped
     image: postgres:18-alpine
     environment:
       POSTGRES_DB: ${DB_NAME:-patchnotify}
@@ -20,6 +21,7 @@ services:
 
   backend:
     container_name: patch-web
+    restart: unless-stopped
     build: ./backend
     command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && (python manage.py createsuperuser --noinput || true) && gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 2"
     ports:
@@ -37,6 +39,7 @@ services:
 
   qcluster:
     container_name: patch-qcluster
+    restart: unless-stopped
     build: ./backend
     command: sh -c "python manage.py qcluster"
     env_file: .env
@@ -53,6 +56,7 @@ services:
 
   slack-api:
     container_name: patch-slack
+    restart: unless-stopped
     build: ./slack-api
     ports:
       - "8001:8001"
