@@ -1,6 +1,7 @@
 services:
   db:
     container_name: patch-db-dev
+    restart: unless-stopped
     image: postgres:18-alpine
     environment:
       POSTGRES_DB: ${DB_NAME:-patchnotify_dev}
@@ -20,6 +21,7 @@ services:
 
   backend:
     container_name: patch-web-dev
+    restart: unless-stopped
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
@@ -42,6 +44,7 @@ services:
 
   qworker:
     container_name: patch-qworker-dev
+    restart: unless-stopped
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
@@ -60,6 +63,7 @@ services:
 
   slack-api:
     container_name: patch-slack-dev
+    restart: unless-stopped
     build:
       context: ./slack-api
       dockerfile: Dockerfile.dev
