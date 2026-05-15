@@ -113,8 +113,8 @@ def _build_patchnote_slack_blocks(patch_note) -> list:
         remarks_text = _html_to_slack_mrkdwn(remarks_obj.content)
         if remarks_text:
             blocks.append({
-                "type": "context",
-                "elements": [{"type": "mrkdwn", "text": "*Remarks*"}],
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "*Remarks*"},
             })
             blocks.append({
                 "type": "section",
@@ -135,8 +135,8 @@ def _build_internal_slack_blocks(patch_note) -> list:
         return []
     return [
         {
-            "type": "context",
-            "elements": [{"type": "mrkdwn", "text": "*Internal · 사내 공유 전용*"}],
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "*Internal · 사내 공유 전용*"},
         },
         {
             "type": "section",
