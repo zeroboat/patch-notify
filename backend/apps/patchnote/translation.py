@@ -3,6 +3,7 @@ Ollama 내부 AI 서버를 이용한 패치노트 영문 번역 모듈
 
 - 패치노트 등록 직후 백그라운드 스레드에서 실행
 - Feature / Improvement / BugFix / Remark / Internal 5개 섹션을 단일 JSON 배치 호출로 번역
+- 긴 섹션(_CHUNK_THRESHOLD 초과)은 배치 제외 후 최상위 <li> 단위 청킹 번역
 - 키 불일치 시 1회 재시도, 재시도도 실패하면 섹션별 개별 호출로 폴백
 - Ollama 서버가 없거나 응답 실패 시 조용히 건너뜀 (서비스 영향 없음)
 """
@@ -39,6 +40,12 @@ _SINGLE_PROMPT_TEMPLATE = (
     "{html_input}"
 )
 
+# 이 값을 초과하는 섹션은 배치에서 제외하고 청킹 번역으로 처리
+_CHUNK_THRESHOLD = 2500
+
+# GTX 1660(VRAM 6GB) 기준 8192로 설정 시 0.6 GB가 CPU/RAM으로 내려가지만 허용 가능한 수준
+_NUM_CTX = 8192
+
 
 def _extract_json(text: str) -> dict | None:
     """응답 텍스트에서 JSON 객체 추출"""
@@ -65,6 +72,72 @@ def _get_ollama_config():
     return cfg.ollama_host, cfg.ollama_model
 
 
+def _extract_top_li_items(body: str) -> list[str]:
+    """HTML body에서 최상위 <li>...</li> 항목 추출 (중첩 ul/ol은 깊이 추적으로 건너뜀)"""
+    tag_re = re.compile(r'<(/?)(\w+)([^>]*)>', re.IGNORECASE)
+    items = []
+    depth = 0
+    item_start = -1
+    i = 0
+
+    while i < len(body):
+        m = tag_re.match(body, i)
+        if not m:
+            i += 1
+            continue
+
+        is_close = m.group(1) == '/'
+        tag_name = m.group(2).lower()
+
+        if tag_name == 'li':
+            if not is_close and depth == 0:
+                item_start = i
+            elif is_close and depth == 0 and item_start >= 0:
+                items.append(body[item_start:m.end()])
+                item_start = -1
+        elif tag_name in ('ul', 'ol'):
+            if not is_close:
+                depth += 1
+            elif depth > 0:
+                depth -= 1
+
+        i = m.end()
+
+    return items
+
+
+def _chunk_html_content(html: str) -> list[str]:
+    """
+    긴 HTML을 최상위 <li> 경계에서 _CHUNK_THRESHOLD 이하 청크로 분할.
+    임계값 이하이거나 구조 파악 불가 시 [html] 반환.
+    """
+    if len(html) <= _CHUNK_THRESHOLD:
+        return [html]
+
+    stripped = html.strip()
+    m = re.match(r'^(<(?:ul|ol)[^>]*>)([\s\S]*)(<\/(?:ul|ol)>)$', stripped, re.IGNORECASE)
+    if not m:
+        return [html]
+
+    open_tag, body, close_tag = m.group(1), m.group(2), m.group(3)
+    items = _extract_top_li_items(body)
+    if len(items) <= 1:
+        return [html]
+
+    chunks, current, current_len = [], [], len(open_tag) + len(close_tag)
+    for item in items:
+        if current and current_len + len(item) > _CHUNK_THRESHOLD:
+            chunks.append(open_tag + "".join(current) + close_tag)
+            current, current_len = [item], len(open_tag) + len(close_tag) + len(item)
+        else:
+            current.append(item)
+            current_len += len(item)
+    if current:
+        chunks.append(open_tag + "".join(current) + close_tag)
+
+    return chunks if len(chunks) > 1 else [html]
+
+
 def _call_ollama_batch(sections: dict[str, str], attempt: int = 1) -> dict[str, str]:
     """
     여러 HTML 섹션을 JSON으로 묶어 단일 Ollama 호출로 번역.
@@ -88,7 +161,7 @@ def _call_ollama_batch(sections: dict[str, str], attempt: int = 1) -> dict[str, 
     try:
         resp = requests.post(
             f"{host}/api/generate",
-            json={"model": model, "prompt": prompt, "stream": False},
+            json={"model": model, "prompt": prompt, "stream": False, "options": {"num_ctx": _NUM_CTX}},
             timeout=120,
         )
         resp.raise_for_status()
@@ -116,8 +189,8 @@ def _call_ollama_batch(sections: dict[str, str], attempt: int = 1) -> dict[str, 
         return {}
 
 
-def _call_ollama_single(key: str, html: str) -> str | None:
-    """단일 섹션 번역 (배치 실패 시 폴백)"""
+def _translate_chunk(key: str, html: str) -> str | None:
+    """HTML 청크 단위 번역 (단일 Ollama 호출)"""
     host, model = _get_ollama_config()
     if not host:
         return None
@@ -128,17 +201,45 @@ def _call_ollama_single(key: str, html: str) -> str | None:
     try:
         resp = requests.post(
             f"{host}/api/generate",
-            json={"model": model, "prompt": prompt, "stream": False},
+            json={"model": model, "prompt": prompt, "stream": False, "options": {"num_ctx": _NUM_CTX}},
             timeout=120,
         )
         resp.raise_for_status()
         raw = resp.json().get("response", "").strip()
-        # 코드블록 제거
         raw = re.sub(r"```(?:html)?", "", raw).strip()
         return raw if raw else None
     except Exception as exc:
         logger.warning("Ollama 단일 번역 실패 (%s): %s", key, exc)
         return None
+
+
+def _call_ollama_single(key: str, html: str) -> str | None:
+    """단일 섹션 번역 (배치 실패 시 폴백). 긴 내용은 자동 청킹 후 병합."""
+    chunks = _chunk_html_content(html)
+    if len(chunks) == 1:
+        return _translate_chunk(key, html)
+
+    logger.info("섹션 '%s' 청킹 번역 시작 (%d 청크)", key, len(chunks))
+    translated_chunks = []
+    for chunk in chunks:
+        result = _translate_chunk(key, chunk)
+        if result is None:
+            logger.warning("섹션 '%s' 청크 번역 실패 — 전체 섹션 번역 포기", key)
+            return None
+        translated_chunks.append(result)
+
+    # 원본 외부 태그 유지하며 청크 병합
+    outer = re.match(r'^(<(?:ul|ol)[^>]*>)', html.strip(), re.IGNORECASE)
+    tag_open = outer.group(1) if outer else '<ul>'
+    tag_name = 'ul' if re.search(r'ul', tag_open, re.IGNORECASE) else 'ol'
+    inner_re = re.compile(rf'^<(?:{tag_name})[^>]*>([\s\S]*)<\/{tag_name}>$', re.IGNORECASE)
+
+    inner_parts = []
+    for chunk in translated_chunks:
+        inner_m = inner_re.match(chunk.strip())
+        inner_parts.append(inner_m.group(1) if inner_m else chunk)
+
+    return f"{tag_open}{''.join(inner_parts)}</{tag_name}>"
 
 
 def _run_translation(patch_note_id: int):
@@ -171,16 +272,35 @@ def _run_translation(patch_note_id: int):
         patch_note.translation_status = PatchNote.TRANSLATION_TRANSLATING
         patch_note.save(update_fields=["translation_status", "updated_at"])
 
-        translated = _call_ollama_batch(to_translate)
+        # 긴 섹션은 배치에서 제외 — 배치 프롬프트 자체가 컨텍스트 초과하는 것 방지
+        to_batch = {k: v for k, v in to_translate.items() if len(v) <= _CHUNK_THRESHOLD}
+        to_single = {k: v for k, v in to_translate.items() if len(v) > _CHUNK_THRESHOLD}
 
-        # 배치 실패 시 섹션별 개별 호출로 폴백
-        if not translated:
-            logger.info("패치노트 %s 배치 번역 실패 → 섹션별 개별 호출로 폴백", patch_note_id)
-            translated = {}
-            for key, html in to_translate.items():
-                result = _call_ollama_single(key, html)
-                if result:
-                    translated[key] = result
+        if to_single:
+            logger.info(
+                "패치노트 %s 긴 섹션 %s → 배치 제외, 개별 청킹 번역",
+                patch_note_id, list(to_single.keys()),
+            )
+
+        translated = {}
+
+        # 짧은 섹션 배치 번역
+        if to_batch:
+            batch_result = _call_ollama_batch(to_batch)
+            if batch_result:
+                translated.update(batch_result)
+            else:
+                logger.info("패치노트 %s 배치 번역 실패 → 섹션별 개별 호출로 폴백", patch_note_id)
+                for key, html in to_batch.items():
+                    result = _call_ollama_single(key, html)
+                    if result:
+                        translated[key] = result
+
+        # 긴 섹션 개별 청킹 번역
+        for key, html in to_single.items():
+            result = _call_ollama_single(key, html)
+            if result:
+                translated[key] = result
 
         if not translated:
             patch_note.translation_status = PatchNote.TRANSLATION_FAILED
