@@ -46,6 +46,9 @@ _CHUNK_THRESHOLD = 2500
 # GTX 1660(VRAM 6GB) 기준 8192로 설정 시 0.6 GB가 CPU/RAM으로 내려가지만 허용 가능한 수준
 _NUM_CTX = 8192
 
+# num_ctx=8192 기준 응답 시간이 늘어나므로 기존 120초에서 상향
+_OLLAMA_TIMEOUT = 240
+
 
 def _extract_json(text: str) -> dict | None:
     """응답 텍스트에서 JSON 객체 추출"""
@@ -162,7 +165,7 @@ def _call_ollama_batch(sections: dict[str, str], attempt: int = 1) -> dict[str, 
         resp = requests.post(
             f"{host}/api/generate",
             json={"model": model, "prompt": prompt, "stream": False, "options": {"num_ctx": _NUM_CTX}},
-            timeout=120,
+            timeout=_OLLAMA_TIMEOUT,
         )
         resp.raise_for_status()
         raw = resp.json().get("response", "").strip()
@@ -202,7 +205,7 @@ def _translate_chunk(key: str, html: str) -> str | None:
         resp = requests.post(
             f"{host}/api/generate",
             json={"model": model, "prompt": prompt, "stream": False, "options": {"num_ctx": _NUM_CTX}},
-            timeout=120,
+            timeout=_OLLAMA_TIMEOUT,
         )
         resp.raise_for_status()
         raw = resp.json().get("response", "").strip()
