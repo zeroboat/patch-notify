@@ -40,6 +40,10 @@ CSRF_TRUSTED_ORIGINS = (
 )
 ENVIRONMENT = os.environ.get("DJANGO_ENVIRONMENT", default="local")
 
+# 리버스 프록시(Nginx 등) 뒤에서 HTTPS 인식
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+
 
 # Application definition
 
@@ -219,7 +223,7 @@ AUTHENTICATION_BACKENDS = [
     'allauth.account.auth_backends.AuthenticationBackend',
 ]
 
-SITE_ID = 1
+SITE_ID = int(os.getenv('DJANGO_SITE_ID', '1'))
 
 SOCIALACCOUNT_ADAPTER = 'apps.authentication.adapter.SocialAccountAdapter'
 
