@@ -10,3 +10,6 @@ slack-bolt>=1.21.0
 requests>=2.32.0
 django-q2>=1.7.6
 blessed>=1.20.0
+django-allauth[google]>=65.0.0
+PyJWT>=2.0.0
+cryptography>=42.0.0
