@@ -33,6 +33,7 @@ urlpatterns = [
 
     path("", include("apps.dashboards.urls")),
     path("", include("apps.authentication.urls")),
+    path("accounts/", include("allauth.urls")),
 ]
 
 if settings.DEBUG:

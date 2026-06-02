@@ -84,10 +84,16 @@ def get_customer_solutions(db: Session, customer_id: int):
 
 def build_home_tab(db: Session, customer_id: int, customer_name: str) -> list:
     blocks = [
-        {"type": "header", "text": {"type": "plain_text", "text": "📋 Patch Notify 구독 관리"}},
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "📋 Patch Notify 구독 관리"},
+        },
         {
             "type": "section",
-            "text": {"type": "mrkdwn", "text": f"*고객사:* {customer_name}"},
+            "text": {
+                "type": "mrkdwn",
+                "text": f"안녕하세요, *{customer_name}*님 👋\n구독 설정을 관리하고 최신 패치노트를 확인하세요.",
+            },
             "accessory": {
                 "type": "button",
                 "text": {"type": "plain_text", "text": "📧 수신 이메일 확인"},
@@ -97,24 +103,18 @@ def build_home_tab(db: Session, customer_id: int, customer_name: str) -> list:
         {"type": "divider"},
         {
             "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": "*💡 사용 안내*",
-            },
+            "text": {"type": "mrkdwn", "text": "*💡 시작 가이드*"},
         },
         {
-            "type": "context",
-            "elements": [
-                {
-                    "type": "mrkdwn",
-                    "text": (
-                        "• Slack 알림을 받으려면 이 봇을 알림 받을 *채널에 먼저 초대*해야 합니다.\n"
-                        "  채널에서 `/invite @Patch Notify` 를 입력하거나, 채널 멤버 추가에서 봇을 검색해 추가하세요.\n"
-                        "• 채널 초대 후 아래 *설정 변경*에서 해당 채널을 선택하고 저장하면 알림이 활성화됩니다.\n"
-                        "• 알림은 새 패치노트가 발행될 때마다 선택한 채널로 자동 전송됩니다."
-                    ),
-                }
-            ],
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    "*1️⃣  봇 초대* — 알림 받을 채널에서 `/invite @Patch Notify` 입력\n"
+                    "*2️⃣  채널 설정* — 아래 *설정 변경* 버튼에서 알림 채널 선택 후 저장\n"
+                    "*3️⃣  알림 수신* — 새 패치노트 발행 시 선택한 채널로 자동 전송"
+                ),
+            },
         },
         {"type": "divider"},
     ]
@@ -124,9 +124,14 @@ def build_home_tab(db: Session, customer_id: int, customer_name: str) -> list:
     if not solutions:
         blocks.append({
             "type": "section",
-            "text": {"type": "mrkdwn", "text": "구독 가능한 솔루션이 없습니다.\n담당자에게 문의해 주세요."},
+            "text": {"type": "mrkdwn", "text": "⚠️ 구독 가능한 솔루션이 없습니다.\n담당자에게 문의해 주세요."},
         })
         return blocks
+
+    blocks.append({
+        "type": "section",
+        "text": {"type": "mrkdwn", "text": f"*📦 구독 솔루션*  _{len(solutions)}개_"},
+    })
 
     sol_ids = [s.id for s in solutions]
 
@@ -158,33 +163,36 @@ def build_home_tab(db: Session, customer_id: int, customer_name: str) -> list:
         total = len(products)
 
         if total == 0:
-            email_text = "❌ 제품 없음"
-            slack_text = "❌ 제품 없음"
+            email_status = "⬜  제품 없음"
+            slack_status = "⬜  제품 없음"
         else:
-            email_text = f"✅ {email_active}/{total}개 활성" if email_active else "❌ 비활성화"
-            slack_text = f"✅ {slack_active}/{total}개 활성" if slack_active else "❌ 비활성화"
+            email_status = f"🟢  {email_active}/{total}개 활성" if email_active else "🔴  비활성화"
+            slack_status = f"🟢  {slack_active}/{total}개 활성" if slack_active else "🔴  비활성화"
 
+        blocks.append({"type": "divider"})
         blocks.append({
             "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": (
-                    f"*{sol.name}*\n"
-                    f"📧 Gmail: {email_text}   💬 Slack: {slack_text}"
-                ),
-            },
+            "text": {"type": "mrkdwn", "text": f"*{sol.name}*"},
             "accessory": {
                 "type": "button",
-                "text": {"type": "plain_text", "text": "설정 변경"},
+                "text": {"type": "plain_text", "text": "⚙️ 설정 변경"},
                 "action_id": "open_subscription_modal",
                 "value": str(sol.id),
+                "style": "primary",
             },
+        })
+        blocks.append({
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*📧 이메일 알림*\n{email_status}"},
+                {"type": "mrkdwn", "text": f"*💬 Slack 알림*\n{slack_status}"},
+            ],
         })
         blocks.append({
             "type": "actions",
             "elements": [{
                 "type": "button",
-                "text": {"type": "plain_text", "text": "📄 최근 패치노트 보기"},
+                "text": {"type": "plain_text", "text": "📄 최근 패치노트"},
                 "action_id": "view_recent_patchnotes",
                 "value": str(sol.id),
             }],

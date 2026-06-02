@@ -98,17 +98,24 @@ def _get_approved_workspace(team_id: str):
 def _pending_view():
     return {
         "type": "home",
-        "blocks": [{
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": (
-                    "⏳ *승인 대기 중*\n\n"
-                    "관리자가 워크스페이스를 확인 후 승인하면 이용할 수 있습니다.\n"
-                    "문의: 담당자에게 연락해 주세요."
-                ),
+        "blocks": [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "📋 Patch Notify 구독 관리"},
             },
-        }],
+            {"type": "divider"},
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*⏳ 승인 대기 중*\n\n관리자가 워크스페이스를 확인한 후 승인하면 이용할 수 있습니다.",
+                },
+            },
+            {
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": "문의가 있으시면 담당자에게 연락해 주세요."}],
+            },
+        ],
     }
 
 
