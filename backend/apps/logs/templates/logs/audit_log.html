@@ -1,0 +1,202 @@
+{% extends layout_path %}
+{% load static %}
+
+{% block title %}Audit Log{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h4 class="fw-bold mb-1">Audit Log</h4>
+      <p class="text-muted mb-0 small">사용자별 데이터 변경 이력 — 총 {{ total }}건</p>
+    </div>
+  </div>
+
+  <!-- 필터 -->
+  <div class="card mb-4">
+    <div class="card-body py-3">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-12 col-md-2">
+          <input type="text" name="actor" class="form-control form-control-sm"
+                 placeholder="사용자명" value="{{ filter_actor }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <select name="action" class="form-select form-select-sm">
+            <option value="">전체 액션</option>
+            {% for val, label in action_choices %}
+            <option value="{{ val }}" {% if filter_action == val|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <select name="model" class="form-select form-select-sm">
+            <option value="">전체 모델</option>
+            {% for ct in registered_models %}
+            <option value="{{ ct.model }}" {% if filter_model == ct.model %}selected{% endif %}>
+              {{ ct.app_label }} · {{ ct.model }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <input type="date" name="date_from" class="form-control form-control-sm" value="{{ filter_date_from }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <input type="date" name="date_to" class="form-control form-control-sm" value="{{ filter_date_to }}">
+        </div>
+        <div class="col-auto d-flex gap-2">
+          <button type="submit" class="btn btn-sm btn-primary">검색</button>
+          <a href="{% url 'logs:audit_log' %}" class="btn btn-sm btn-label-secondary">초기화</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 테이블 -->
+  <div class="card">
+    <div class="card-body p-0">
+      {% if page_obj %}
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4" style="width:160px">일시</th>
+              <th style="width:110px">사용자</th>
+              <th style="width:70px">액션</th>
+              <th style="width:150px">모델</th>
+              <th>대상 객체</th>
+              <th>변경 내용</th>
+              <th style="width:110px">IP</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in page_obj %}
+            <tr>
+              <td class="ps-4">
+                <small class="text-muted">{{ entry.timestamp|date:"Y-m-d H:i:s" }}</small>
+              </td>
+              <td>
+                {% if entry.actor %}
+                  <span class="fw-semibold">{{ entry.actor.username }}</span>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if entry.action == 0 %}
+                  <span class="badge bg-label-success">생성</span>
+                {% elif entry.action == 1 %}
+                  <span class="badge bg-label-primary">수정</span>
+                {% elif entry.action == 2 %}
+                  <span class="badge bg-label-danger">삭제</span>
+                {% else %}
+                  <span class="badge bg-label-secondary">{{ entry.get_action_display }}</span>
+                {% endif %}
+              </td>
+              <td>
+                <small class="text-muted">{{ entry.content_type.app_label }}</small><br>
+                <span class="fw-semibold small">{{ entry.content_type.model }}</span>
+              </td>
+              <td>
+                <span class="text-truncate d-inline-block" style="max-width:200px" title="{{ entry.object_repr }}">
+                  {{ entry.object_repr }}
+                </span>
+              </td>
+              <td>
+                {% if entry.changes_dict %}
+                  <div class="d-flex flex-wrap gap-1">
+                    {% for field, values in entry.changes_dict.items %}
+                      {% if forloop.counter <= 3 %}
+                      <span class="badge bg-label-secondary" title="{{ field }}: {{ values.0 }} → {{ values.1 }}">
+                        {{ field }}
+                      </span>
+                      {% endif %}
+                    {% endfor %}
+                    {% if entry.changes_dict|length > 3 %}
+                      <span class="badge bg-label-secondary">+{{ entry.changes_dict|length|add:"-3" }}개</span>
+                    {% endif %}
+                  </div>
+                {% else %}
+                  <small class="text-muted">—</small>
+                {% endif %}
+              </td>
+              <td>
+                <small class="text-muted font-monospace">{{ entry.remote_addr|default:"—" }}</small>
+              </td>
+            </tr>
+            <!-- 변경 상세 (펼치기) -->
+            {% if entry.changes_dict and entry.changes_dict|length > 0 %}
+            <tr class="table-active" id="detail-{{ entry.pk }}" style="display:none">
+              <td colspan="7" class="ps-5 py-2">
+                <table class="table table-sm table-borderless mb-0 small">
+                  <thead><tr>
+                    <th style="width:180px">필드</th>
+                    <th>이전 값</th>
+                    <th>변경 후</th>
+                  </tr></thead>
+                  <tbody>
+                    {% for field, values in entry.changes_dict.items %}
+                    <tr>
+                      <td class="text-muted">{{ field }}</td>
+                      <td><span class="text-danger">{{ values.0|default:"(없음)" }}</span></td>
+                      <td><span class="text-success">{{ values.1|default:"(없음)" }}</span></td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 페이지네이션 -->
+      {% if page_obj.has_other_pages %}
+      <div class="d-flex justify-content-center py-3">
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+              <a class="page-link" href="?{% if filter_actor %}actor={{ filter_actor }}&{% endif %}{% if filter_action %}action={{ filter_action }}&{% endif %}{% if filter_model %}model={{ filter_model }}&{% endif %}{% if filter_date_from %}date_from={{ filter_date_from }}&{% endif %}{% if filter_date_to %}date_to={{ filter_date_to }}&{% endif %}page={{ page_obj.previous_page_number }}">이전</a>
+            </li>
+            {% endif %}
+            <li class="page-item disabled">
+              <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+            </li>
+            {% if page_obj.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="?{% if filter_actor %}actor={{ filter_actor }}&{% endif %}{% if filter_action %}action={{ filter_action }}&{% endif %}{% if filter_model %}model={{ filter_model }}&{% endif %}{% if filter_date_from %}date_from={{ filter_date_from }}&{% endif %}{% if filter_date_to %}date_to={{ filter_date_to }}&{% endif %}page={{ page_obj.next_page_number }}">다음</a>
+            </li>
+            {% endif %}
+          </ul>
+        </nav>
+      </div>
+      {% endif %}
+
+      {% else %}
+      <div class="text-center text-muted py-5">
+        <i class="bx bx-search-alt fs-2 mb-2 d-block"></i>
+        조건에 맞는 이력이 없습니다.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+// 행 클릭으로 변경 상세 펼치기
+document.querySelectorAll('tbody tr[id^="detail-"]').forEach(detail => {
+  const id = detail.id.replace('detail-', '');
+  const mainRow = detail.previousElementSibling;
+  if (mainRow) {
+    mainRow.style.cursor = 'pointer';
+    mainRow.addEventListener('click', () => {
+      detail.style.display = detail.style.display === 'none' ? '' : 'none';
+    });
+  }
+});
+</script>
+{% endblock %}
