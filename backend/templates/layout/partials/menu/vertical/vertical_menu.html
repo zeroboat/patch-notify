@@ -83,6 +83,34 @@
                         </ul>
                     </li>
                 {% endfor %}
+                {% if side_utility_platforms %}
+                <li class="menu-item {% if '/patchnote/utility/' in request.path %}active open{% endif %}">
+                    <a href="javascript:void(0);" class="menu-link menu-toggle">
+                        <i class="menu-icon tf-icons bx bx-wrench"></i>
+                        <div>Utilities</div>
+                    </a>
+                    <ul class="menu-sub">
+                        {% for platform in side_utility_platforms %}
+                        <li class="menu-item {% for u in platform.utilities %}{% url 'patchnote:utility_patch_detail' u.id as util_url %}{% if request.path == util_url %}active open{% endif %}{% endfor %}">
+                            <a href="javascript:void(0);" class="menu-link menu-toggle">
+                                <i class="menu-icon tf-icons bx bx-devices"></i>
+                                <div>{{ platform.label }}</div>
+                            </a>
+                            <ul class="menu-sub">
+                                {% for utility in platform.utilities %}
+                                {% url 'patchnote:utility_patch_detail' utility.id as util_url %}
+                                <li class="menu-item {% if request.path == util_url %}active{% endif %}">
+                                    <a href="{{ util_url }}" class="menu-link">
+                                        <div class="text-truncate">{{ utility.name }}</div>
+                                    </a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </li>
+                {% endif %}
             </ul>
         </li>
 

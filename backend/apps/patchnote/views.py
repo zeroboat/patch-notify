@@ -544,6 +544,28 @@ class PatchNoteDetailView(LoginRequiredMixin, TemplateView):
         return context
 
 
+class UtilityPatchNoteDetailView(LoginRequiredMixin, TemplateView):
+    template_name = "patchnote/patch_list.html"
+
+    def get_context_data(self, **kwargs):
+        from apps.product.models import Utility
+        context = super().get_context_data(**kwargs)
+        context = TemplateLayout.init(self, context)
+
+        utility_id = self.kwargs.get('utility_id')
+        utility = get_object_or_404(Utility, id=utility_id)
+
+        patch_notes = PatchNote.objects.filter(utility=utility).prefetch_related(
+            'features', 'improvements', 'bugfixes', 'remarks', 'internals', 'files'
+        ).order_by('-release_date', '-version')
+
+        context.update({
+            'selected_utility': utility,
+            'patch_notes': patch_notes,
+        })
+        return context
+
+
 # ──────────────────────────────────────────────
 # 헬퍼: 섹션 HTML 저장 / 조회
 # ──────────────────────────────────────────────
@@ -591,23 +613,36 @@ def patch_note_append(request):
         special_notes_html   = request.POST.get('special_notes', '')
         internal_notes_html  = request.POST.get('internal_notes', '')
 
-        if not product_id:
-            return JsonResponse({'error': '제품 정보가 누락되었습니다.'}, status=400)
+        utility_id = request.POST.get('utility_id', '').strip()
+
+        if not product_id and not utility_id:
+            return JsonResponse({'error': '제품 또는 유틸리티 정보가 누락되었습니다.'}, status=400)
         if not version:
             return JsonResponse({'error': '버전을 입력해주세요.'}, status=400)
         if not patch_date:
             return JsonResponse({'error': '배포 날짜를 입력해주세요.'}, status=400)
 
-        try:
-            product = Product.objects.get(id=product_id)
-        except Product.DoesNotExist:
-            return JsonResponse({'error': '제품을 찾을 수 없습니다.'}, status=400)
-
-        patch_note, created = PatchNote.objects.get_or_create(
-            product=product,
-            version=version,
-            defaults={'release_date': patch_date},
-        )
+        if utility_id:
+            from apps.product.models import Utility
+            try:
+                utility = Utility.objects.get(id=utility_id)
+            except Utility.DoesNotExist:
+                return JsonResponse({'error': '유틸리티를 찾을 수 없습니다.'}, status=400)
+            patch_note, created = PatchNote.objects.get_or_create(
+                utility=utility,
+                version=version,
+                defaults={'release_date': patch_date},
+            )
+        else:
+            try:
+                product = Product.objects.get(id=product_id)
+            except Product.DoesNotExist:
+                return JsonResponse({'error': '제품을 찾을 수 없습니다.'}, status=400)
+            patch_note, created = PatchNote.objects.get_or_create(
+                product=product,
+                version=version,
+                defaults={'release_date': patch_date},
+            )
         if not created:
             return JsonResponse(
                 {'error': f'버전 {version}은 이미 등록되어 있습니다.'},
