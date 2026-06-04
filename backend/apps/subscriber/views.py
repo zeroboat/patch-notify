@@ -152,4 +152,8 @@ def save_customer_subscription(request):
         ).delete()
 
     label = f"{product.solution.name} {product.get_platform_display()} {product.get_category_display()}"
+    from apps.logs.models import ActionLog
+    ActionLog.record(request, ActionLog.SUBSCRIPTION_CHANGE,
+                     f'{customer.name} / {label}',
+                     {'email_active': email_active, 'slack_active': slack_active})
     return JsonResponse({'ok': True, 'message': f'{label} 구독 설정이 저장되었습니다.'})

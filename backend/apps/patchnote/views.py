@@ -659,6 +659,11 @@ def patch_note_append(request):
         patch_note.save(update_fields=["translation_status", "updated_at"])
         start_translation(patch_note.id)
 
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.PATCHNOTE_CREATE,
+                         f'{patch_note.subject} v{version}',
+                         {'version': version, 'release_date': patch_date})
+
         return JsonResponse({'message': '패치노트가 등록되었습니다.', 'patch_note_id': patch_note.id})
 
     except Exception as e:
@@ -745,6 +750,11 @@ def patch_note_update(request):
         note.save(update_fields=["translation_status", "updated_at"])
         start_translation(note.id)
 
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.PATCHNOTE_UPDATE,
+                         f'{note.subject} v{version}',
+                         {'version': version, 'release_date': patch_date})
+
         return JsonResponse({'message': '패치노트가 수정되었습니다.', 'patch_note_id': note.id})
 
     except Exception as e:
@@ -768,8 +778,15 @@ def patch_note_delete(request):
         except PatchNote.DoesNotExist:
             return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
 
+        subject_str = str(note.subject)
         version = note.version
         note.delete()
+
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.PATCHNOTE_DELETE,
+                         f'{subject_str} v{version}',
+                         {'version': version})
+
         return JsonResponse({'message': f'버전 {version} 패치노트가 삭제되었습니다.'})
 
     except Exception as e:
@@ -814,6 +831,11 @@ def patch_note_publish(request):
         note.external_send_status = PatchNote.EXTERNAL_SEND_FAILED
         note.external_send_error = f'예약 실패: {e}'[:1000]
         note.save(update_fields=['external_send_status', 'external_send_error', 'updated_at'])
+
+    from apps.logs.models import ActionLog
+    ActionLog.record(request, ActionLog.PATCHNOTE_PUBLISH,
+                     f'{note.subject} v{note.version}',
+                     {'version': note.version, 'release_date': str(note.release_date)})
 
     msg = f'버전 {note.version} 이(가) 발행되었습니다.'
     if note.external_send_status == PatchNote.EXTERNAL_SEND_PENDING and note.external_send_scheduled_at:

@@ -167,6 +167,10 @@ def notion_sync(request):
             msg = '변경사항 없음 — 동기화 스킵'
         else:
             msg = f'동기화 완료 — 신규: {stats["created"]}, 갱신: {stats["updated"]}, 건너뜀: {stats["skipped"]}'
+            from apps.logs.models import ActionLog
+            ActionLog.record(request, ActionLog.NOTION_SYNC,
+                             str(mapping.subject),
+                             {'created': stats['created'], 'updated': stats['updated']})
         return JsonResponse({'message': msg, **stats})
     except Exception as e:
         logger.exception(f'Notion 동기화 실패 (product_id={product_id})')
@@ -201,6 +205,9 @@ def notion_push(request):
         from django.utils import timezone
         patch_note.notion_pushed_at = timezone.now()
         patch_note.save(update_fields=['notion_pushed_at'])
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.NOTION_PUSH,
+                         f'{patch_note.subject} v{patch_note.version}')
         en_status = result.get('en_status', 'skipped')
         en_reason = result.get('en_reason', '')
         msg = f'v{patch_note.version} Notion push 완료 (KO: ✅'

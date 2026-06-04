@@ -138,10 +138,10 @@
             </a>
         </li>
         {% if user_role == 'admin' or user_role == 'manager' %}
-        <li class="menu-item {% if '/logs/audit/' in request.path %}active{% endif %}">
-            <a href="{% url 'logs:audit_log' %}" class="menu-link">
+        <li class="menu-item {% if '/logs/action/' in request.path %}active{% endif %}">
+            <a href="{% url 'logs:action_log' %}" class="menu-link">
                 <i class="menu-icon icon-base bx bx-shield-quarter"></i>
-                <div class="text-truncate">Audit Log</div>
+                <div class="text-truncate">Action Log</div>
             </a>
         </li>
         {% endif %}
