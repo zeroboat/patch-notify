@@ -207,10 +207,7 @@ def handle_save_subscription(ack, body, view, client):
         values.get('slack_channel_input', {}).get('slack_channel_value', {})
         .get('selected_conversation') or ''
     )
-    slack_max = int(
-        values.get('slack_max_items', {}).get('slack_max_select', {})
-        .get('selected_option', {}).get('value', '5')
-    )
+    slack_max = 1
 
     db = SessionLocal()
     try:
