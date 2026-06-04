@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     "apps.config",
     "apps.feedback",
     "django_q",
+    "auditlog",
 ]
 
 # Django-Q2 (외부 발송 지연 처리용)
@@ -99,6 +100,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'auditlog.middleware.AuditlogMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
