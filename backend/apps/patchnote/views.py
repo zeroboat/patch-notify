@@ -165,6 +165,9 @@ def _send_internal_slack_notification(patch_note):
             logger.warning('사내 Slack 워크스페이스 미설정 — Admin에서 is_internal 체크 필요')
             return
 
+        if not patch_note.product_id:
+            return
+
         subs = (
             Subscription.objects
             .filter(
@@ -180,10 +183,8 @@ def _send_internal_slack_notification(patch_note):
         if not subs.exists():
             return
 
-        solution_name = patch_note.product.solution.name
-        platform = patch_note.product.get_platform_display()
-        category = patch_note.product.get_category_display()
-        product_label = f"{solution_name} {platform} {category}"
+        solution_name = patch_note.subject.solution.name
+        product_label = f"{solution_name} {patch_note.subject_label}"
 
         # internals 접근을 위해 prefetch된 인스턴스를 별도로 조회
         note = (
@@ -219,6 +220,9 @@ def _send_slack_notifications(patch_note):
         from apps.slack_app.models import SlackWorkspace
         from apps.subscriber.models import Subscription
 
+        if not patch_note.product_id:
+            return
+
         subs = (
             Subscription.objects
             .filter(
@@ -234,10 +238,8 @@ def _send_slack_notifications(patch_note):
         if not subs.exists():
             return
 
-        solution_name = patch_note.product.solution.name
-        platform = patch_note.product.get_platform_display()
-        category = patch_note.product.get_category_display()
-        product_label = f"{solution_name} {platform} {category}"
+        solution_name = patch_note.subject.solution.name
+        product_label = f"{solution_name} {patch_note.subject_label}"
 
         fallback_text = f"{product_label} v{patch_note.version} 패치노트가 발행되었습니다."
         blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} Release 안내]"}}]
@@ -263,7 +265,7 @@ def _send_slack_notifications(patch_note):
                 _log_dispatch(
                     channel=DispatchLog.CHANNEL_SLACK,
                     customer=sub.customer,
-                    solution=patch_note.product.solution,
+                    solution=patch_note.subject.solution,
                     recipient=sub.slack_channel,
                     subject=fallback_text,
                     status=DispatchLog.STATUS_SUCCESS,
@@ -274,7 +276,7 @@ def _send_slack_notifications(patch_note):
                 _log_dispatch(
                     channel=DispatchLog.CHANNEL_SLACK,
                     customer=sub.customer,
-                    solution=patch_note.product.solution,
+                    solution=patch_note.subject.solution,
                     recipient=sub.slack_channel,
                     subject=fallback_text,
                     status=DispatchLog.STATUS_FAILED,
@@ -315,6 +317,9 @@ def _send_email_notifications(patch_note):
             logger.warning('Gmail 설정 누락 — 이메일 발송 건너뜀')
             return
 
+        if not patch_note.product_id:
+            return
+
         subs = (
             Subscription.objects
             .filter(
@@ -328,10 +333,8 @@ def _send_email_notifications(patch_note):
         if not subs.exists():
             return
 
-        solution_name = patch_note.product.solution.name
-        platform = patch_note.product.get_platform_display()
-        category = patch_note.product.get_category_display()
-        product_label = f"{solution_name} {platform} {category}"
+        solution_name = patch_note.subject.solution.name
+        product_label = f"{solution_name} {patch_note.subject_label}"
         subject_str = f"[Patch Notify] {product_label} v{patch_note.version} 패치노트"
 
         for sub in subs:
@@ -343,7 +346,6 @@ def _send_email_notifications(patch_note):
             if not emails:
                 continue
 
-            # max_items 건 내 최근 발행 패치노트
             recent_notes = (
                 PatchNote.objects
                 .filter(product=patch_note.product, is_published=True)
@@ -395,7 +397,7 @@ def _send_email_notifications(patch_note):
                 _log_dispatch(
                     channel=DispatchLog.CHANNEL_EMAIL,
                     customer=sub.customer,
-                    solution=patch_note.product.solution,
+                    solution=patch_note.subject.solution,
                     recipient=', '.join(emails),
                     subject=subject_str,
                     status=DispatchLog.STATUS_SUCCESS,
@@ -406,7 +408,7 @@ def _send_email_notifications(patch_note):
                 _log_dispatch(
                     channel=DispatchLog.CHANNEL_EMAIL,
                     customer=sub.customer,
-                    solution=patch_note.product.solution,
+                    solution=patch_note.subject.solution,
                     recipient=', '.join(emails),
                     subject=subject_str,
                     status=DispatchLog.STATUS_FAILED,
@@ -684,7 +686,8 @@ def patch_note_update(request):
         except PatchNote.DoesNotExist:
             return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
 
-        if PatchNote.objects.filter(product=note.product, version=version).exclude(id=note.id).exists():
+        dup_filter = {'product': note.product} if note.product_id else {'utility': note.utility}
+        if PatchNote.objects.filter(**dup_filter, version=version).exclude(id=note.id).exists():
             return JsonResponse({'error': f'버전 {version}은 이미 등록되어 있습니다.'}, status=400)
 
         note.version = version

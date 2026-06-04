@@ -74,3 +74,25 @@ class Product(BaseModel):
             'FLUTTER': 'danger',
         }
         return colors.get(self.platform, 'secondary')
+
+
+class Utility(BaseModel):
+    """Tool 타입 솔루션 하위 유틸리티 (플랫폼/카테고리 없이 이름으로 식별)"""
+    solution = models.ForeignKey(
+        Solution,
+        on_delete=models.CASCADE,
+        related_name='utilities',
+        verbose_name="소속 솔루션",
+        limit_choices_to={'solution_type': Solution.TYPE_TOOL},
+    )
+    name = models.CharField(max_length=100, verbose_name="유틸리티 명")
+    order = models.PositiveIntegerField(default=0, verbose_name="정렬 순서")
+
+    class Meta:
+        verbose_name = "유틸리티"
+        verbose_name_plural = "유틸리티 목록"
+        unique_together = ['solution', 'name']
+        ordering = ['order', 'name']
+
+    def __str__(self):
+        return f"{self.solution.name} - {self.name}"

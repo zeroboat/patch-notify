@@ -726,7 +726,7 @@ def _build_patch_md(patch_note: PatchNote, lang: str = 'ko') -> str:
     else:
         cat_new, cat_imp, cat_bug = '기능 추가', '기능 개선', '버그 수정'
 
-    is_tool = patch_note.product.solution.is_tool
+    is_tool = patch_note.subject.solution.is_tool
     eol_date = (patch_note.release_date + relativedelta(years=1)) if is_tool else None
 
     lines = [
@@ -837,10 +837,11 @@ def push_patch_note_to_notion(patch_note: PatchNote, is_new: bool = True) -> dic
     if not cfg.notion_enabled or not cfg.notion_token:
         raise ValueError('Notion 연동이 비활성화되어 있습니다.')
 
+    mapping_filter = {'product': patch_note.product} if patch_note.product_id else {'utility': patch_note.utility}
     try:
-        mapping = NotionPageMapping.objects.get(product=patch_note.product)
+        mapping = NotionPageMapping.objects.get(**mapping_filter)
     except NotionPageMapping.DoesNotExist:
-        raise ValueError('해당 제품의 Notion 매핑 정보가 없습니다.')
+        raise ValueError('해당 제품/유틸리티의 Notion 매핑 정보가 없습니다.')
 
     version = patch_note.version
     push_result = {'ko': None, 'en': None, 'en_status': 'skipped', 'en_reason': ''}
@@ -848,12 +849,12 @@ def push_patch_note_to_notion(patch_note: PatchNote, is_new: bool = True) -> dic
     # ── 한국어 페이지 push ──
     md_ko = _build_patch_md(patch_note, lang='ko')
     push_result['ko'] = _push_to_page(mapping.page_id_ko, md_ko, is_new, version)
-    logger.info('Notion push 완료 (KO): %s v%s (%s)', patch_note.product, version, 'insert' if is_new else 'update')
+    logger.info('Notion push 완료 (KO): %s v%s (%s)', patch_note.subject, version, 'insert' if is_new else 'update')
 
     # ── 영문 페이지 push (매핑이 있고, 영문 콘텐츠가 있을 때) ──
     if not mapping.page_id_en:
         push_result['en_reason'] = 'page_id_en 미설정'
-        logger.info('Notion 영문 push 건너뜀 — page_id_en 미설정 (%s)', patch_note.product)
+        logger.info('Notion 영문 push 건너뜀 — page_id_en 미설정 (%s)', patch_note.subject)
     else:
         has_en = any(
             manager.filter(parent__isnull=True, content_en__isnull=False).exclude(content_en='').exists()
@@ -861,17 +862,17 @@ def push_patch_note_to_notion(patch_note: PatchNote, is_new: bool = True) -> dic
         )
         if not has_en:
             push_result['en_reason'] = '영문 콘텐츠 없음 (content_en이 비어있음)'
-            logger.info('Notion 영문 push 건너뜀 — 영문 콘텐츠 없음 (%s v%s)', patch_note.product, version)
+            logger.info('Notion 영문 push 건너뜀 — 영문 콘텐츠 없음 (%s v%s)', patch_note.subject, version)
         else:
             try:
                 md_en = _build_patch_md(patch_note, lang='en')
                 push_result['en'] = _push_to_page(mapping.page_id_en, md_en, is_new, version)
                 push_result['en_status'] = 'success'
-                logger.info('Notion push 완료 (EN): %s v%s (%s)', patch_note.product, version, 'insert' if is_new else 'update')
+                logger.info('Notion push 완료 (EN): %s v%s (%s)', patch_note.subject, version, 'insert' if is_new else 'update')
             except Exception as e:
                 push_result['en_status'] = 'failed'
                 push_result['en_reason'] = str(e)
-                logger.error('Notion 영문 push 실패 (%s v%s): %s', patch_note.product, version, e, exc_info=True)
+                logger.error('Notion 영문 push 실패 (%s v%s): %s', patch_note.subject, version, e, exc_info=True)
 
     return push_result
 
@@ -883,10 +884,11 @@ def push_en_to_notion(patch_note: PatchNote, is_new: bool = True) -> dict:
     if not cfg.notion_enabled or not cfg.notion_token:
         raise ValueError('Notion 연동이 비활성화되어 있습니다.')
 
+    mapping_filter = {'product': patch_note.product} if patch_note.product_id else {'utility': patch_note.utility}
     try:
-        mapping = NotionPageMapping.objects.get(product=patch_note.product)
+        mapping = NotionPageMapping.objects.get(**mapping_filter)
     except NotionPageMapping.DoesNotExist:
-        raise ValueError('해당 제품의 Notion 매핑 정보가 없습니다.')
+        raise ValueError('해당 제품/유틸리티의 Notion 매핑 정보가 없습니다.')
 
     if not mapping.page_id_en:
         return {'en_status': 'skipped', 'en_reason': 'page_id_en 미설정'}

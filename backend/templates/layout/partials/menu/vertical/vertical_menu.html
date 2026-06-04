@@ -35,6 +35,12 @@
                 <div class="text-truncate">Product Management</div>
             </a>
         </li>
+        <li class="menu-item {% if '/product/utility/' in request.path %}active{% endif %}">
+            <a href="{% url 'product:utility_management' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-wrench"></i>
+                <div class="text-truncate">Utilities Management</div>
+            </a>
+        </li>
         {% if NOTION_ENABLED %}
         <li class="menu-item {% if '/notion/' in request.path %}active open{% endif %}">
             <a href="{% url 'notion:notion_management' %}" class="menu-link">

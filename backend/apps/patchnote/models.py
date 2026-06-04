@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from apps.base.models import BaseModel
 class PatchNote(BaseModel):
     """패치노트 메인 모델"""
@@ -28,7 +29,20 @@ class PatchNote(BaseModel):
         (EXTERNAL_SEND_FAILED,    '발송 실패'),
     ]
 
-    product = models.ForeignKey('product.Product', on_delete=models.CASCADE, related_name='patch_notes', verbose_name="제품")
+    product = models.ForeignKey(
+        'product.Product',
+        on_delete=models.CASCADE,
+        related_name='patch_notes',
+        verbose_name="제품",
+        null=True, blank=True,
+    )
+    utility = models.ForeignKey(
+        'product.Utility',
+        on_delete=models.CASCADE,
+        related_name='patch_notes',
+        verbose_name="유틸리티",
+        null=True, blank=True,
+    )
     version = models.CharField(max_length=30, verbose_name="버전")
     release_date = models.DateField(verbose_name="배포일")
     translation_status = models.CharField(
@@ -60,11 +74,44 @@ class PatchNote(BaseModel):
     class Meta:
         verbose_name = "패치노트"
         verbose_name_plural = "패치노트 목록"
-        unique_together = ['product', 'version']
         ordering = ['-release_date']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['product', 'version'],
+                condition=Q(product__isnull=False),
+                name='patchnote_product_version_unique',
+            ),
+            models.UniqueConstraint(
+                fields=['utility', 'version'],
+                condition=Q(utility__isnull=False),
+                name='patchnote_utility_version_unique',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(product__isnull=False, utility__isnull=True) |
+                    Q(product__isnull=True, utility__isnull=False)
+                ),
+                name='patchnote_product_xor_utility',
+            ),
+        ]
 
     def __str__(self):
-        return f"{self.product} - {self.version}"
+        subject = self.product or self.utility
+        return f"{subject} - {self.version}"
+
+    @property
+    def subject(self):
+        """product 또는 utility 반환"""
+        return self.product if self.product_id else self.utility
+
+    @property
+    def subject_label(self):
+        """플랫폼+카테고리(product) 또는 이름(utility) 표시용 문자열"""
+        if self.product_id:
+            return f"{self.product.get_platform_display()} {self.product.get_category_display()}"
+        if self.utility_id:
+            return self.utility.name
+        return ''
 
 class PatchItemBase(BaseModel):
     """패치노트 공통 베이스 모델"""

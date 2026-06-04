@@ -3,12 +3,20 @@ from apps.base.models import BaseModel
 
 
 class NotionPageMapping(BaseModel):
-    """Product ↔ Notion 페이지 매핑"""
+    """Product 또는 Utility ↔ Notion 페이지 매핑"""
     product = models.OneToOneField(
         'product.Product',
         on_delete=models.CASCADE,
         related_name='notion_mapping',
         verbose_name="제품",
+        null=True, blank=True,
+    )
+    utility = models.OneToOneField(
+        'product.Utility',
+        on_delete=models.CASCADE,
+        related_name='notion_mapping',
+        verbose_name="유틸리티",
+        null=True, blank=True,
     )
     page_id_ko = models.CharField(max_length=100, verbose_name="한국어 페이지 ID")
     page_id_en = models.CharField(max_length=100, verbose_name="영문 페이지 ID", blank=True, default='')
@@ -21,4 +29,9 @@ class NotionPageMapping(BaseModel):
         verbose_name_plural = "Notion 페이지 매핑 목록"
 
     def __str__(self):
-        return f"{self.product} → {self.page_id_ko[:12]}..."
+        subject = self.product or self.utility
+        return f"{subject} → {self.page_id_ko[:12]}..."
+
+    @property
+    def subject(self):
+        return self.product if self.product_id else self.utility
