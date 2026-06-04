@@ -186,7 +186,7 @@ def _clean_notion_md(md: str) -> str:
         md = re.sub(tag + r'[ \t]*\n?', '', md)
 
     md = re.sub(r'<mention-page url="([^"]+)"/>', r'[\1](\1)', md)
-    md = md.replace('\\[', '[').replace('\\]', ']')
+    md = re.sub(r'\\([~\[\]_*])', r'\1', md)
 
     lang_map = {'plain text': '', 'javascript': 'sh', 'groovy': 'groovy'}
     def replace_code_open(m):
