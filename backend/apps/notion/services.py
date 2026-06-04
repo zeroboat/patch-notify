@@ -8,6 +8,7 @@ Notion 페이지에서 패치노트를 가져와 DB에 동기화하는 서비스
 import re
 import logging
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 from pathlib import Path
 
 import requests
@@ -725,9 +726,16 @@ def _build_patch_md(patch_note: PatchNote, lang: str = 'ko') -> str:
     else:
         cat_new, cat_imp, cat_bug = '기능 추가', '기능 개선', '버그 수정'
 
+    is_tool = patch_note.product.solution.is_tool
+    eol_date = (patch_note.release_date + relativedelta(years=1)) if is_tool else None
+
     lines = [
         f'\t\t## <span color="green_bg">{patch_note.version} </span>',
         f'\t\tDATE : {patch_note.release_date}',
+    ]
+    if eol_date:
+        lines.append(f'\t\t지원 종료 예정 : {eol_date}')
+    lines += [
         '\t\t**\\[*Patch notes*\\]**',
         '\t\t```plain text',
         cat_new,
