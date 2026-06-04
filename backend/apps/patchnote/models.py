@@ -152,10 +152,13 @@ class Internal(PatchItemBase):
 
 def patchnote_file_upload_path(instance, filename):
     note = instance.patch_note
-    solution = note.product.solution.name
-    product = f"{note.product.get_platform_display()}_{note.product.get_category_display()}"
-    version = note.version
-    return f"patchnotes/{solution}/{product}/{version}/{instance.file_type}/{filename}"
+    if note.product_id:
+        group = note.product.solution.name.replace(' ', '_')
+        sub = f"{note.product.get_platform_display()}_{note.product.get_category_display()}"
+    else:
+        group = 'utilities'
+        sub = note.utility.name.replace(' ', '_')
+    return f"patchnotes/{group}/{sub}/{note.version}/{instance.file_type}/{filename}"
 
 
 class PatchNoteFile(BaseModel):

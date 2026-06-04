@@ -726,7 +726,7 @@ def _build_patch_md(patch_note: PatchNote, lang: str = 'ko') -> str:
     else:
         cat_new, cat_imp, cat_bug = '기능 추가', '기능 개선', '버그 수정'
 
-    is_tool = patch_note.subject.solution.is_tool
+    is_tool = patch_note.utility_id is not None
     eol_date = (patch_note.release_date + relativedelta(years=1)) if is_tool else None
 
     lines = [

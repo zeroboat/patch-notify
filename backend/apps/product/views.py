@@ -174,72 +174,49 @@ def delete_solution(request):
 # ---------------------------------------------------------------------------
 
 class UtilityManagementView(RoleRequiredMixin, TemplateView):
-    """Admin 전용: 유틸리티/툴 솔루션 관리"""
+    """Admin 전용: 유틸리티 관리 (플랫폼별 분류)"""
     allowed_roles = []
     template_name = "product/utility_management.html"
 
     def get_context_data(self, **kwargs):
         context = TemplateLayout.init(self, super().get_context_data(**kwargs))
 
-        tool_solutions = Solution.objects.filter(solution_type=Solution.TYPE_TOOL).prefetch_related(
-            Prefetch(
-                'utilities',
-                queryset=Utility.objects.annotate(
-                    latest_release=Max('patch_notes__release_date')
-                ).order_by('order', 'name')
-            )
-        ).order_by('order', 'id')
+        utilities = Utility.objects.annotate(
+            latest_release=Max('patch_notes__release_date')
+        ).order_by('platform', 'order', 'name')
 
-        total_utilities = Utility.objects.filter(
-            solution__solution_type=Solution.TYPE_TOOL
-        ).count()
+        # 플랫폼별 그룹핑
+        platform_map = {}
+        for u in utilities:
+            platform_map.setdefault(u.platform, []).append(u)
+
+        platforms = [
+            {'key': key, 'label': label, 'utilities': platform_map.get(key, [])}
+            for key, label in Utility.PLATFORM_CHOICES
+        ]
 
         context.update({
-            'tool_solutions': tool_solutions,
-            'total_utilities': total_utilities,
+            'platforms': platforms,
+            'platform_choices': Utility.PLATFORM_CHOICES,
+            'total_utilities': utilities.count(),
         })
         return context
 
 
 @role_required()
-def create_utility_solution(request):
-    if request.method == 'POST':
-        name = request.POST.get('name', '').strip()
-        icon = request.POST.get('icon', '').strip() or 'bx-wrench'
-        order = request.POST.get('order', '0').strip()
-        if name:
-            Solution.objects.create(
-                name=name,
-                icon=icon,
-                order=int(order or 0),
-                solution_type=Solution.TYPE_TOOL,
-            )
-            messages.success(request, f'툴 솔루션 "{name}"이 등록되었습니다.')
-        else:
-            messages.error(request, '솔루션 이름을 입력해주세요.')
-    return redirect('product:utility_management')
-
-
-@role_required()
 def create_utility(request):
     if request.method == 'POST':
-        solution_id = request.POST.get('solution_id')
         name = request.POST.get('name', '').strip()
+        platform = request.POST.get('platform', Utility.PLATFORM_COMMON)
         order = request.POST.get('order', '0').strip()
-
-        try:
-            solution = Solution.objects.get(id=solution_id, solution_type=Solution.TYPE_TOOL)
-            Utility.objects.create(
-                solution=solution,
-                name=name,
-                order=int(order or 0),
-            )
-            messages.success(request, f'유틸리티 "{name}"이 등록되었습니다.')
-        except Solution.DoesNotExist:
-            messages.error(request, '선택한 툴 솔루션을 찾을 수 없습니다.')
-        except Exception as e:
-            messages.error(request, f'등록 중 오류가 발생했습니다: {e}')
-
+        if not name:
+            messages.error(request, '유틸리티 이름을 입력해주세요.')
+        else:
+            try:
+                Utility.objects.create(name=name, platform=platform, order=int(order or 0))
+                messages.success(request, f'유틸리티 "{name}"이 등록되었습니다.')
+            except Exception as e:
+                messages.error(request, f'등록 중 오류가 발생했습니다: {e}')
     return redirect('product:utility_management')
 
 
@@ -248,6 +225,7 @@ def create_utility(request):
 def update_utility(request):
     utility_id = request.POST.get('utility_id', '').strip()
     name = request.POST.get('name', '').strip()
+    platform = request.POST.get('platform', '').strip()
     order = request.POST.get('order', '').strip()
 
     if not utility_id:
@@ -258,6 +236,8 @@ def update_utility(request):
     try:
         utility = Utility.objects.get(id=utility_id)
         utility.name = name
+        if platform:
+            utility.platform = platform
         if order:
             utility.order = int(order)
         utility.save()
@@ -290,48 +270,12 @@ def delete_utility(request):
         return JsonResponse({'error': f'삭제 중 오류가 발생했습니다: {e}'}, status=500)
 
 
-@require_POST
-@role_required()
+# solution 기반 유틸리티 뷰는 제거됨 (platform 기반으로 전환)
+def create_utility_solution(request):
+    return redirect('product:utility_management')
+
 def update_utility_solution(request):
-    solution_id = request.POST.get('solution_id', '').strip()
-    name = request.POST.get('name', '').strip()
-    icon = request.POST.get('icon', '').strip()
-    order = request.POST.get('order', '').strip()
+    return JsonResponse({'error': '사용되지 않는 엔드포인트입니다.'}, status=410)
 
-    if not solution_id:
-        return JsonResponse({'error': '솔루션 ID가 누락되었습니다.'}, status=400)
-
-    try:
-        solution = Solution.objects.get(id=solution_id, solution_type=Solution.TYPE_TOOL)
-        if name:
-            solution.name = name
-        if icon:
-            solution.icon = icon
-        if order:
-            solution.order = int(order)
-        solution.save()
-        return JsonResponse({'message': f'솔루션 "{solution.name}" 정보가 수정되었습니다.'})
-    except Solution.DoesNotExist:
-        return JsonResponse({'error': '솔루션을 찾을 수 없습니다.'}, status=404)
-    except (ValueError, TypeError):
-        return JsonResponse({'error': '순서 값이 올바르지 않습니다.'}, status=400)
-
-
-@require_POST
-@role_required()
 def delete_utility_solution(request):
-    solution_id = request.POST.get('solution_id', '').strip()
-    try:
-        solution = Solution.objects.get(id=solution_id, solution_type=Solution.TYPE_TOOL)
-        if solution.utilities.exists():
-            return JsonResponse(
-                {'error': '솔루션에 유틸리티가 등록되어 있어 삭제할 수 없습니다. 유틸리티를 먼저 삭제해주세요.'},
-                status=400
-            )
-        name = solution.name
-        solution.delete()
-        return JsonResponse({'message': f'솔루션 "{name}"이 삭제되었습니다.'})
-    except Solution.DoesNotExist:
-        return JsonResponse({'error': '솔루션을 찾을 수 없습니다.'}, status=404)
-    except Exception as e:
-        return JsonResponse({'error': f'삭제 중 오류가 발생했습니다: {e}'}, status=500)
+    return JsonResponse({'error': '사용되지 않는 엔드포인트입니다.'}, status=410)

@@ -1,623 +1,229 @@
 {% extends layout_path %}
-
 {% load static %}
-{% load i18n %}
 
 {% block title %}Utilities Management{% endblock %}
 
 {% block content %}
 <div class="container-xxl flex-grow-1 container-p-y">
 
-  <!-- 페이지 헤더 -->
-  <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+  <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-      <h4 class="fw-bold mb-1">
-        <span class="text-muted fw-light">Management /</span> Utilities Management
-      </h4>
-      <p class="text-muted mb-0 small">등록된 툴 솔루션과 유틸리티를 관리합니다.</p>
+      <h4 class="fw-bold mb-1">Utilities Management</h4>
+      <p class="text-muted mb-0 small">유틸리티 등록 및 관리 — 총 {{ total_utilities }}개</p>
     </div>
-    <div class="d-flex gap-2 flex-shrink-0">
-      <button class="btn btn-outline-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasUtilitySolution">
-        <i class="bx bx-wrench me-1"></i> 툴 솔루션 추가
-      </button>
-      <button class="btn btn-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasUtility">
-        <i class="bx bx-plus me-1"></i> 유틸리티 추가
-      </button>
-    </div>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUtilityModal">
+      <i class="bx bx-plus me-1"></i>유틸리티 추가
+    </button>
   </div>
 
-  <!-- 통계 카드 -->
-  <div class="row g-4 mb-4">
-    <div class="col-6 col-xl-3">
-      <div class="card h-100">
-        <div class="card-body d-flex align-items-center gap-3">
-          <div class="avatar avatar-md flex-shrink-0">
-            <span class="avatar-initial rounded bg-label-primary">
-              <i class="bx bx-wrench fs-4"></i>
-            </span>
-          </div>
-          <div>
-            <p class="mb-0 small text-muted">전체 툴 솔루션</p>
-            <h4 class="mb-0 fw-bold">{{ tool_solutions|length }}</h4>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-xl-3">
-      <div class="card h-100">
-        <div class="card-body d-flex align-items-center gap-3">
-          <div class="avatar avatar-md flex-shrink-0">
-            <span class="avatar-initial rounded bg-label-success">
-              <i class="bx bx-cog fs-4"></i>
-            </span>
-          </div>
-          <div>
-            <p class="mb-0 small text-muted">전체 유틸리티</p>
-            <h4 class="mb-0 fw-bold">{{ total_utilities }}</h4>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+  {% if messages %}
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      {% for message in messages %}
+      Swal.fire({ icon: '{% if message.tags == "error" %}error{% else %}success{% endif %}', title: '{{ message|escapejs }}', timer: 2500, showConfirmButton: false, toast: true, position: 'top-end' });
+      {% endfor %}
+    });
+  </script>
+  {% endif %}
 
-  <!-- 툴 솔루션별 유틸리티 목록 -->
-  {% for solution in tool_solutions %}
+  {% for platform in platforms %}
   <div class="card mb-4">
-    <!-- 솔루션 헤더 -->
-    <div class="card-header d-flex align-items-center justify-content-between py-3">
-      <div class="d-flex align-items-center gap-3">
-        <div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;">
-          <i class="bx {{ solution.icon|default:'bx-wrench' }} text-primary" style="font-size:1.4rem;"></i>
-        </div>
-        <div>
-          <h6 class="mb-0 fw-bold">{{ solution.name }}</h6>
-          <small class="text-muted">유틸리티 {{ solution.utilities.all|length }}개</small>
-        </div>
-      </div>
-      <div class="d-flex align-items-center gap-2">
-        <span class="badge bg-label-secondary rounded-pill" title="정렬 순서">
-          <i class="bx bx-sort-alt-2 me-1"></i>{{ solution.order }}
-        </span>
-        <span class="badge bg-label-primary rounded-pill">{{ solution.name }}</span>
-        <button class="btn btn-sm btn-icon btn-label-warning btn-edit-utility-solution"
-                data-id="{{ solution.id }}" data-name="{{ solution.name }}"
-                data-icon="{{ solution.icon|default:'bx-wrench' }}" data-order="{{ solution.order }}"
-                title="솔루션 편집">
-          <i class="bx bx-edit-alt"></i>
-        </button>
-        <button class="btn btn-sm btn-icon btn-label-danger btn-delete-utility-solution"
-                data-id="{{ solution.id }}" data-name="{{ solution.name }}" title="솔루션 삭제">
-          <i class="bx bx-trash"></i>
-        </button>
-      </div>
+    <div class="card-header d-flex justify-content-between align-items-center py-3">
+      <h6 class="mb-0 fw-semibold">
+        <i class="bx bx-devices me-2 text-primary"></i>{{ platform.label }}
+        <span class="badge bg-label-primary ms-2">{{ platform.utilities|length }}</span>
+      </h6>
     </div>
-
-    {% with utilities=solution.utilities.all %}
-    {% if utilities %}
-    <!-- 유틸리티 테이블 -->
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-          <tr>
-            <th class="ps-4 text-center" style="width:80px">순서</th>
-            <th>유틸리티 명</th>
-            <th style="width:180px">최신 릴리즈</th>
-            <th style="width:80px" class="text-center">관리</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for utility in utilities %}
-          <tr>
-            <td class="ps-4 text-center text-muted small">{{ utility.order }}</td>
-            <td>
-              <div class="d-flex align-items-center gap-2">
-                <i class="bx bx-cog text-secondary" style="font-size:1.1rem;"></i>
-                <span class="fw-medium">{{ utility.name }}</span>
-              </div>
-            </td>
-            <td>
-              {% if utility.latest_release %}
-              <div class="d-flex align-items-center gap-2">
-                <i class="bx bx-calendar-check text-success"></i>
-                <span class="small fw-medium">{{ utility.latest_release|date:"Y.m.d" }}</span>
-              </div>
-              {% else %}
-              <span class="text-muted small">릴리즈 없음</span>
-              {% endif %}
-            </td>
-            <td class="text-center">
-              <div class="dropdown">
-                <button type="button"
-                  class="btn btn-sm btn-icon btn-text-secondary rounded-circle"
-                  data-bs-toggle="dropdown">
-                  <i class="bx bx-dots-vertical-rounded"></i>
-                </button>
-                <div class="dropdown-menu dropdown-menu-end">
-                  <a class="dropdown-item btn-edit-utility" href="javascript:void(0);"
-                     data-id="{{ utility.id }}"
-                     data-name="{{ utility.name }}"
-                     data-order="{{ utility.order }}">
-                    <i class="bx bx-edit-alt me-2 text-warning"></i>수정
-                  </a>
-                  <div class="dropdown-divider"></div>
-                  <a class="dropdown-item text-danger btn-delete-utility"
-                     href="javascript:void(0);"
-                     data-id="{{ utility.id }}"
-                     data-name="{{ utility.name }}">
-                    <i class="bx bx-trash me-2"></i>삭제
-                  </a>
+    <div class="card-body p-0">
+      {% if platform.utilities %}
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">유틸리티 명</th>
+              <th style="width:150px">최근 패치노트</th>
+              <th style="width:80px">순서</th>
+              <th style="width:80px" class="text-center">관리</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for utility in platform.utilities %}
+            <tr>
+              <td class="ps-4 fw-semibold">{{ utility.name }}</td>
+              <td>
+                {% if utility.latest_release %}
+                  <span class="text-muted small">{{ utility.latest_release }}</span>
+                {% else %}
+                  <span class="text-muted small">—</span>
+                {% endif %}
+              </td>
+              <td><span class="text-muted small">{{ utility.order }}</span></td>
+              <td class="text-center">
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-icon btn-label-secondary" data-bs-toggle="dropdown">
+                    <i class="bx bx-dots-vertical-rounded"></i>
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                      <a class="dropdown-item" href="#"
+                         onclick="openEditUtility({{ utility.id }}, '{{ utility.name|escapejs }}', '{{ utility.platform }}', {{ utility.order }})">
+                        <i class="bx bx-edit me-2"></i>수정
+                      </a>
+                    </li>
+                    <li>
+                      <a class="dropdown-item text-danger" href="#"
+                         onclick="deleteUtility({{ utility.id }}, '{{ utility.name|escapejs }}')">
+                        <i class="bx bx-trash me-2"></i>삭제
+                      </a>
+                    </li>
+                  </ul>
                 </div>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-    {% else %}
-    <!-- 유틸리티 없음 상태 -->
-    <div class="card-body py-5 text-center">
-      <div class="avatar avatar-lg mb-3">
-        <span class="avatar-initial rounded-circle bg-label-secondary">
-          <i class="bx bx-cog fs-4"></i>
-        </span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
-      <p class="text-muted mb-2 small">등록된 유틸리티가 없습니다.</p>
-      <button class="btn btn-sm btn-outline-primary"
-        data-bs-toggle="offcanvas" data-bs-target="#offcanvasUtility">
-        <i class="bx bx-plus me-1"></i> 유틸리티 추가
-      </button>
-    </div>
-    {% endif %}
-    {% endwith %}
-  </div>
-  {% empty %}
-  <!-- 솔루션 없음 상태 -->
-  <div class="card">
-    <div class="card-body text-center py-5">
-      <div class="avatar avatar-xl mb-3">
-        <span class="avatar-initial rounded-circle bg-label-secondary">
-          <i class="bx bx-wrench" style="font-size:2rem;"></i>
-        </span>
-      </div>
-      <h6 class="fw-semibold">등록된 툴 솔루션이 없습니다.</h6>
-      <p class="text-muted small mb-3">툴 솔루션을 추가하여 유틸리티를 관리해 보세요.</p>
-      <button class="btn btn-primary"
-        data-bs-toggle="offcanvas" data-bs-target="#offcanvasUtilitySolution">
-        <i class="bx bx-plus me-1"></i> 툴 솔루션 추가
-      </button>
+      {% else %}
+      <div class="text-center text-muted py-4 small">등록된 유틸리티가 없습니다.</div>
+      {% endif %}
     </div>
   </div>
   {% endfor %}
 
 </div>
 
-<!-- ===== 툴 솔루션 추가 Offcanvas ===== -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasUtilitySolution" aria-labelledby="offcanvasUtilitySolutionLabel">
-  <div class="offcanvas-header border-bottom">
-    <div>
-      <h5 id="offcanvasUtilitySolutionLabel" class="offcanvas-title mb-0">새 툴 솔루션 등록</h5>
-      <small class="text-muted">새로운 툴 솔루션 그룹을 추가합니다.</small>
-    </div>
-    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
-  </div>
-  <div class="offcanvas-body">
-    <form action="{% url 'product:create_utility_solution' %}" method="POST">
+<!-- 유틸리티 추가 모달 -->
+<div class="modal fade" id="addUtilityModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="{% url 'product:create_utility' %}">
       {% csrf_token %}
-      <div class="mb-3">
-        <label class="form-label fw-semibold">솔루션 이름 <span class="text-danger">*</span></label>
-        <input type="text" name="name" class="form-control"
-          placeholder="예: 스캔 도구" required autofocus>
-        <div class="form-text">툴 솔루션은 유틸리티들을 묶는 상위 그룹입니다.</div>
-      </div>
-      <!-- 아이콘 선택 -->
-      <div class="mb-4">
-        <label class="form-label fw-semibold">아이콘</label>
-        <input type="hidden" name="icon" id="utilitySolutionIcon" value="bx-wrench">
-        <!-- 미리보기 -->
-        <div class="d-flex align-items-center gap-2 mb-2 px-3 py-2 rounded border bg-light" style="width:fit-content;">
-          <i class="bx bx-wrench text-primary" id="utilitySolutionIconPreviewEl" style="font-size:1.3rem;"></i>
-          <span class="small text-muted" id="utilitySolutionIconPreviewText">bx-wrench</span>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">유틸리티 추가</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-        <!-- 아이콘 그리드 -->
-        <div class="border rounded p-2" style="max-height:210px; overflow-y:auto;">
-          <p class="text-muted small mb-2 px-1">도구/개발</p>
-          <div class="d-flex flex-wrap gap-1 mb-2">
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0 btn-primary text-white" data-icon="bx-wrench" title="Wrench" style="width:36px;height:36px;"><i class="bx bx-wrench" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-cog" title="Settings" style="width:36px;height:36px;"><i class="bx bx-cog" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-code-block" title="Code Block" style="width:36px;height:36px;"><i class="bx bx-code-block" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-code-alt" title="Code" style="width:36px;height:36px;"><i class="bx bx-code-alt" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-terminal" title="Terminal" style="width:36px;height:36px;"><i class="bx bx-terminal" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-extension" title="Extension" style="width:36px;height:36px;"><i class="bx bx-extension" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-package" title="Package" style="width:36px;height:36px;"><i class="bx bx-package" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-plug" title="Plugin" style="width:36px;height:36px;"><i class="bx bx-plug" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-git-branch" title="Git" style="width:36px;height:36px;"><i class="bx bx-git-branch" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-cube-alt" title="Cube" style="width:36px;height:36px;"><i class="bx bx-cube-alt" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-layer" title="Layer" style="width:36px;height:36px;"><i class="bx bx-layer" style="font-size:1.15rem;pointer-events:none;"></i></button>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">유틸리티 명 <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" placeholder="AppSuitSign" required>
           </div>
-          <p class="text-muted small mb-2 px-1">보안</p>
-          <div class="d-flex flex-wrap gap-1 mb-2">
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-shield" title="Shield" style="width:36px;height:36px;"><i class="bx bx-shield" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-shield-quarter" title="Shield Quarter" style="width:36px;height:36px;"><i class="bx bx-shield-quarter" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-shield-alt-2" title="Shield Alt" style="width:36px;height:36px;"><i class="bx bx-shield-alt-2" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-lock" title="Lock" style="width:36px;height:36px;"><i class="bx bx-lock" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-key" title="Key" style="width:36px;height:36px;"><i class="bx bx-key" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-bug" title="Bug" style="width:36px;height:36px;"><i class="bx bx-bug" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-scan" title="Scan" style="width:36px;height:36px;"><i class="bx bx-scan" style="font-size:1.15rem;pointer-events:none;"></i></button>
+          <div class="mb-3">
+            <label class="form-label">플랫폼</label>
+            <select name="platform" class="form-select">
+              {% for key, label in platform_choices %}
+              <option value="{{ key }}">{{ label }}</option>
+              {% endfor %}
+            </select>
           </div>
-          <p class="text-muted small mb-2 px-1">서버/네트워크</p>
-          <div class="d-flex flex-wrap gap-1 mb-2">
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-server" title="Server" style="width:36px;height:36px;"><i class="bx bx-server" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-cloud" title="Cloud" style="width:36px;height:36px;"><i class="bx bx-cloud" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-data" title="Data" style="width:36px;height:36px;"><i class="bx bx-data" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-globe" title="Globe" style="width:36px;height:36px;"><i class="bx bx-globe" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-transfer" title="Transfer" style="width:36px;height:36px;"><i class="bx bx-transfer" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            <button type="button" class="util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-analyse" title="Analyse" style="width:36px;height:36px;"><i class="bx bx-analyse" style="font-size:1.15rem;pointer-events:none;"></i></button>
+          <div class="mb-3">
+            <label class="form-label">정렬 순서</label>
+            <input type="number" name="order" class="form-control" value="0" min="0">
           </div>
         </div>
-        <div class="form-text">아이콘을 클릭하여 선택하세요.</div>
-      </div>
-      <div class="mb-4">
-        <label class="form-label fw-semibold">정렬 순서</label>
-        <input type="number" name="order" class="form-control" min="0" value="0">
-        <div class="form-text">숫자가 작을수록 상단에 표시됩니다.</div>
-      </div>
-      <div class="d-flex gap-2">
-        <button type="submit" class="btn btn-primary">
-          <i class="bx bx-check me-1"></i> 등록
-        </button>
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="offcanvas">취소</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- ===== 유틸리티 추가 Offcanvas ===== -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasUtility" aria-labelledby="offcanvasUtilityLabel">
-  <div class="offcanvas-header border-bottom">
-    <div>
-      <h5 id="offcanvasUtilityLabel" class="offcanvas-title mb-0">새 유틸리티 등록</h5>
-      <small class="text-muted">툴 솔루션에 새 유틸리티를 추가합니다.</small>
-    </div>
-    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
-  </div>
-  <div class="offcanvas-body">
-    <form action="{% url 'product:create_utility' %}" method="POST">
-      {% csrf_token %}
-      <div class="mb-3">
-        <label class="form-label fw-semibold">툴 솔루션 <span class="text-danger">*</span></label>
-        <select name="solution_id" class="form-select" required>
-          <option value="">솔루션을 선택하세요</option>
-          {% for sol in tool_solutions %}
-          <option value="{{ sol.id }}">{{ sol.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="mb-3">
-        <label class="form-label fw-semibold">유틸리티 이름 <span class="text-danger">*</span></label>
-        <input type="text" name="name" class="form-control"
-          placeholder="예: Scanner CLI" required>
-      </div>
-      <div class="mb-4">
-        <label class="form-label fw-semibold">정렬 순서</label>
-        <input type="number" name="order" class="form-control" min="0" value="0">
-        <div class="form-text">숫자가 작을수록 상단에 표시됩니다.</div>
-      </div>
-      <div class="d-flex gap-2">
-        <button type="submit" class="btn btn-primary">
-          <i class="bx bx-check me-1"></i> 등록
-        </button>
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="offcanvas">취소</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- 툴 솔루션 편집 모달 -->
-<div class="modal fade" id="utilitySolutionEditModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-md" role="document">
-    <form id="utilitySolutionEditForm" action="{% url 'product:update_utility_solution' %}" method="POST" class="modal-content">
-      {% csrf_token %}
-      <input type="hidden" name="solution_id" id="editUtilitySolutionId">
-      <div class="modal-header border-bottom pb-3">
-        <h5 class="modal-title fw-bold">툴 솔루션 편집</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div class="mb-3">
-          <label class="form-label fw-semibold">솔루션 이름 <span class="text-danger">*</span></label>
-          <input type="text" name="name" id="editUtilitySolutionName" class="form-control" required>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">취소</button>
+          <button type="submit" class="btn btn-primary">추가</button>
         </div>
-        <div class="mb-3">
-          <label class="form-label fw-semibold">아이콘</label>
-          <input type="hidden" name="icon" id="editUtilitySolutionIcon" value="bx-wrench">
-          <div class="d-flex align-items-center gap-2 mb-2 px-3 py-2 rounded border bg-light" style="width:fit-content;">
-            <i class="bx bx-wrench text-primary" id="editUtilSolIconPreviewEl" style="font-size:1.3rem;"></i>
-            <span class="small text-muted" id="editUtilSolIconPreviewText">bx-wrench</span>
-          </div>
-          <div class="border rounded p-2" style="max-height:180px; overflow-y:auto;">
-            <div class="d-flex flex-wrap gap-1">
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-wrench" title="Wrench" style="width:36px;height:36px;"><i class="bx bx-wrench" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-cog" title="Settings" style="width:36px;height:36px;"><i class="bx bx-cog" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-code-block" title="Code" style="width:36px;height:36px;"><i class="bx bx-code-block" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-terminal" title="Terminal" style="width:36px;height:36px;"><i class="bx bx-terminal" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-extension" title="Extension" style="width:36px;height:36px;"><i class="bx bx-extension" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-package" title="Package" style="width:36px;height:36px;"><i class="bx bx-package" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-plug" title="Plugin" style="width:36px;height:36px;"><i class="bx bx-plug" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-layer" title="Layer" style="width:36px;height:36px;"><i class="bx bx-layer" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-cube-alt" title="Cube" style="width:36px;height:36px;"><i class="bx bx-cube-alt" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-shield" title="Shield" style="width:36px;height:36px;"><i class="bx bx-shield" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-shield-quarter" title="Shield Q" style="width:36px;height:36px;"><i class="bx bx-shield-quarter" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-shield-alt-2" title="Shield Alt" style="width:36px;height:36px;"><i class="bx bx-shield-alt-2" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-lock" title="Lock" style="width:36px;height:36px;"><i class="bx bx-lock" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-bug" title="Bug" style="width:36px;height:36px;"><i class="bx bx-bug" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-scan" title="Scan" style="width:36px;height:36px;"><i class="bx bx-scan" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-server" title="Server" style="width:36px;height:36px;"><i class="bx bx-server" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-cloud" title="Cloud" style="width:36px;height:36px;"><i class="bx bx-cloud" style="font-size:1.15rem;pointer-events:none;"></i></button>
-              <button type="button" class="edit-util-sol-icon-opt btn btn-sm text-muted p-0" data-icon="bx-analyse" title="Analyse" style="width:36px;height:36px;"><i class="bx bx-analyse" style="font-size:1.15rem;pointer-events:none;"></i></button>
-            </div>
-          </div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label fw-semibold">정렬 순서</label>
-          <input type="number" name="order" id="editUtilitySolutionOrder" class="form-control" min="0" value="0">
-          <div class="form-text">숫자가 작을수록 상단에 표시됩니다.</div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">취소</button>
-        <button type="submit" class="btn btn-warning" id="btn-update-utility-solution">저장</button>
       </div>
     </form>
   </div>
 </div>
 
 <!-- 유틸리티 수정 모달 -->
-<div class="modal fade" id="utilityEditModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-md" role="document">
-    <form id="utilityEditForm" action="{% url 'product:update_utility' %}" method="POST" class="modal-content">
-      {% csrf_token %}
-      <input type="hidden" name="utility_id" id="editUtilityId">
-      <div class="modal-header border-bottom pb-3">
-        <h5 class="modal-title fw-bold">유틸리티 수정</h5>
+<div class="modal fade" id="editUtilityModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">유틸리티 수정</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
+        <input type="hidden" id="editUtilityId">
         <div class="mb-3">
-          <label class="form-label fw-semibold">유틸리티 이름 <span class="text-danger">*</span></label>
-          <input type="text" name="name" id="editUtilityName" class="form-control" required>
+          <label class="form-label">유틸리티 명 <span class="text-danger">*</span></label>
+          <input type="text" id="editUtilityName" class="form-control" required>
         </div>
         <div class="mb-3">
-          <label class="form-label fw-semibold">정렬 순서</label>
-          <input type="number" name="order" id="editUtilityOrder" class="form-control" min="0" value="0">
-          <div class="form-text">숫자가 작을수록 상단에 표시됩니다.</div>
+          <label class="form-label">플랫폼</label>
+          <select id="editUtilityPlatform" class="form-select">
+            {% for key, label in platform_choices %}
+            <option value="{{ key }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">정렬 순서</label>
+          <input type="number" id="editUtilityOrder" class="form-control" min="0">
         </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">취소</button>
-        <button type="submit" class="btn btn-warning" id="btn-update-utility">저장</button>
+        <button type="button" class="btn btn-primary" onclick="submitEditUtility()">저장</button>
       </div>
-    </form>
+    </div>
   </div>
 </div>
 
-<!-- Django 메시지 데이터 -->
-{% if messages %}
-<div id="django-messages" hidden>
-  {% for message in messages %}
-  <span data-level="{{ message.level_tag }}" data-text="{{ message|escapejs }}"></span>
-  {% endfor %}
-</div>
-{% endif %}
-
-{% endblock content %}
-
-{% block page_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+const CSRF = '{{ csrf_token }}';
 
-  async function doDelete(url, body) {
-    const fd = new FormData();
-    fd.append('csrfmiddlewaretoken', csrfToken);
-    for (const [k, v] of Object.entries(body)) fd.append(k, v);
+function openEditUtility(id, name, platform, order) {
+  document.getElementById('editUtilityId').value = id;
+  document.getElementById('editUtilityName').value = name;
+  document.getElementById('editUtilityPlatform').value = platform;
+  document.getElementById('editUtilityOrder').value = order;
+  new bootstrap.Modal(document.getElementById('editUtilityModal')).show();
+}
 
-    try {
-      const res = await fetch(url, { method: 'POST', body: fd });
-      const data = await res.json();
-      if (res.ok) {
-        await Swal.fire({ icon: 'success', title: '삭제 완료', text: data.message, timer: 1500, showConfirmButton: false });
-        location.reload();
-      } else {
-        Swal.fire('삭제 불가', data.error, 'error');
-      }
-    } catch (e) {
-      Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
-    }
-  }
+function submitEditUtility() {
+  const id = document.getElementById('editUtilityId').value;
+  const name = document.getElementById('editUtilityName').value.trim();
+  const platform = document.getElementById('editUtilityPlatform').value;
+  const order = document.getElementById('editUtilityOrder').value;
+  if (!name) { Swal.fire({ icon: 'warning', title: '유틸리티 이름을 입력해주세요.', timer: 2000, showConfirmButton: false }); return; }
 
-  // 툴 솔루션 편집 모달 열기
-  document.querySelectorAll('.btn-edit-utility-solution').forEach(btn => {
-    btn.addEventListener('click', function () {
-      document.getElementById('editUtilitySolutionId').value    = this.dataset.id;
-      document.getElementById('editUtilitySolutionName').value  = this.dataset.name;
-      document.getElementById('editUtilitySolutionIcon').value  = this.dataset.icon;
-      document.getElementById('editUtilitySolutionOrder').value = this.dataset.order;
-      const icon = this.dataset.icon || 'bx-wrench';
-      document.getElementById('editUtilSolIconPreviewEl').className = 'bx ' + icon + ' text-primary';
-      document.getElementById('editUtilSolIconPreviewEl').style.fontSize = '1.3rem';
-      document.getElementById('editUtilSolIconPreviewText').textContent = icon;
-      document.querySelectorAll('.edit-util-sol-icon-opt').forEach(o => {
-        o.classList.remove('btn-primary', 'text-white');
-        o.classList.add('text-muted');
-        if (o.dataset.icon === icon) {
-          o.classList.add('btn-primary', 'text-white');
-          o.classList.remove('text-muted');
-        }
-      });
-      new bootstrap.Modal(document.getElementById('utilitySolutionEditModal')).show();
-    });
-  });
-
-  // 툴 솔루션 편집 아이콘 피커
-  document.querySelectorAll('.edit-util-sol-icon-opt').forEach(btn => {
-    btn.addEventListener('click', function () {
-      document.querySelectorAll('.edit-util-sol-icon-opt').forEach(o => {
-        o.classList.remove('btn-primary', 'text-white');
-        o.classList.add('text-muted');
-      });
-      this.classList.add('btn-primary', 'text-white');
-      this.classList.remove('text-muted');
-      const icon = this.dataset.icon;
-      document.getElementById('editUtilitySolutionIcon').value = icon;
-      document.getElementById('editUtilSolIconPreviewEl').className = 'bx ' + icon + ' text-primary';
-      document.getElementById('editUtilSolIconPreviewEl').style.fontSize = '1.3rem';
-      document.getElementById('editUtilSolIconPreviewText').textContent = icon;
-    });
-  });
-
-  // 툴 솔루션 편집 폼 제출
-  document.getElementById('utilitySolutionEditForm').addEventListener('submit', async function (e) {
-    e.preventDefault();
-    const btn = document.getElementById('btn-update-utility-solution');
-    btn.disabled = true;
-    const fd = new FormData(this);
-    try {
-      const res = await fetch(this.action, { method: 'POST', body: fd });
-      const data = await res.json();
-      if (res.ok) {
-        await Swal.fire({ icon: 'success', title: '수정 완료', text: data.message, timer: 1500, showConfirmButton: false });
-        location.reload();
-      } else {
-        Swal.fire('오류', data.error, 'error');
-      }
-    } catch (e) {
-      Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
-    } finally {
-      btn.disabled = false;
+  fetch('{% url "product:update_utility" %}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF },
+    body: new URLSearchParams({ utility_id: id, name, platform, order }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    bootstrap.Modal.getInstance(document.getElementById('editUtilityModal')).hide();
+    if (data.message) {
+      Swal.fire({ icon: 'success', title: data.message, timer: 1500, showConfirmButton: false }).then(() => location.reload());
+    } else {
+      Swal.fire({ icon: 'error', title: data.error || '오류가 발생했습니다.' });
     }
   });
+}
 
-  // 유틸리티 수정 모달 열기
-  document.querySelectorAll('.btn-edit-utility').forEach(btn => {
-    btn.addEventListener('click', function () {
-      document.getElementById('editUtilityId').value    = this.dataset.id;
-      document.getElementById('editUtilityName').value  = this.dataset.name;
-      document.getElementById('editUtilityOrder').value = this.dataset.order;
-      new bootstrap.Modal(document.getElementById('utilityEditModal')).show();
-    });
-  });
-
-  // 유틸리티 수정 폼 제출
-  document.getElementById('utilityEditForm').addEventListener('submit', async function (e) {
-    e.preventDefault();
-    const btn = document.getElementById('btn-update-utility');
-    btn.disabled = true;
-    const fd = new FormData(this);
-    try {
-      const res = await fetch(this.action, { method: 'POST', body: fd });
-      const data = await res.json();
-      if (res.ok) {
-        await Swal.fire({ icon: 'success', title: '수정 완료', text: data.message, timer: 1500, showConfirmButton: false });
-        location.reload();
+function deleteUtility(id, name) {
+  Swal.fire({
+    title: `"${name}" 삭제`,
+    text: '삭제된 유틸리티는 복구할 수 없습니다.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: '삭제',
+    cancelButtonText: '취소',
+    confirmButtonColor: '#d33',
+  }).then(result => {
+    if (!result.isConfirmed) return;
+    fetch('{% url "product:delete_utility" %}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF },
+      body: new URLSearchParams({ utility_id: id }),
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.message) {
+        Swal.fire({ icon: 'success', title: data.message, timer: 1500, showConfirmButton: false }).then(() => location.reload());
       } else {
-        Swal.fire('오류', data.error, 'error');
-      }
-    } catch (e) {
-      Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
-  // 유틸리티 삭제
-  document.querySelectorAll('.btn-delete-utility').forEach(btn => {
-    btn.addEventListener('click', async function () {
-      const result = await Swal.fire({
-        title: '유틸리티 삭제',
-        text: `"${this.dataset.name}" 유틸리티를 삭제하시겠습니까? (패치노트가 있으면 삭제되지 않습니다)`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: '삭제',
-        cancelButtonText: '취소',
-        confirmButtonColor: '#d33',
-      });
-      if (result.isConfirmed) {
-        await doDelete('{% url "product:delete_utility" %}', { utility_id: this.dataset.id });
+        Swal.fire({ icon: 'error', title: data.error || '삭제 실패' });
       }
     });
   });
-
-  // 툴 솔루션 삭제
-  document.querySelectorAll('.btn-delete-utility-solution').forEach(btn => {
-    btn.addEventListener('click', async function () {
-      const result = await Swal.fire({
-        title: '툴 솔루션 삭제',
-        text: `"${this.dataset.name}" 솔루션을 삭제하시겠습니까? (유틸리티가 있으면 삭제되지 않습니다)`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: '삭제',
-        cancelButtonText: '취소',
-        confirmButtonColor: '#d33',
-      });
-      if (result.isConfirmed) {
-        await doDelete('{% url "product:delete_utility_solution" %}', { solution_id: this.dataset.id });
-      }
-    });
-  });
-});
+}
 </script>
-
-<!-- 툴 솔루션 아이콘 피커 JS -->
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-  var solOpts      = document.querySelectorAll('.util-sol-icon-opt');
-  var solHidden    = document.getElementById('utilitySolutionIcon');
-  var solPreviewEl = document.getElementById('utilitySolutionIconPreviewEl');
-  var solPreviewTx = document.getElementById('utilitySolutionIconPreviewText');
-
-  function selectUtilSolIcon(btn) {
-    solOpts.forEach(function (o) {
-      o.classList.remove('btn-primary', 'text-white');
-      o.classList.add('text-muted');
-    });
-    btn.classList.add('btn-primary', 'text-white');
-    btn.classList.remove('text-muted');
-
-    var icon = btn.dataset.icon;
-    solHidden.value        = icon;
-    solPreviewEl.className = 'bx ' + icon + ' text-primary';
-    solPreviewEl.style.fontSize = '1.3rem';
-    solPreviewTx.textContent = icon;
-  }
-
-  // 기본값 (bx-wrench) 선택 표시
-  var solDefault = document.querySelector('.util-sol-icon-opt[data-icon="bx-wrench"]');
-  if (solDefault) selectUtilSolIcon(solDefault);
-
-  solOpts.forEach(function (btn) {
-    btn.addEventListener('click', function () { selectUtilSolIcon(this); });
-  });
-});
-</script>
-
-<!-- Django 메시지 → SweetAlert2 토스트 -->
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-  document.querySelectorAll('#django-messages span').forEach(function (el) {
-    const level = el.dataset.level;
-    Swal.fire({
-      toast: true,
-      position: 'top-end',
-      icon: level === 'error' ? 'error' : level === 'success' ? 'success' : 'info',
-      title: el.dataset.text,
-      showConfirmButton: false,
-      timer: 3500,
-      timerProgressBar: true,
-    });
-  });
-});
-</script>
-
-{% endblock page_js %}
+{% endblock %}
