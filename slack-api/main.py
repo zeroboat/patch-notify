@@ -7,7 +7,7 @@ FastAPI — Slack 외부 공개 엔드포인트
 import os
 from datetime import datetime, timezone
 from dotenv import load_dotenv
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', 'dev.env'))
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 import httpx
 from fastapi import FastAPI, Request
@@ -86,7 +86,7 @@ _INSTALL_PAGE = """\
   <p>설치할 워크스페이스의 Team ID를 입력하세요.<br>
      여러 워크스페이스에 로그인된 경우 올바른 워크스페이스가 자동 선택됩니다.</p>
 
-  <form method="get" action="/slack/install/">
+  <form method="get" action="">
     <label for="team">Team ID</label>
     <div class="input-wrap">
       <input id="team" name="team" type="text" placeholder="T01234ABCDE"
@@ -100,7 +100,7 @@ _INSTALL_PAGE = """\
   </form>
 
   <div class="divider">또는</div>
-  <a href="/slack/install/?team=" class="btn-direct">
+  <a href="?team=" class="btn-direct">
     Team ID 없이 설치
   </a>
 </div>

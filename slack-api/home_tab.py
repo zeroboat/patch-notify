@@ -90,31 +90,29 @@ def build_home_tab(db: Session, customer_id: int, customer_name: str) -> list:
         },
         {
             "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"안녕하세요, *{customer_name}*님 👋\n구독 설정을 관리하고 최신 패치노트를 확인하세요.",
-            },
-            "accessory": {
+            "text": {"type": "mrkdwn", "text": f"안녕하세요, *{customer_name}*님 👋"},
+        },
+        {
+            "type": "actions",
+            "elements": [{
                 "type": "button",
-                "text": {"type": "plain_text", "text": "📧 수신 이메일 확인"},
+                "text": {"type": "plain_text", "text": "📧 수신 이메일"},
                 "action_id": "view_emails",
-            },
+            }],
         },
         {"type": "divider"},
         {
             "type": "section",
-            "text": {"type": "mrkdwn", "text": "*💡 시작 가이드*"},
+            "text": {"type": "mrkdwn", "text": "*📌 사용 전 확인해 주세요*"},
         },
         {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": (
-                    "*1️⃣  봇 초대* — 알림 받을 채널에서 `/invite @Patch Notify` 입력\n"
-                    "*2️⃣  채널 설정* — 아래 *설정 변경* 버튼에서 알림 채널 선택 후 저장\n"
-                    "*3️⃣  알림 수신* — 새 패치노트 발행 시 선택한 채널로 자동 전송"
-                ),
-            },
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": (
+                "• *Slack 알림* — 알림을 받으려면 채널에 봇을 먼저 초대해야 합니다.  채널에서 `/invite @Patch Notify` 입력\n"
+                "• *채널 설정* — 봇 초대 후 *설정 변경*에서 해당 채널을 선택하고 저장해야 알림이 활성화됩니다.\n"
+                "• *이메일 알림* — 수신 이메일은 담당자가 등록한 주소로만 발송됩니다.  상단 *수신 이메일* 버튼으로 확인 가능\n"
+                "• *패치노트 조회* — *최근 패치노트* 버튼을 누르면 DM으로 최근 패치노트를 받아볼 수 있습니다."
+            )}],
         },
         {"type": "divider"},
     ]
@@ -127,11 +125,6 @@ def build_home_tab(db: Session, customer_id: int, customer_name: str) -> list:
             "text": {"type": "mrkdwn", "text": "⚠️ 구독 가능한 솔루션이 없습니다.\n담당자에게 문의해 주세요."},
         })
         return blocks
-
-    blocks.append({
-        "type": "section",
-        "text": {"type": "mrkdwn", "text": f"*📦 구독 솔루션*  _{len(solutions)}개_"},
-    })
 
     sol_ids = [s.id for s in solutions]
 
@@ -149,8 +142,22 @@ def build_home_tab(db: Session, customer_id: int, customer_name: str) -> list:
     ).fetchall()
     sub_map: dict[tuple, object] = {(s.product_id, s.channel): s for s in all_subs}
 
-    for sol in solutions:
+    total_email_active = sum(
+        1 for s in all_subs if s.channel == 'email' and s.is_active
+    )
+    total_slack_active = sum(
+        1 for s in all_subs if s.channel == 'slack' and s.is_active
+    )
+
+    blocks.append({
+        "type": "context",
+        "elements": [{"type": "mrkdwn", "text": f"📦 솔루션 {len(solutions)}개   |   📧 이메일 {total_email_active}개 활성   💬 Slack {total_slack_active}개 활성"}],
+    })
+    blocks.append({"type": "divider"})
+
+    for i, sol in enumerate(solutions):
         products = products_by_sol.get(sol.id, [])
+        total = len(products)
 
         email_active = sum(
             1 for p in products
@@ -160,42 +167,41 @@ def build_home_tab(db: Session, customer_id: int, customer_name: str) -> list:
             1 for p in products
             if (s := sub_map.get((p.id, 'slack'))) and s.is_active
         )
-        total = len(products)
 
         if total == 0:
-            email_status = "⬜  제품 없음"
-            slack_status = "⬜  제품 없음"
+            status_text = "_제품 없음_"
         else:
-            email_status = f"🟢  {email_active}/{total}개 활성" if email_active else "🔴  비활성화"
-            slack_status = f"🟢  {slack_active}/{total}개 활성" if slack_active else "🔴  비활성화"
+            email_text = f"✅ {email_active}/{total}개" if email_active else "❌ 비활성"
+            slack_text = f"✅ {slack_active}/{total}개" if slack_active else "❌ 비활성"
+            status_text = f"📧 {email_text}   |   💬 {slack_text}"
 
-        blocks.append({"type": "divider"})
+        if i > 0:
+            blocks.append({"type": "divider"})
+
         blocks.append({
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"*{sol.name}*"},
-            "accessory": {
-                "type": "button",
-                "text": {"type": "plain_text", "text": "⚙️ 설정 변경"},
-                "action_id": "open_subscription_modal",
-                "value": str(sol.id),
-                "style": "primary",
-            },
         })
         blocks.append({
-            "type": "section",
-            "fields": [
-                {"type": "mrkdwn", "text": f"*📧 이메일 알림*\n{email_status}"},
-                {"type": "mrkdwn", "text": f"*💬 Slack 알림*\n{slack_status}"},
-            ],
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": status_text}],
         })
         blocks.append({
             "type": "actions",
-            "elements": [{
-                "type": "button",
-                "text": {"type": "plain_text", "text": "📄 최근 패치노트"},
-                "action_id": "view_recent_patchnotes",
-                "value": str(sol.id),
-            }],
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "⚙️ 설정 변경"},
+                    "action_id": "open_subscription_modal",
+                    "value": str(sol.id),
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "📄 최근 패치노트"},
+                    "action_id": "view_recent_patchnotes",
+                    "value": str(sol.id),
+                },
+            ],
         })
 
     return blocks
@@ -229,7 +235,7 @@ def build_subscription_modal(db: Session, customer_id: int, solution_id: int, so
 
     # 현재 활성화된 제품 및 공통 설정 수집
     email_active_opts, slack_active_opts = [], []
-    email_max, slack_max, slack_channel = '5', '5', ''
+    email_max, slack_channel = '5', ''
 
     for p, opt in zip(products, product_options):
         email_sub = sub_map.get((p.id, 'email'))
@@ -239,7 +245,6 @@ def build_subscription_modal(db: Session, customer_id: int, solution_id: int, so
             email_max = str(email_sub.max_items)
         if slack_sub and slack_sub.is_active:
             slack_active_opts.append(opt)
-            slack_max = str(slack_sub.max_items)
             if slack_sub.slack_channel:
                 slack_channel = slack_sub.slack_channel
 
@@ -294,18 +299,6 @@ def build_subscription_modal(db: Session, customer_id: int, solution_id: int, so
             "block_id": "slack_channel_input",
             "label": {"type": "plain_text", "text": "알림 채널"},
             "element": channel_element,
-            "optional": True,
-        },
-        {
-            "type": "input",
-            "block_id": "slack_max_items",
-            "label": {"type": "plain_text", "text": "최대 건수"},
-            "element": {
-                "type": "static_select",
-                "action_id": "slack_max_select",
-                "options": _MAX_ITEMS_OPTIONS,
-                "initial_option": _max_initial(slack_max),
-            },
             "optional": True,
         },
     ]
