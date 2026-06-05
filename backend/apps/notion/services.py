@@ -8,6 +8,7 @@ Notion 페이지에서 패치노트를 가져와 DB에 동기화하는 서비스
 import re
 import logging
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 from pathlib import Path
 
 import requests
@@ -93,33 +94,39 @@ def fetch_page_markdown(page_id: str) -> str:
 # 1-1. MD 파일 저장/로드
 # ──────────────────────────────────────────────
 
-def _get_md_dir(product) -> Path:
-    """제품별 MD 저장 디렉토리"""
-    solution_name = product.solution.name.replace(' ', '_')
+def _get_md_dir(subject) -> Path:
+    """제품/유틸리티별 MD 저장 디렉토리"""
+    from apps.product.models import Utility
+    if isinstance(subject, Utility):
+        return Path(settings.NOTION_MD_DIR) / 'utilities'
+    solution_name = subject.solution.name.replace(' ', '_')
     return Path(settings.NOTION_MD_DIR) / solution_name
 
 
-def _get_md_filename(product, lang: str = 'ko') -> str:
-    """파일명 생성: {Platform}_{Category}[_en].md"""
-    platform = product.get_platform_display().replace(' ', '_')
-    category = product.get_category_display().replace(' ', '_')
+def _get_md_filename(subject, lang: str = 'ko') -> str:
+    """파일명 생성 — Product: {Platform}_{Category}[_en].md / Utility: {Name}[_en].md"""
+    from apps.product.models import Utility
     suffix = '_en' if lang == 'en' else ''
+    if isinstance(subject, Utility):
+        return f'{subject.name.replace(" ", "_")}{suffix}.md'
+    platform = subject.get_platform_display().replace(' ', '_')
+    category = subject.get_category_display().replace(' ', '_')
     return f'{platform}_{category}{suffix}.md'
 
 
-def _save_md_file(product, md_content: str, lang: str = 'ko') -> Path:
+def _save_md_file(subject, md_content: str, lang: str = 'ko') -> Path:
     """cleaned MD를 파일로 저장"""
-    md_dir = _get_md_dir(product)
+    md_dir = _get_md_dir(subject)
     md_dir.mkdir(parents=True, exist_ok=True)
-    file_path = md_dir / _get_md_filename(product, lang)
+    file_path = md_dir / _get_md_filename(subject, lang)
     file_path.write_text(md_content, encoding='utf-8')
     logger.info('MD 파일 저장: %s', file_path)
     return file_path
 
 
-def _load_md_file(product, lang: str = 'ko') -> str | None:
+def _load_md_file(subject, lang: str = 'ko') -> str | None:
     """저장된 MD 파일 로드 (없으면 None)"""
-    file_path = _get_md_dir(product) / _get_md_filename(product, lang)
+    file_path = _get_md_dir(subject) / _get_md_filename(subject, lang)
     if file_path.exists():
         return file_path.read_text(encoding='utf-8')
     return None
@@ -179,7 +186,7 @@ def _clean_notion_md(md: str) -> str:
         md = re.sub(tag + r'[ \t]*\n?', '', md)
 
     md = re.sub(r'<mention-page url="([^"]+)"/>', r'[\1](\1)', md)
-    md = md.replace('\\[', '[').replace('\\]', ']')
+    md = re.sub(r'\\([~\[\]_*])', r'\1', md)
 
     lang_map = {'plain text': '', 'javascript': 'sh', 'groovy': 'groovy'}
     def replace_code_open(m):
@@ -319,7 +326,8 @@ def _parse_remarks(block: str) -> str:
     if not match:
         return ''
     raw = match.group(1)
-    end = re.search(r'\n\s*##\s+', raw)
+    # 다음 섹션 레이블(**[...]**) 또는 다음 버전 헤더(##)에서 종료
+    end = re.search(r'\n\s*(?:##\s+|\*{2,3}\[)', raw)
     if end:
         raw = raw[:end.start()]
     lines = raw.split('\n')
@@ -402,7 +410,7 @@ def _check_page_changed(mapping, page_id: str, lang: str) -> tuple[bool, datetim
 
     stored = mapping.notion_last_edited_ko if lang == 'ko' else mapping.notion_last_edited_en
     if stored and last_edited <= stored:
-        logger.info('변경 없음 (%s %s): last_edited=%s, stored=%s', mapping.product, lang, last_edited, stored)
+        logger.info('변경 없음 (%s %s): last_edited=%s, stored=%s', mapping.subject, lang, last_edited, stored)
         return False, last_edited
 
     return True, last_edited
@@ -418,12 +426,12 @@ def _fetch_and_save_md(mapping, page_id: str, lang: str) -> tuple[str, bool]:
     cleaned_md = _clean_notion_md(raw_md)
 
     # 기존 파일과 비교
-    existing = _load_md_file(mapping.product, lang)
+    existing = _load_md_file(mapping.subject, lang)
     if existing == cleaned_md:
-        logger.info('MD 내용 동일 (%s %s) — 파일 스킵', mapping.product, lang)
+        logger.info('MD 내용 동일 (%s %s) — 파일 스킵', mapping.subject, lang)
         return cleaned_md, False
 
-    _save_md_file(mapping.product, cleaned_md, lang)
+    _save_md_file(mapping.subject, cleaned_md, lang)
     return cleaned_md, True
 
 
@@ -439,7 +447,7 @@ def sync_product(mapping: NotionPageMapping, version: str = None, force: bool = 
     Returns:
         {'created': int, 'updated': int, 'skipped': int, 'unchanged': bool}
     """
-    product = mapping.product
+    subject = mapping.subject
     stats = {'created': 0, 'updated': 0, 'skipped': 0, 'unchanged': False}
 
     # ── 한국어 페이지 변경 감지 ──
@@ -461,15 +469,14 @@ def sync_product(mapping: NotionPageMapping, version: str = None, force: bool = 
     if force or ko_changed:
         md_ko, ko_content_changed = _fetch_and_save_md(mapping, mapping.page_id_ko, 'ko')
     else:
-        # 메타데이터상 변경 없지만 영문이 변경됨 → 기존 파일에서 로드
-        md_ko = _load_md_file(product, 'ko')
+        md_ko = _load_md_file(subject, 'ko')
         if not md_ko:
             md_ko, ko_content_changed = _fetch_and_save_md(mapping, mapping.page_id_ko, 'ko')
         else:
             ko_content_changed = False
 
     notes_ko = parse_md_to_patch_notes(md_ko)
-    logger.info('%s 파싱된 버전 수: %d', product, len(notes_ko))
+    logger.info('%s 파싱된 버전 수: %d', subject, len(notes_ko))
 
     # ── 영문 MD (있으면) ──
     notes_en_by_version = {}
@@ -479,7 +486,7 @@ def sync_product(mapping: NotionPageMapping, version: str = None, force: bool = 
             if force or en_changed:
                 md_en, en_content_changed = _fetch_and_save_md(mapping, mapping.page_id_en, 'en')
             else:
-                md_en = _load_md_file(product, 'en')
+                md_en = _load_md_file(subject, 'en')
                 if not md_en:
                     md_en, en_content_changed = _fetch_and_save_md(mapping, mapping.page_id_en, 'en')
 
@@ -491,8 +498,7 @@ def sync_product(mapping: NotionPageMapping, version: str = None, force: bool = 
 
     # ── 파일 내용도 동일하면 DB 업데이트 스킵 ──
     if not force and not ko_content_changed and not en_content_changed:
-        logger.info('%s MD 파일 내용 변경 없음 — DB 업데이트 스킵', product)
-        # last_edited 타임스탬프만 갱신
+        logger.info('%s MD 파일 내용 변경 없음 — DB 업데이트 스킵', subject)
         if ko_last_edited:
             mapping.notion_last_edited_ko = ko_last_edited
         if en_last_edited:
@@ -503,6 +509,7 @@ def sync_product(mapping: NotionPageMapping, version: str = None, force: bool = 
         return stats
 
     # ── DB upsert ──
+    note_lookup = {'utility': subject} if mapping.utility_id else {'product': subject}
     for note_data in notes_ko:
         v = note_data.get('version', '').strip()
         patch_date = note_data.get('patch_date', '').strip()
@@ -517,7 +524,7 @@ def sync_product(mapping: NotionPageMapping, version: str = None, force: bool = 
         en = notes_en_by_version.get(v, {})
 
         patch_note, created = PatchNote.objects.get_or_create(
-            product=product,
+            **note_lookup,
             version=v,
             defaults={'release_date': patch_date, 'is_published': True},
         )
@@ -725,9 +732,33 @@ def _build_patch_md(patch_note: PatchNote, lang: str = 'ko') -> str:
     else:
         cat_new, cat_imp, cat_bug = '기능 추가', '기능 개선', '버그 수정'
 
+    is_tool = patch_note.utility_id is not None
+    eol_date = (patch_note.release_date + relativedelta(years=1)) if is_tool else None
+
+    # has_download 유틸리티의 release 파일 NAS 링크
+    download_line = None
+    if is_tool and patch_note.utility.has_download:
+        from apps.patchnote.models import PatchNoteFile
+        release_file = (
+            PatchNoteFile.objects
+            .filter(patch_note=patch_note, file_type='release')
+            .exclude(nextcloud_url='')
+            .filter(nextcloud_url__isnull=False)
+            .order_by('-created_at')
+            .first()
+        )
+        if release_file:
+            filename = release_file.original_filename
+            download_line = f'\t\t**\\[*Download*\\]**\n\t\t- URL : [{filename}]({release_file.nextcloud_url})'
+
     lines = [
         f'\t\t## <span color="green_bg">{patch_note.version} </span>',
         f'\t\tDATE : {patch_note.release_date}',
+    ]
+    if eol_date:
+        eol_label = 'End of Support' if is_en else '지원 종료 예정'
+        lines.append(f'\t\t{eol_label} : {eol_date}')
+    lines += [
         '\t\t**\\[*Patch notes*\\]**',
         '\t\t```plain text',
         cat_new,
@@ -741,6 +772,10 @@ def _build_patch_md(patch_note: PatchNote, lang: str = 'ko') -> str:
         '\t\t```',
         '\t\t**\\[*Remarks*\\]**',
         remarks_tabbed,
+    ]
+    if download_line:
+        lines.append(download_line)
+    lines += [
         '\t\t<empty-block/>',
         '\t\t---',
     ]
@@ -829,10 +864,11 @@ def push_patch_note_to_notion(patch_note: PatchNote, is_new: bool = True) -> dic
     if not cfg.notion_enabled or not cfg.notion_token:
         raise ValueError('Notion 연동이 비활성화되어 있습니다.')
 
+    mapping_filter = {'product': patch_note.product} if patch_note.product_id else {'utility': patch_note.utility}
     try:
-        mapping = NotionPageMapping.objects.get(product=patch_note.product)
+        mapping = NotionPageMapping.objects.get(**mapping_filter)
     except NotionPageMapping.DoesNotExist:
-        raise ValueError('해당 제품의 Notion 매핑 정보가 없습니다.')
+        raise ValueError('해당 제품/유틸리티의 Notion 매핑 정보가 없습니다.')
 
     version = patch_note.version
     push_result = {'ko': None, 'en': None, 'en_status': 'skipped', 'en_reason': ''}
@@ -840,12 +876,12 @@ def push_patch_note_to_notion(patch_note: PatchNote, is_new: bool = True) -> dic
     # ── 한국어 페이지 push ──
     md_ko = _build_patch_md(patch_note, lang='ko')
     push_result['ko'] = _push_to_page(mapping.page_id_ko, md_ko, is_new, version)
-    logger.info('Notion push 완료 (KO): %s v%s (%s)', patch_note.product, version, 'insert' if is_new else 'update')
+    logger.info('Notion push 완료 (KO): %s v%s (%s)', patch_note.subject, version, 'insert' if is_new else 'update')
 
     # ── 영문 페이지 push (매핑이 있고, 영문 콘텐츠가 있을 때) ──
     if not mapping.page_id_en:
         push_result['en_reason'] = 'page_id_en 미설정'
-        logger.info('Notion 영문 push 건너뜀 — page_id_en 미설정 (%s)', patch_note.product)
+        logger.info('Notion 영문 push 건너뜀 — page_id_en 미설정 (%s)', patch_note.subject)
     else:
         has_en = any(
             manager.filter(parent__isnull=True, content_en__isnull=False).exclude(content_en='').exists()
@@ -853,17 +889,17 @@ def push_patch_note_to_notion(patch_note: PatchNote, is_new: bool = True) -> dic
         )
         if not has_en:
             push_result['en_reason'] = '영문 콘텐츠 없음 (content_en이 비어있음)'
-            logger.info('Notion 영문 push 건너뜀 — 영문 콘텐츠 없음 (%s v%s)', patch_note.product, version)
+            logger.info('Notion 영문 push 건너뜀 — 영문 콘텐츠 없음 (%s v%s)', patch_note.subject, version)
         else:
             try:
                 md_en = _build_patch_md(patch_note, lang='en')
                 push_result['en'] = _push_to_page(mapping.page_id_en, md_en, is_new, version)
                 push_result['en_status'] = 'success'
-                logger.info('Notion push 완료 (EN): %s v%s (%s)', patch_note.product, version, 'insert' if is_new else 'update')
+                logger.info('Notion push 완료 (EN): %s v%s (%s)', patch_note.subject, version, 'insert' if is_new else 'update')
             except Exception as e:
                 push_result['en_status'] = 'failed'
                 push_result['en_reason'] = str(e)
-                logger.error('Notion 영문 push 실패 (%s v%s): %s', patch_note.product, version, e, exc_info=True)
+                logger.error('Notion 영문 push 실패 (%s v%s): %s', patch_note.subject, version, e, exc_info=True)
 
     return push_result
 
@@ -875,10 +911,11 @@ def push_en_to_notion(patch_note: PatchNote, is_new: bool = True) -> dict:
     if not cfg.notion_enabled or not cfg.notion_token:
         raise ValueError('Notion 연동이 비활성화되어 있습니다.')
 
+    mapping_filter = {'product': patch_note.product} if patch_note.product_id else {'utility': patch_note.utility}
     try:
-        mapping = NotionPageMapping.objects.get(product=patch_note.product)
+        mapping = NotionPageMapping.objects.get(**mapping_filter)
     except NotionPageMapping.DoesNotExist:
-        raise ValueError('해당 제품의 Notion 매핑 정보가 없습니다.')
+        raise ValueError('해당 제품/유틸리티의 Notion 매핑 정보가 없습니다.')
 
     if not mapping.page_id_en:
         return {'en_status': 'skipped', 'en_reason': 'page_id_en 미설정'}

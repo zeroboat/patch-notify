@@ -165,6 +165,9 @@ def _send_internal_slack_notification(patch_note):
             logger.warning('사내 Slack 워크스페이스 미설정 — Admin에서 is_internal 체크 필요')
             return
 
+        if not patch_note.product_id:
+            return
+
         subs = (
             Subscription.objects
             .filter(
@@ -180,10 +183,8 @@ def _send_internal_slack_notification(patch_note):
         if not subs.exists():
             return
 
-        solution_name = patch_note.product.solution.name
-        platform = patch_note.product.get_platform_display()
-        category = patch_note.product.get_category_display()
-        product_label = f"{solution_name} {platform} {category}"
+        solution_name = patch_note.subject.solution.name
+        product_label = f"{solution_name} {patch_note.subject_label}"
 
         # internals 접근을 위해 prefetch된 인스턴스를 별도로 조회
         note = (
@@ -219,6 +220,9 @@ def _send_slack_notifications(patch_note):
         from apps.slack_app.models import SlackWorkspace
         from apps.subscriber.models import Subscription
 
+        if not patch_note.product_id:
+            return
+
         subs = (
             Subscription.objects
             .filter(
@@ -234,10 +238,8 @@ def _send_slack_notifications(patch_note):
         if not subs.exists():
             return
 
-        solution_name = patch_note.product.solution.name
-        platform = patch_note.product.get_platform_display()
-        category = patch_note.product.get_category_display()
-        product_label = f"{solution_name} {platform} {category}"
+        solution_name = patch_note.subject.solution.name
+        product_label = f"{solution_name} {patch_note.subject_label}"
 
         fallback_text = f"{product_label} v{patch_note.version} 패치노트가 발행되었습니다."
         blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} Release 안내]"}}]
@@ -263,7 +265,7 @@ def _send_slack_notifications(patch_note):
                 _log_dispatch(
                     channel=DispatchLog.CHANNEL_SLACK,
                     customer=sub.customer,
-                    solution=patch_note.product.solution,
+                    solution=patch_note.subject.solution,
                     recipient=sub.slack_channel,
                     subject=fallback_text,
                     status=DispatchLog.STATUS_SUCCESS,
@@ -274,7 +276,7 @@ def _send_slack_notifications(patch_note):
                 _log_dispatch(
                     channel=DispatchLog.CHANNEL_SLACK,
                     customer=sub.customer,
-                    solution=patch_note.product.solution,
+                    solution=patch_note.subject.solution,
                     recipient=sub.slack_channel,
                     subject=fallback_text,
                     status=DispatchLog.STATUS_FAILED,
@@ -315,6 +317,9 @@ def _send_email_notifications(patch_note):
             logger.warning('Gmail 설정 누락 — 이메일 발송 건너뜀')
             return
 
+        if not patch_note.product_id:
+            return
+
         subs = (
             Subscription.objects
             .filter(
@@ -328,10 +333,8 @@ def _send_email_notifications(patch_note):
         if not subs.exists():
             return
 
-        solution_name = patch_note.product.solution.name
-        platform = patch_note.product.get_platform_display()
-        category = patch_note.product.get_category_display()
-        product_label = f"{solution_name} {platform} {category}"
+        solution_name = patch_note.subject.solution.name
+        product_label = f"{solution_name} {patch_note.subject_label}"
         subject_str = f"[Patch Notify] {product_label} v{patch_note.version} 패치노트"
 
         for sub in subs:
@@ -343,7 +346,6 @@ def _send_email_notifications(patch_note):
             if not emails:
                 continue
 
-            # max_items 건 내 최근 발행 패치노트
             recent_notes = (
                 PatchNote.objects
                 .filter(product=patch_note.product, is_published=True)
@@ -395,7 +397,7 @@ def _send_email_notifications(patch_note):
                 _log_dispatch(
                     channel=DispatchLog.CHANNEL_EMAIL,
                     customer=sub.customer,
-                    solution=patch_note.product.solution,
+                    solution=patch_note.subject.solution,
                     recipient=', '.join(emails),
                     subject=subject_str,
                     status=DispatchLog.STATUS_SUCCESS,
@@ -406,7 +408,7 @@ def _send_email_notifications(patch_note):
                 _log_dispatch(
                     channel=DispatchLog.CHANNEL_EMAIL,
                     customer=sub.customer,
-                    solution=patch_note.product.solution,
+                    solution=patch_note.subject.solution,
                     recipient=', '.join(emails),
                     subject=subject_str,
                     status=DispatchLog.STATUS_FAILED,
@@ -542,6 +544,28 @@ class PatchNoteDetailView(LoginRequiredMixin, TemplateView):
         return context
 
 
+class UtilityPatchNoteDetailView(LoginRequiredMixin, TemplateView):
+    template_name = "patchnote/patch_list.html"
+
+    def get_context_data(self, **kwargs):
+        from apps.product.models import Utility
+        context = super().get_context_data(**kwargs)
+        context = TemplateLayout.init(self, context)
+
+        utility_id = self.kwargs.get('utility_id')
+        utility = get_object_or_404(Utility, id=utility_id)
+
+        patch_notes = PatchNote.objects.filter(utility=utility).prefetch_related(
+            'features', 'improvements', 'bugfixes', 'remarks', 'internals', 'files'
+        ).order_by('-release_date', '-version')
+
+        context.update({
+            'selected_utility': utility,
+            'patch_notes': patch_notes,
+        })
+        return context
+
+
 # ──────────────────────────────────────────────
 # 헬퍼: 섹션 HTML 저장 / 조회
 # ──────────────────────────────────────────────
@@ -589,23 +613,36 @@ def patch_note_append(request):
         special_notes_html   = request.POST.get('special_notes', '')
         internal_notes_html  = request.POST.get('internal_notes', '')
 
-        if not product_id:
-            return JsonResponse({'error': '제품 정보가 누락되었습니다.'}, status=400)
+        utility_id = request.POST.get('utility_id', '').strip()
+
+        if not product_id and not utility_id:
+            return JsonResponse({'error': '제품 또는 유틸리티 정보가 누락되었습니다.'}, status=400)
         if not version:
             return JsonResponse({'error': '버전을 입력해주세요.'}, status=400)
         if not patch_date:
             return JsonResponse({'error': '배포 날짜를 입력해주세요.'}, status=400)
 
-        try:
-            product = Product.objects.get(id=product_id)
-        except Product.DoesNotExist:
-            return JsonResponse({'error': '제품을 찾을 수 없습니다.'}, status=400)
-
-        patch_note, created = PatchNote.objects.get_or_create(
-            product=product,
-            version=version,
-            defaults={'release_date': patch_date},
-        )
+        if utility_id:
+            from apps.product.models import Utility
+            try:
+                utility = Utility.objects.get(id=utility_id)
+            except Utility.DoesNotExist:
+                return JsonResponse({'error': '유틸리티를 찾을 수 없습니다.'}, status=400)
+            patch_note, created = PatchNote.objects.get_or_create(
+                utility=utility,
+                version=version,
+                defaults={'release_date': patch_date},
+            )
+        else:
+            try:
+                product = Product.objects.get(id=product_id)
+            except Product.DoesNotExist:
+                return JsonResponse({'error': '제품을 찾을 수 없습니다.'}, status=400)
+            patch_note, created = PatchNote.objects.get_or_create(
+                product=product,
+                version=version,
+                defaults={'release_date': patch_date},
+            )
         if not created:
             return JsonResponse(
                 {'error': f'버전 {version}은 이미 등록되어 있습니다.'},
@@ -621,6 +658,11 @@ def patch_note_append(request):
         patch_note.translation_status = PatchNote.TRANSLATION_PENDING
         patch_note.save(update_fields=["translation_status", "updated_at"])
         start_translation(patch_note.id)
+
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.PATCHNOTE_CREATE,
+                         f'{patch_note.subject} v{version}',
+                         {'version': version, 'release_date': patch_date})
 
         return JsonResponse({'message': '패치노트가 등록되었습니다.', 'patch_note_id': patch_note.id})
 
@@ -684,7 +726,8 @@ def patch_note_update(request):
         except PatchNote.DoesNotExist:
             return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
 
-        if PatchNote.objects.filter(product=note.product, version=version).exclude(id=note.id).exists():
+        dup_filter = {'product': note.product} if note.product_id else {'utility': note.utility}
+        if PatchNote.objects.filter(**dup_filter, version=version).exclude(id=note.id).exists():
             return JsonResponse({'error': f'버전 {version}은 이미 등록되어 있습니다.'}, status=400)
 
         note.version = version
@@ -706,6 +749,11 @@ def patch_note_update(request):
         note.translation_status = PatchNote.TRANSLATION_PENDING
         note.save(update_fields=["translation_status", "updated_at"])
         start_translation(note.id)
+
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.PATCHNOTE_UPDATE,
+                         f'{note.subject} v{version}',
+                         {'version': version, 'release_date': patch_date})
 
         return JsonResponse({'message': '패치노트가 수정되었습니다.', 'patch_note_id': note.id})
 
@@ -730,8 +778,15 @@ def patch_note_delete(request):
         except PatchNote.DoesNotExist:
             return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
 
+        subject_str = str(note.subject)
         version = note.version
         note.delete()
+
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.PATCHNOTE_DELETE,
+                         f'{subject_str} v{version}',
+                         {'version': version})
+
         return JsonResponse({'message': f'버전 {version} 패치노트가 삭제되었습니다.'})
 
     except Exception as e:
@@ -751,7 +806,9 @@ def patch_note_publish(request):
         return JsonResponse({'error': '패치노트 ID가 누락되었습니다.'}, status=400)
 
     try:
-        note = PatchNote.objects.select_related('product__solution').prefetch_related(
+        note = PatchNote.objects.select_related(
+            'product__solution', 'utility'
+        ).prefetch_related(
             'features', 'improvements', 'bugfixes', 'remarks'
         ).get(id=patch_note_id)
     except PatchNote.DoesNotExist:
@@ -759,6 +816,14 @@ def patch_note_publish(request):
 
     if note.is_published:
         return JsonResponse({'error': '이미 발행된 패치노트입니다.'}, status=400)
+
+    # has_download 유틸리티는 release 파일 필수
+    if note.utility_id and note.utility.has_download:
+        if not note.files.filter(file_type='release').exists():
+            return JsonResponse(
+                {'error': '다운로드 파일(Release)을 먼저 업로드해야 발행할 수 있습니다.'},
+                status=400,
+            )
 
     note.is_published = True
     note.save(update_fields=['is_published', 'updated_at'])
@@ -776,6 +841,11 @@ def patch_note_publish(request):
         note.external_send_status = PatchNote.EXTERNAL_SEND_FAILED
         note.external_send_error = f'예약 실패: {e}'[:1000]
         note.save(update_fields=['external_send_status', 'external_send_error', 'updated_at'])
+
+    from apps.logs.models import ActionLog
+    ActionLog.record(request, ActionLog.PATCHNOTE_PUBLISH,
+                     f'{note.subject} v{note.version}',
+                     {'version': note.version, 'release_date': str(note.release_date)})
 
     msg = f'버전 {note.version} 이(가) 발행되었습니다.'
     if note.external_send_status == PatchNote.EXTERNAL_SEND_PENDING and note.external_send_scheduled_at:
@@ -951,8 +1021,7 @@ def patch_note_file_download(request, file_id):
     pf = get_object_or_404(PatchNoteFile, id=file_id)
 
     if pf.file_type == 'debug':
-        role = get_user_role(request.user)
-        if role not in ('admin', 'dev'):
+        if get_user_role(request.user) == 'guest':
             raise PermissionDenied
 
     if not pf.file:
@@ -999,7 +1068,7 @@ def patch_note_files_list(request, patch_note_id):
 
     result = []
     for pf in files:
-        if pf.file_type == 'debug' and role not in ('admin', 'dev'):
+        if pf.file_type == 'debug' and role == 'guest':
             continue
         result.append({
             'id': pf.id,

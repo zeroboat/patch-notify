@@ -1,8 +1,6 @@
 from django.views.generic import TemplateView
 from django.core.paginator import Paginator
-from django.contrib.contenttypes.models import ContentType
-
-from auditlog.models import LogEntry
+from django.shortcuts import get_object_or_404
 
 from web_project import TemplateLayout
 from apps.base.mixins import RoleRequiredMixin, get_user_role
@@ -85,38 +83,30 @@ class DispatchLogView(RoleRequiredMixin, TemplateView):
         return context
 
 
-class AuditLogView(RoleRequiredMixin, TemplateView):
-    """Manager 이상: 변경 이력 조회"""
+class ActionLogView(RoleRequiredMixin, TemplateView):
+    """Manager 이상: 액션 로그 조회"""
     allowed_roles = ['manager']
-    template_name = "logs/audit_log.html"
+    template_name = "logs/action_log.html"
 
     def get_context_data(self, **kwargs):
+        from .models import ActionLog
         context = TemplateLayout.init(self, super().get_context_data(**kwargs))
 
-        qs = LogEntry.objects.select_related('actor', 'content_type').order_by('-timestamp')
+        qs = ActionLog.objects.select_related('actor').order_by('-timestamp')
 
-        # 필터
         actor = self.request.GET.get('actor', '').strip()
-        action = self.request.GET.get('action', '')
-        model = self.request.GET.get('model', '')
+        action = self.request.GET.get('action', '').strip()
         date_from = self.request.GET.get('date_from', '')
         date_to = self.request.GET.get('date_to', '')
 
         if actor:
             qs = qs.filter(actor__username__icontains=actor)
-        if action != '':
+        if action:
             qs = qs.filter(action=action)
-        if model:
-            qs = qs.filter(content_type__model=model)
         if date_from:
             qs = qs.filter(timestamp__date__gte=date_from)
         if date_to:
             qs = qs.filter(timestamp__date__lte=date_to)
-
-        # 모델 목록 (필터용)
-        registered_models = ContentType.objects.filter(
-            id__in=LogEntry.objects.values('content_type_id').distinct()
-        ).order_by('model')
 
         paginator = Paginator(qs, 50)
         page_obj = paginator.get_page(self.request.GET.get('page', 1))
@@ -124,16 +114,23 @@ class AuditLogView(RoleRequiredMixin, TemplateView):
         context.update({
             'page_obj': page_obj,
             'total': qs.count(),
-            'registered_models': registered_models,
-            'action_choices': [
-                (LogEntry.Action.CREATE, '생성'),
-                (LogEntry.Action.UPDATE, '수정'),
-                (LogEntry.Action.DELETE, '삭제'),
-            ],
+            'action_choices': list(ActionLog.ACTION_LABELS.items()),
             'filter_actor': actor,
             'filter_action': action,
-            'filter_model': model,
             'filter_date_from': date_from,
             'filter_date_to': date_to,
         })
+        return context
+
+
+class ActionLogDetailView(RoleRequiredMixin, TemplateView):
+    """Manager 이상: 액션 로그 상세"""
+    allowed_roles = ['manager']
+    template_name = "logs/action_log_detail.html"
+
+    def get_context_data(self, **kwargs):
+        from .models import ActionLog
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        log = get_object_or_404(ActionLog, pk=self.kwargs['pk'])
+        context['log'] = log
         return context

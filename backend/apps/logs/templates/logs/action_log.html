@@ -1,0 +1,144 @@
+{% extends layout_path %}
+{% load static %}
+
+{% block title %}Action Log{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h4 class="fw-bold mb-1">Action Log</h4>
+      <p class="text-muted mb-0 small">웹 페이지에서 수행된 주요 액션 기록 — 총 {{ total }}건</p>
+    </div>
+  </div>
+
+  <!-- 필터 -->
+  <div class="card mb-4">
+    <div class="card-body py-3">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-12 col-md-2">
+          <input type="text" name="actor" class="form-control form-control-sm"
+                 placeholder="사용자명" value="{{ filter_actor }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <select name="action" class="form-select form-select-sm">
+            <option value="">전체 액션</option>
+            {% for code, label in action_choices %}
+            <option value="{{ code }}" {% if filter_action == code %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <input type="date" name="date_from" class="form-control form-control-sm" value="{{ filter_date_from }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <input type="date" name="date_to" class="form-control form-control-sm" value="{{ filter_date_to }}">
+        </div>
+        <div class="col-auto d-flex gap-2">
+          <button type="submit" class="btn btn-sm btn-primary">검색</button>
+          <a href="{% url 'logs:action_log' %}" class="btn btn-sm btn-label-secondary">초기화</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 목록 -->
+  <div class="card">
+    <div class="card-body p-0">
+      {% if page_obj %}
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4" style="width:160px">일시</th>
+              <th style="width:110px">사용자</th>
+              <th style="width:160px">액션</th>
+              <th>대상</th>
+              <th style="width:110px">IP</th>
+              <th style="width:60px" class="text-center">상세</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in page_obj %}
+            <tr>
+              <td class="ps-4">
+                <small class="text-muted">{{ entry.timestamp|date:"Y-m-d H:i:s" }}</small>
+              </td>
+              <td>
+                {% if entry.actor %}
+                <span class="fw-semibold">{{ entry.actor.username }}</span>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if 'publish' in entry.action %}
+                  <span class="badge bg-label-success">{{ entry.action_label }}</span>
+                {% elif 'delete' in entry.action %}
+                  <span class="badge bg-label-danger">{{ entry.action_label }}</span>
+                {% elif 'create' in entry.action %}
+                  <span class="badge bg-label-primary">{{ entry.action_label }}</span>
+                {% elif 'approve' in entry.action %}
+                  <span class="badge bg-label-success">{{ entry.action_label }}</span>
+                {% elif 'reject' in entry.action %}
+                  <span class="badge bg-label-danger">{{ entry.action_label }}</span>
+                {% else %}
+                  <span class="badge bg-label-secondary">{{ entry.action_label }}</span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="text-truncate d-inline-block" style="max-width:300px" title="{{ entry.target }}">
+                  {{ entry.target }}
+                </span>
+              </td>
+              <td>
+                <small class="text-muted font-monospace">{{ entry.ip_address|default:"—" }}</small>
+              </td>
+              <td class="text-center">
+                {% if entry.detail %}
+                <a href="{% url 'logs:action_log_detail' entry.pk %}" class="btn btn-sm btn-icon btn-label-secondary">
+                  <i class="bx bx-detail"></i>
+                </a>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if page_obj.has_other_pages %}
+      <div class="d-flex justify-content-center py-3">
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+              <a class="page-link" href="?actor={{ filter_actor }}&action={{ filter_action }}&date_from={{ filter_date_from }}&date_to={{ filter_date_to }}&page={{ page_obj.previous_page_number }}">이전</a>
+            </li>
+            {% endif %}
+            <li class="page-item disabled">
+              <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+            </li>
+            {% if page_obj.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="?actor={{ filter_actor }}&action={{ filter_action }}&date_from={{ filter_date_from }}&date_to={{ filter_date_to }}&page={{ page_obj.next_page_number }}">다음</a>
+            </li>
+            {% endif %}
+          </ul>
+        </nav>
+      </div>
+      {% endif %}
+
+      {% else %}
+      <div class="text-center text-muted py-5">
+        <i class="bx bx-search-alt fs-2 mb-2 d-block"></i>
+        조건에 맞는 로그가 없습니다.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

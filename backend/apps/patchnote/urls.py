@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     PatchNoteDetailView,
+    UtilityPatchNoteDetailView,
     patch_note_append,
     get_patch_note_data,
     patch_note_update,
@@ -19,6 +20,7 @@ app_name = 'patchnote'
 
 urlpatterns = [
     path('product/<int:product_id>/', PatchNoteDetailView.as_view(), name='product_patch_detail'),
+    path('utility/<int:utility_id>/', UtilityPatchNoteDetailView.as_view(), name='utility_patch_detail'),
     path('append', patch_note_append, name='patch_note_append'),
     path('data/<int:patch_note_id>/', get_patch_note_data, name='patch_note_data'),
     path('update/', patch_note_update, name='patch_note_update'),

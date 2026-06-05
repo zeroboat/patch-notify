@@ -104,19 +104,8 @@
                 </span>
               </td>
               <td>
-                {% if entry.changes_dict %}
-                  <div class="d-flex flex-wrap gap-1">
-                    {% for field, values in entry.changes_dict.items %}
-                      {% if forloop.counter <= 3 %}
-                      <span class="badge bg-label-secondary" title="{{ field }}: {{ values.0 }} → {{ values.1 }}">
-                        {{ field }}
-                      </span>
-                      {% endif %}
-                    {% endfor %}
-                    {% if entry.changes_dict|length > 3 %}
-                      <span class="badge bg-label-secondary">+{{ entry.changes_dict|length|add:"-3" }}개</span>
-                    {% endif %}
-                  </div>
+                {% if entry.action == 1 and entry.changes_dict %}
+                  <small class="text-muted">{{ entry.changes_dict|length }}개 필드 수정</small>
                 {% else %}
                   <small class="text-muted">—</small>
                 {% endif %}
@@ -125,29 +114,6 @@
                 <small class="text-muted font-monospace">{{ entry.remote_addr|default:"—" }}</small>
               </td>
             </tr>
-            <!-- 변경 상세 (펼치기) -->
-            {% if entry.changes_dict and entry.changes_dict|length > 0 %}
-            <tr class="table-active" id="detail-{{ entry.pk }}" style="display:none">
-              <td colspan="7" class="ps-5 py-2">
-                <table class="table table-sm table-borderless mb-0 small">
-                  <thead><tr>
-                    <th style="width:180px">필드</th>
-                    <th>이전 값</th>
-                    <th>변경 후</th>
-                  </tr></thead>
-                  <tbody>
-                    {% for field, values in entry.changes_dict.items %}
-                    <tr>
-                      <td class="text-muted">{{ field }}</td>
-                      <td><span class="text-danger">{{ values.0|default:"(없음)" }}</span></td>
-                      <td><span class="text-success">{{ values.1|default:"(없음)" }}</span></td>
-                    </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </td>
-            </tr>
-            {% endif %}
             {% endfor %}
           </tbody>
         </table>
@@ -186,17 +152,4 @@
   </div>
 </div>
 
-<script>
-// 행 클릭으로 변경 상세 펼치기
-document.querySelectorAll('tbody tr[id^="detail-"]').forEach(detail => {
-  const id = detail.id.replace('detail-', '');
-  const mainRow = detail.previousElementSibling;
-  if (mainRow) {
-    mainRow.style.cursor = 'pointer';
-    mainRow.addEventListener('click', () => {
-      detail.style.display = detail.style.display === 'none' ? '' : 'none';
-    });
-  }
-});
-</script>
 {% endblock %}

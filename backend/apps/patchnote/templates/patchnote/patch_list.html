@@ -39,6 +39,12 @@
         <!-- 좌측: 제품 정보 -->
         <div>
             <div class="d-flex align-items-center flex-wrap gap-2">
+                {% if selected_utility %}
+                <i class="bx bx-wrench text-warning" style="font-size:1.2rem;"></i>
+                <span class="fw-semibold">{{ selected_utility.name }}</span>
+                <span class="text-muted">/</span>
+                <span class="badge bg-label-warning rounded-pill">{{ selected_utility.get_platform_display }}</span>
+                {% else %}
                 {% if selected_product.solution.icon %}
                 <i class="bx {{ selected_product.solution.icon }} text-{{ selected_product.platform_color }}" style="font-size:1.2rem;"></i>
                 {% endif %}
@@ -47,10 +53,11 @@
                 <span class="badge bg-label-{{ selected_product.platform_color }} rounded-pill">{{ selected_product.get_platform_display }}</span>
                 <span class="text-muted">/</span>
                 <span class="badge bg-label-secondary rounded-pill">{{ selected_product.get_category_display }}</span>
+                {% if selected_product.description %}
+                <p class="mb-0 small text-muted mt-1">{{ selected_product.description }}</p>
+                {% endif %}
+                {% endif %}
             </div>
-            {% if selected_product.description %}
-            <p class="mb-0 small text-muted mt-1">{{ selected_product.description }}</p>
-            {% endif %}
         </div>
         <!-- 우측: 검색 + 언어 토글 + 등록 버튼 -->
         <div class="d-flex align-items-center gap-2 flex-shrink-0">
@@ -76,7 +83,11 @@
             <form id="appendForm" action="{% url 'patchnote:patch_note_append' %}" method="POST" class="modal-content">
                 {% csrf_token %}
 
+                {% if selected_utility %}
+                <input type="hidden" name="utility_id" value="{{ selected_utility.id }}">
+                {% else %}
                 <input type="hidden" name="product_id" value="{{ selected_product.id }}">
+                {% endif %}
 
                 <div class="modal-header border-bottom pb-3">
                     <div class="d-flex align-items-center">
@@ -88,7 +99,7 @@
                         <div>
                             <h4 class="modal-title mb-0 fw-bold">패치내역 등록</h4>
                             <small class="text-muted">
-                                <span class="badge bg-label-secondary text-capitalize">{{ selected_product }}</span>
+                                <span class="badge bg-label-secondary text-capitalize">{% if selected_utility %}{{ selected_utility }}{% else %}{{ selected_product }}{% endif %}</span>
                                 전용 릴리즈 노트를 작성합니다.
                             </small>
                         </div>
@@ -466,7 +477,7 @@
                         {% endwith %}
 
                         {% with intl=note.internals.first %}
-                        {% if intl and intl.content %}
+                        {% if intl and intl.content and user_role != 'guest' %}
                         {% if note.features.exists or note.improvements.exists or note.bugfixes.exists or note.remarks.exists %}<hr class="my-3 opacity-25">{% endif %}
                         <div class="patch-section border-start border-3 border-dark ps-3 mb-4">
                             <div class="d-flex align-items-center gap-2 mb-2">
@@ -498,7 +509,7 @@
                             </div>
                             <div id="file-list-{{ note.id }}">
                                 {% for pf in note.files.all %}
-                                    {% if pf.file_type == 'release' or user_role == 'admin' or user_role == 'manager' or user_role == 'dev' %}
+                                    {% if pf.file_type == 'release' or user_role != 'guest' %}
                                     <div class="d-flex align-items-center gap-2 mb-1 file-item" data-file-id="{{ pf.id }}">
                                         <span class="badge {% if pf.file_type == 'release' %}bg-label-success{% else %}bg-label-danger{% endif %}" style="font-size:0.65rem;">
                                             {{ pf.get_file_type_display }}
@@ -538,8 +549,12 @@
                         <div class="mb-3" style="font-size:3rem; opacity:0.25;">📋</div>
                         <h6 class="fw-semibold mb-1">아직 등록된 패치노트가 없습니다.</h6>
                         <p class="text-muted small mb-3">
+                            {% if selected_utility %}
+                            <span class="badge bg-label-warning rounded-pill">{{ selected_utility.name }}</span>
+                            {% else %}
                             <span class="badge bg-label-{{ selected_product.platform_color }} rounded-pill">{{ selected_product.get_platform_display }}</span>
                             <span class="badge bg-label-secondary rounded-pill ms-1">{{ selected_product.get_category_display }}</span>
+                            {% endif %}
                             의 첫 번째 릴리즈 노트를 작성해 보세요.
                         </p>
                         <button type="button" class="btn btn-primary btn-sm"

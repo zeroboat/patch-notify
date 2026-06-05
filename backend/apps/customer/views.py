@@ -40,6 +40,9 @@ def create_customer(request):
         if name:
             is_on_premise = request.POST.get('is_on_premise') == 'on'
             Customer.objects.create(name=name, is_on_premise=is_on_premise)
+            from apps.logs.models import ActionLog
+            ActionLog.record(request, ActionLog.CUSTOMER_CREATE, name,
+                             {'고객사명': name, 'On-Premise': is_on_premise})
             messages.success(request, f'고객사 "{name}"이 등록되었습니다.')
         else:
             messages.error(request, '고객사명을 입력해주세요.')
@@ -90,6 +93,8 @@ def delete_customer(request):
         customer = Customer.objects.get(id=customer_id)
         name = customer.name
         customer.delete()
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.CUSTOMER_DELETE, name)
         return JsonResponse({'message': f'"{name}"이 삭제되었습니다.'})
     except Customer.DoesNotExist:
         return JsonResponse({'error': '고객사를 찾을 수 없습니다.'}, status=404)
@@ -110,6 +115,9 @@ def update_customer(request):
         customer.is_on_premise = is_on_premise
         customer.save()
         customer.solutions.set(solution_ids)
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.CUSTOMER_UPDATE, customer.name,
+                         {'고객사명': customer.name, 'On-Premise': customer.is_on_premise})
         return JsonResponse({'message': f'"{customer.name}" 정보가 저장되었습니다.'})
     except Customer.DoesNotExist:
         return JsonResponse({'error': '고객사를 찾을 수 없습니다.'}, status=404)
