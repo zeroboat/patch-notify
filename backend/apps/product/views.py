@@ -44,6 +44,8 @@ def create_solution(request):
         order = request.POST.get('order', '0').strip()
         if name:
             Solution.objects.create(name=name, icon=icon, order=int(order or 0))
+            from apps.logs.models import ActionLog
+            ActionLog.record(request, ActionLog.SOLUTION_CREATE, name)
             messages.success(request, f'솔루션 "{name}"이 등록되었습니다.')
         else:
             messages.error(request, '솔루션 이름을 입력해주세요.')
@@ -61,13 +63,15 @@ def create_product(request):
 
         try:
             solution = Solution.objects.get(id=solution_id)
-            Product.objects.create(
+            product = Product.objects.create(
                 solution=solution,
                 platform=platform,
                 category=category,
                 description=description or None,
                 order=int(order or 0),
             )
+            from apps.logs.models import ActionLog
+            ActionLog.record(request, ActionLog.PRODUCT_CREATE, str(product))
             messages.success(request, '제품이 등록되었습니다.')
         except Solution.DoesNotExist:
             messages.error(request, '선택한 솔루션을 찾을 수 없습니다.')
@@ -100,6 +104,8 @@ def update_product(request):
         if order:
             product.order = int(order)
         product.save()
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.PRODUCT_UPDATE, str(product))
         return JsonResponse({'message': '제품 정보가 수정되었습니다.'})
     except Product.DoesNotExist:
         return JsonResponse({'error': '제품을 찾을 수 없습니다.'}, status=404)
@@ -115,6 +121,8 @@ def delete_product(request):
         product = Product.objects.get(id=product_id)
         name = str(product)
         product.delete()
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.PRODUCT_DELETE, name)
         return JsonResponse({'message': f'제품 "{name}"이 삭제되었습니다.'})
     except Product.DoesNotExist:
         return JsonResponse({'error': '제품을 찾을 수 없습니다.'}, status=404)
@@ -142,6 +150,8 @@ def update_solution(request):
         if order:
             solution.order = int(order)
         solution.save()
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.SOLUTION_UPDATE, solution.name)
         return JsonResponse({'message': f'솔루션 "{solution.name}" 정보가 수정되었습니다.'})
     except Solution.DoesNotExist:
         return JsonResponse({'error': '솔루션을 찾을 수 없습니다.'}, status=404)
@@ -162,6 +172,8 @@ def delete_solution(request):
             )
         name = solution.name
         solution.delete()
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.SOLUTION_DELETE, name)
         return JsonResponse({'message': f'솔루션 "{name}"이 삭제되었습니다.'})
     except Solution.DoesNotExist:
         return JsonResponse({'error': '솔루션을 찾을 수 없습니다.'}, status=404)
@@ -214,6 +226,8 @@ def create_utility(request):
         else:
             try:
                 Utility.objects.create(name=name, platform=platform, order=int(order or 0))
+                from apps.logs.models import ActionLog
+                ActionLog.record(request, ActionLog.UTILITY_CREATE, name)
                 messages.success(request, f'유틸리티 "{name}"이 등록되었습니다.')
             except Exception as e:
                 messages.error(request, f'등록 중 오류가 발생했습니다: {e}')
@@ -241,6 +255,8 @@ def update_utility(request):
         if order:
             utility.order = int(order)
         utility.save()
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.UTILITY_UPDATE, utility.name)
         return JsonResponse({'message': f'유틸리티 "{utility.name}" 정보가 수정되었습니다.'})
     except Utility.DoesNotExist:
         return JsonResponse({'error': '유틸리티를 찾을 수 없습니다.'}, status=404)
@@ -263,6 +279,8 @@ def delete_utility(request):
             )
         name = str(utility)
         utility.delete()
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.UTILITY_DELETE, name)
         return JsonResponse({'message': f'유틸리티 "{name}"이 삭제되었습니다.'})
     except Utility.DoesNotExist:
         return JsonResponse({'error': '유틸리티를 찾을 수 없습니다.'}, status=404)

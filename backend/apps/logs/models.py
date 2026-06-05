@@ -85,8 +85,13 @@ class ActionLog(models.Model):
     SLACK_APPROVE     = 'slack_approve'
     SLACK_REJECT      = 'slack_reject'
     PRODUCT_CREATE    = 'product_create'
+    PRODUCT_UPDATE    = 'product_update'
     PRODUCT_DELETE    = 'product_delete'
+    SOLUTION_CREATE   = 'solution_create'
+    SOLUTION_UPDATE   = 'solution_update'
+    SOLUTION_DELETE   = 'solution_delete'
     UTILITY_CREATE    = 'utility_create'
+    UTILITY_UPDATE    = 'utility_update'
     UTILITY_DELETE    = 'utility_delete'
 
     ACTION_LABELS = {
@@ -102,9 +107,14 @@ class ActionLog(models.Model):
         SUBSCRIPTION_CHANGE:'구독 설정 변경',
         SLACK_APPROVE:      'Slack 워크스페이스 승인',
         SLACK_REJECT:       'Slack 워크스페이스 거부',
+        SOLUTION_CREATE:    '솔루션 등록',
+        SOLUTION_UPDATE:    '솔루션 수정',
+        SOLUTION_DELETE:    '솔루션 삭제',
         PRODUCT_CREATE:     '제품 등록',
+        PRODUCT_UPDATE:     '제품 수정',
         PRODUCT_DELETE:     '제품 삭제',
         UTILITY_CREATE:     '유틸리티 등록',
+        UTILITY_UPDATE:     '유틸리티 수정',
         UTILITY_DELETE:     '유틸리티 삭제',
     }
 
