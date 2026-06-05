@@ -756,7 +756,8 @@ def _build_patch_md(patch_note: PatchNote, lang: str = 'ko') -> str:
         f'\t\tDATE : {patch_note.release_date}',
     ]
     if eol_date:
-        lines.append(f'\t\t지원 종료 예정 : {eol_date}')
+        eol_label = 'End of Support' if is_en else '지원 종료 예정'
+        lines.append(f'\t\t{eol_label} : {eol_date}')
     lines += [
         '\t\t**\\[*Patch notes*\\]**',
         '\t\t```plain text',
