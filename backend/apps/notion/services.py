@@ -774,7 +774,7 @@ def _build_patch_md(patch_note: PatchNote, lang: str = 'ko') -> str:
         remarks_tabbed,
     ]
     if download_line:
-        lines += ['\t\t<empty-block/>', download_line]
+        lines.append(download_line)
     lines += [
         '\t\t<empty-block/>',
         '\t\t---',
