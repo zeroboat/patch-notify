@@ -131,7 +131,7 @@
                 <div class="text-truncate">Subscribers</div>
             </a>
         </li>
-        <li class="menu-item {% if '/logs/' in request.path and 'audit' not in request.path %}active{% endif %}">
+        <li class="menu-item {% if '/logs/' in request.path and '/logs/action' not in request.path %}active{% endif %}">
             <a href="{% url 'logs:dispatch_log' %}" class="menu-link">
                 <i class="menu-icon icon-base bx bx-list-check"></i>
                 <div class="text-truncate">Logs</div>

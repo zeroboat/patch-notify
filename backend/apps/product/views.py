@@ -45,7 +45,8 @@ def create_solution(request):
         if name:
             Solution.objects.create(name=name, icon=icon, order=int(order or 0))
             from apps.logs.models import ActionLog
-            ActionLog.record(request, ActionLog.SOLUTION_CREATE, name)
+            ActionLog.record(request, ActionLog.SOLUTION_CREATE, name,
+                             {'이름': name})
             messages.success(request, f'솔루션 "{name}"이 등록되었습니다.')
         else:
             messages.error(request, '솔루션 이름을 입력해주세요.')
@@ -71,7 +72,9 @@ def create_product(request):
                 order=int(order or 0),
             )
             from apps.logs.models import ActionLog
-            ActionLog.record(request, ActionLog.PRODUCT_CREATE, str(product))
+            ActionLog.record(request, ActionLog.PRODUCT_CREATE, str(product),
+                             {'솔루션': solution.name, '플랫폼': product.get_platform_display(),
+                              '카테고리': product.get_category_display()})
             messages.success(request, '제품이 등록되었습니다.')
         except Solution.DoesNotExist:
             messages.error(request, '선택한 솔루션을 찾을 수 없습니다.')
@@ -105,7 +108,9 @@ def update_product(request):
             product.order = int(order)
         product.save()
         from apps.logs.models import ActionLog
-        ActionLog.record(request, ActionLog.PRODUCT_UPDATE, str(product))
+        ActionLog.record(request, ActionLog.PRODUCT_UPDATE, str(product),
+                         {'플랫폼': product.get_platform_display(),
+                          '카테고리': product.get_category_display()})
         return JsonResponse({'message': '제품 정보가 수정되었습니다.'})
     except Product.DoesNotExist:
         return JsonResponse({'error': '제품을 찾을 수 없습니다.'}, status=404)
@@ -225,9 +230,10 @@ def create_utility(request):
             messages.error(request, '유틸리티 이름을 입력해주세요.')
         else:
             try:
-                Utility.objects.create(name=name, platform=platform, order=int(order or 0))
+                u = Utility.objects.create(name=name, platform=platform, order=int(order or 0))
                 from apps.logs.models import ActionLog
-                ActionLog.record(request, ActionLog.UTILITY_CREATE, name)
+                ActionLog.record(request, ActionLog.UTILITY_CREATE, name,
+                                 {'이름': name, '플랫폼': u.get_platform_display()})
                 messages.success(request, f'유틸리티 "{name}"이 등록되었습니다.')
             except Exception as e:
                 messages.error(request, f'등록 중 오류가 발생했습니다: {e}')
@@ -256,7 +262,8 @@ def update_utility(request):
             utility.order = int(order)
         utility.save()
         from apps.logs.models import ActionLog
-        ActionLog.record(request, ActionLog.UTILITY_UPDATE, utility.name)
+        ActionLog.record(request, ActionLog.UTILITY_UPDATE, utility.name,
+                         {'이름': utility.name, '플랫폼': utility.get_platform_display()})
         return JsonResponse({'message': f'유틸리티 "{utility.name}" 정보가 수정되었습니다.'})
     except Utility.DoesNotExist:
         return JsonResponse({'error': '유틸리티를 찾을 수 없습니다.'}, status=404)
