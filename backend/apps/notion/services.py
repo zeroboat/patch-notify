@@ -799,15 +799,8 @@ def _notion_update_markdown(page_id: str, payload: dict):
 
 
 def _find_supported_anchor(md: str) -> str | None:
-    """Notion 페이지에서 새 버전 삽입 앵커를 찾아 반환.
-    - 제품 페이지: '지원중인 버전' / 'Supported Versions'
-    - 유틸리티 페이지: '[Path Notes]' / '[Patch Notes]'
-    """
-    match = re.search(
-        r'^[ \t]*(#\s+\*{0,2}(?:지원\s*중인\s*버전|Supported\s+[Vv]ersions?|'
-        r'\[(?:Path|Patch)\s+Notes?\])\*{0,2})',
-        md, re.MULTILINE
-    )
+    """Notion 페이지에서 '지원중인 버전' 또는 'Supported Versions' 앵커를 찾아 반환"""
+    match = re.search(r'^[ \t]*(#\s+\*{0,2}(?:지원\s*중인\s*버전|Supported\s+[Vv]ersions?)\*{0,2})', md, re.MULTILINE)
     return match.group(1) if match else None
 
 
