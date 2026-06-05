@@ -749,7 +749,7 @@ def _build_patch_md(patch_note: PatchNote, lang: str = 'ko') -> str:
         )
         if release_file:
             filename = release_file.original_filename
-            download_line = f'\t\t**\\[*Download*\\]**\n\t\t[{filename}]({release_file.nextcloud_url})'
+            download_line = f'\t\t**\\[*Download*\\]**\n\t\t- URL : [{filename}]({release_file.nextcloud_url})'
 
     lines = [
         f'\t\t## <span color="green_bg">{patch_note.version} </span>',
