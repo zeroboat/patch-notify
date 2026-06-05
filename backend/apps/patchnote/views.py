@@ -1011,8 +1011,7 @@ def patch_note_file_download(request, file_id):
     pf = get_object_or_404(PatchNoteFile, id=file_id)
 
     if pf.file_type == 'debug':
-        role = get_user_role(request.user)
-        if role not in ('admin', 'dev'):
+        if get_user_role(request.user) == 'guest':
             raise PermissionDenied
 
     if not pf.file:
@@ -1059,7 +1058,7 @@ def patch_note_files_list(request, patch_note_id):
 
     result = []
     for pf in files:
-        if pf.file_type == 'debug' and role not in ('admin', 'dev'):
+        if pf.file_type == 'debug' and role == 'guest':
             continue
         result.append({
             'id': pf.id,

@@ -509,7 +509,7 @@
                             </div>
                             <div id="file-list-{{ note.id }}">
                                 {% for pf in note.files.all %}
-                                    {% if pf.file_type == 'release' or user_role == 'admin' or user_role == 'manager' or user_role == 'dev' %}
+                                    {% if pf.file_type == 'release' or user_role != 'guest' %}
                                     <div class="d-flex align-items-center gap-2 mb-1 file-item" data-file-id="{{ pf.id }}">
                                         <span class="badge {% if pf.file_type == 'release' %}bg-label-success{% else %}bg-label-danger{% endif %}" style="font-size:0.65rem;">
                                             {{ pf.get_file_type_display }}
