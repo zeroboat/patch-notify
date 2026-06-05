@@ -735,6 +735,22 @@ def _build_patch_md(patch_note: PatchNote, lang: str = 'ko') -> str:
     is_tool = patch_note.utility_id is not None
     eol_date = (patch_note.release_date + relativedelta(years=1)) if is_tool else None
 
+    # has_download 유틸리티의 release 파일 NAS 링크
+    download_line = None
+    if is_tool and patch_note.utility.has_download and not is_en:
+        from apps.patchnote.models import PatchNoteFile
+        release_file = (
+            PatchNoteFile.objects
+            .filter(patch_note=patch_note, file_type='release')
+            .exclude(nextcloud_url='')
+            .filter(nextcloud_url__isnull=False)
+            .order_by('-created_at')
+            .first()
+        )
+        if release_file:
+            filename = release_file.original_filename
+            download_line = f'\t\t**\\[*Download*\\]**\n\t\t[{filename}]({release_file.nextcloud_url})'
+
     lines = [
         f'\t\t## <span color="green_bg">{patch_note.version} </span>',
         f'\t\tDATE : {patch_note.release_date}',
@@ -755,6 +771,10 @@ def _build_patch_md(patch_note: PatchNote, lang: str = 'ko') -> str:
         '\t\t```',
         '\t\t**\\[*Remarks*\\]**',
         remarks_tabbed,
+    ]
+    if download_line:
+        lines += ['\t\t<empty-block/>', download_line]
+    lines += [
         '\t\t<empty-block/>',
         '\t\t---',
     ]
