@@ -352,11 +352,19 @@ document.addEventListener('DOMContentLoaded', function () {
       const subjectName = this.dataset.subjectName;
       const result = await Swal.fire({
         title: 'Notion 동기화',
-        text: `"${subjectName}"의 패치노트를 Notion에서 가져옵니다.`,
+        html: `"${subjectName}"의 패치노트를 Notion에서 가져옵니다.<br>
+               <div class="form-check mt-3 text-start d-inline-block">
+                 <input class="form-check-input" type="checkbox" id="swalForceSync">
+                 <label class="form-check-label small" for="swalForceSync">
+                   강제 동기화 (변경 여부 무시하고 전체 재동기화)
+                 </label>
+               </div>`,
         icon: 'question', showCancelButton: true,
         confirmButtonText: '동기화', cancelButtonText: '취소',
       });
       if (!result.isConfirmed) return;
+
+      const force = document.getElementById('swalForceSync')?.checked || false;
 
       this.disabled = true;
       this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sync...';
@@ -365,6 +373,7 @@ document.addEventListener('DOMContentLoaded', function () {
       fd.append('csrfmiddlewaretoken', csrfToken);
       if (this.dataset.productId) fd.append('product_id', this.dataset.productId);
       if (this.dataset.utilityId) fd.append('utility_id', this.dataset.utilityId);
+      if (force) fd.append('force', 'true');
 
       try {
         const [res, data] = await postForm("{% url 'notion:notion_sync' %}", fd);
