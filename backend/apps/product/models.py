@@ -96,6 +96,11 @@ class Utility(BaseModel):
         default=PLATFORM_COMMON,
         verbose_name="플랫폼",
     )
+    has_download = models.BooleanField(
+        default=False,
+        verbose_name="다운로드 파일 여부",
+        help_text="체크 시 패치노트에 파일 업로드 UI가 표시됩니다.",
+    )
     order = models.PositiveIntegerField(default=0, verbose_name="정렬 순서")
 
     class Meta:

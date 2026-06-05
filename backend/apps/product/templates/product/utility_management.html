@@ -49,7 +49,12 @@
           <tbody>
             {% for utility in platform.utilities %}
             <tr>
-              <td class="ps-4 fw-semibold">{{ utility.name }}</td>
+              <td class="ps-4 fw-semibold">
+                {{ utility.name }}
+                {% if utility.has_download %}
+                <span class="badge bg-label-info ms-1" style="font-size:0.6rem;">다운로드</span>
+                {% endif %}
+              </td>
               <td>
                 {% if utility.latest_release %}
                   <span class="text-muted small">{{ utility.latest_release }}</span>
@@ -66,7 +71,7 @@
                   <ul class="dropdown-menu dropdown-menu-end">
                     <li>
                       <a class="dropdown-item" href="#"
-                         onclick="openEditUtility({{ utility.id }}, '{{ utility.name|escapejs }}', '{{ utility.platform }}', {{ utility.order }})">
+                         onclick="openEditUtility({{ utility.id }}, '{{ utility.name|escapejs }}', '{{ utility.platform }}', {{ utility.order }}, '{{ utility.has_download|lower }}')">
                         <i class="bx bx-edit me-2"></i>수정
                       </a>
                     </li>
@@ -120,6 +125,12 @@
             <label class="form-label">정렬 순서</label>
             <input type="number" name="order" class="form-control" value="0" min="0">
           </div>
+          <div class="mb-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="has_download" id="addHasDownload" value="true">
+              <label class="form-check-label" for="addHasDownload">패치노트에 다운로드 파일 업로드 허용</label>
+            </div>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">취소</button>
@@ -156,6 +167,12 @@
           <label class="form-label">정렬 순서</label>
           <input type="number" id="editUtilityOrder" class="form-control" min="0">
         </div>
+        <div class="mb-3">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="editHasDownload">
+            <label class="form-check-label" for="editHasDownload">패치노트에 다운로드 파일 업로드 허용</label>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">취소</button>
@@ -168,11 +185,12 @@
 <script>
 const CSRF = '{{ csrf_token }}';
 
-function openEditUtility(id, name, platform, order) {
+function openEditUtility(id, name, platform, order, hasDownload) {
   document.getElementById('editUtilityId').value = id;
   document.getElementById('editUtilityName').value = name;
   document.getElementById('editUtilityPlatform').value = platform;
   document.getElementById('editUtilityOrder').value = order;
+  document.getElementById('editHasDownload').checked = hasDownload === 'true';
   new bootstrap.Modal(document.getElementById('editUtilityModal')).show();
 }
 
@@ -181,12 +199,13 @@ function submitEditUtility() {
   const name = document.getElementById('editUtilityName').value.trim();
   const platform = document.getElementById('editUtilityPlatform').value;
   const order = document.getElementById('editUtilityOrder').value;
+  const hasDownload = document.getElementById('editHasDownload').checked;
   if (!name) { Swal.fire({ icon: 'warning', title: '유틸리티 이름을 입력해주세요.', timer: 2000, showConfirmButton: false }); return; }
 
   fetch('{% url "product:update_utility" %}', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF },
-    body: new URLSearchParams({ utility_id: id, name, platform, order }),
+    body: new URLSearchParams({ utility_id: id, name, platform, order, has_download: hasDownload }),
   })
   .then(r => r.json())
   .then(data => {

@@ -226,11 +226,13 @@ def create_utility(request):
         name = request.POST.get('name', '').strip()
         platform = request.POST.get('platform', Utility.PLATFORM_COMMON)
         order = request.POST.get('order', '0').strip()
+        has_download = request.POST.get('has_download') == 'true'
         if not name:
             messages.error(request, '유틸리티 이름을 입력해주세요.')
         else:
             try:
-                u = Utility.objects.create(name=name, platform=platform, order=int(order or 0))
+                u = Utility.objects.create(name=name, platform=platform,
+                                           has_download=has_download, order=int(order or 0))
                 from apps.logs.models import ActionLog
                 ActionLog.record(request, ActionLog.UTILITY_CREATE, name,
                                  {'이름': name, '플랫폼': u.get_platform_display()})
@@ -260,6 +262,8 @@ def update_utility(request):
             utility.platform = platform
         if order:
             utility.order = int(order)
+        has_download = request.POST.get('has_download', '').lower() in ('true', '1', 'on')
+        utility.has_download = has_download
         utility.save()
         from apps.logs.models import ActionLog
         ActionLog.record(request, ActionLog.UTILITY_UPDATE, utility.name,

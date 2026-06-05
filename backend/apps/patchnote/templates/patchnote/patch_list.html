@@ -477,7 +477,7 @@
                         {% endwith %}
 
                         {% with intl=note.internals.first %}
-                        {% if intl and intl.content %}
+                        {% if intl and intl.content and user_role != 'guest' %}
                         {% if note.features.exists or note.improvements.exists or note.bugfixes.exists or note.remarks.exists %}<hr class="my-3 opacity-25">{% endif %}
                         <div class="patch-section border-start border-3 border-dark ps-3 mb-4">
                             <div class="d-flex align-items-center gap-2 mb-2">
