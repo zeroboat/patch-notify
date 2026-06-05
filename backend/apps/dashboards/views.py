@@ -33,7 +33,7 @@ class DashboardsView(LoginRequiredMixin, TemplateView):
         # 최근 패치노트 5건 (카테고리 존재 여부 포함)
         recent_patch_qs = (
             PatchNote.objects
-            .select_related('product__solution')
+            .select_related('product__solution', 'utility')
             .prefetch_related('features', 'improvements', 'bugfixes', 'remarks')
             .order_by('-release_date')[:5]
         )
