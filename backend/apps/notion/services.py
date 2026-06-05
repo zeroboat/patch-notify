@@ -737,7 +737,7 @@ def _build_patch_md(patch_note: PatchNote, lang: str = 'ko') -> str:
 
     # has_download 유틸리티의 release 파일 NAS 링크
     download_line = None
-    if is_tool and patch_note.utility.has_download and not is_en:
+    if is_tool and patch_note.utility.has_download:
         from apps.patchnote.models import PatchNoteFile
         release_file = (
             PatchNoteFile.objects
