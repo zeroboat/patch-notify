@@ -806,7 +806,9 @@ def patch_note_publish(request):
         return JsonResponse({'error': '패치노트 ID가 누락되었습니다.'}, status=400)
 
     try:
-        note = PatchNote.objects.select_related('product__solution').prefetch_related(
+        note = PatchNote.objects.select_related(
+            'product__solution', 'utility'
+        ).prefetch_related(
             'features', 'improvements', 'bugfixes', 'remarks'
         ).get(id=patch_note_id)
     except PatchNote.DoesNotExist:
@@ -814,6 +816,14 @@ def patch_note_publish(request):
 
     if note.is_published:
         return JsonResponse({'error': '이미 발행된 패치노트입니다.'}, status=400)
+
+    # has_download 유틸리티는 release 파일 필수
+    if note.utility_id and note.utility.has_download:
+        if not note.files.filter(file_type='release').exists():
+            return JsonResponse(
+                {'error': '다운로드 파일(Release)을 먼저 업로드해야 발행할 수 있습니다.'},
+                status=400,
+            )
 
     note.is_published = True
     note.save(update_fields=['is_published', 'updated_at'])
