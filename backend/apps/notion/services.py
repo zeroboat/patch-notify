@@ -326,7 +326,8 @@ def _parse_remarks(block: str) -> str:
     if not match:
         return ''
     raw = match.group(1)
-    end = re.search(r'\n\s*##\s+', raw)
+    # 다음 섹션 레이블(**[...]**) 또는 다음 버전 헤더(##)에서 종료
+    end = re.search(r'\n\s*(?:##\s+|\*{2,3}\[)', raw)
     if end:
         raw = raw[:end.start()]
     lines = raw.split('\n')
