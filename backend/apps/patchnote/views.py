@@ -1,15 +1,23 @@
 import logging
 import re
+from datetime import timedelta
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse, FileResponse, Http404
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.views.decorators.http import require_POST, require_GET
 from django.views.generic import TemplateView
 
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+
 from web_project import TemplateLayout
 from apps.base.mixins import role_required, get_user_role
+from apps.customer.models import CustomerEmail
+from apps.logs.models import DispatchLog
 from apps.product.models import Product
 from .models import PatchNote, Feature, Improvement, BugFix, Remark, Internal, PatchNoteFile
 from .nextcloud import upload_to_nextcloud, create_share_link, delete_from_nextcloud
@@ -51,17 +59,36 @@ def _html_to_plain(html: str) -> str:
     return text.lstrip('\n').rstrip()
 
 
+def _html_to_slack_mrkdwn(html: str) -> str:
+    """HTML → Slack mrkdwn。<a> 태그를 <url|text> 형식으로 보존한 뒤 _html_to_plain 적용."""
+    if not html:
+        return ''
+    links: dict[str, str] = {}
+
+    def _replace_link(m):
+        key = f'\x00LINK{len(links)}\x00'
+        link_text = strip_tags(m.group(2)).strip() or m.group(1)
+        links[key] = f'<{m.group(1)}|{link_text}>'
+        return key
+
+    html = re.sub(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', _replace_link, html, flags=re.DOTALL)
+    text = _html_to_plain(html)
+    for key, val in links.items():
+        text = text.replace(key, val)
+    return text
+
+
 def _build_patchnote_slack_blocks(patch_note) -> list:
-    """단일 패치노트를 Slack Block Kit 블록으로 변환"""
+    """단일 패치노트를 Slack Block Kit 블록으로 변환 (릴리즈 내용만, 고객사/사내 공통)"""
     def _section_text(manager):
         obj = manager.filter(parent__isnull=True).order_by('order', 'id').first()
         if not obj or not obj.content:
             return '  - N/A'
         return _html_to_plain(obj.content) or '  - N/A'
 
-    features_text   = _section_text(patch_note.features)
+    features_text     = _section_text(patch_note.features)
     improvements_text = _section_text(patch_note.improvements)
-    bugfixes_text   = _section_text(patch_note.bugfixes)
+    bugfixes_text     = _section_text(patch_note.bugfixes)
 
     body = (
         f"[Patch Note]\n"
@@ -70,13 +97,7 @@ def _build_patchnote_slack_blocks(patch_note) -> list:
         f"버그 수정\n{bugfixes_text}"
     )
 
-    remarks_obj = patch_note.remarks.filter(parent__isnull=True).order_by('order', 'id').first()
-    if remarks_obj and remarks_obj.content:
-        remarks_text = _html_to_plain(remarks_obj.content)
-        if remarks_text:
-            body += f"\n\n[Remarks]\n{remarks_text}"
-
-    return [
+    blocks = [
         {
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"*Version: {patch_note.version}*  ·  {patch_note.release_date}"},
@@ -85,16 +106,122 @@ def _build_patchnote_slack_blocks(patch_note) -> list:
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"```{body}```"},
         },
+    ]
+
+    remarks_obj = patch_note.remarks.filter(parent__isnull=True).order_by('order', 'id').first()
+    if remarks_obj and remarks_obj.content:
+        remarks_text = _html_to_slack_mrkdwn(remarks_obj.content)
+        if remarks_text:
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "*Remarks*"},
+            })
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": remarks_text},
+            })
+
+    blocks.append({"type": "divider"})
+    return blocks
+
+
+def _build_internal_slack_blocks(patch_note) -> list:
+    """Internal 섹션 블록 — codeblock 없이 mrkdwn으로 렌더링, 링크 클릭 가능."""
+    internal_obj = patch_note.internals.filter(parent__isnull=True).order_by('order', 'id').first()
+    if not internal_obj or not internal_obj.content:
+        return []
+    internal_text = _html_to_slack_mrkdwn(internal_obj.content)
+    if not internal_text:
+        return []
+    return [
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "*Internal · 사내 공유 전용*"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": internal_text},
+        },
         {"type": "divider"},
     ]
 
 
+def _send_internal_slack_notification(patch_note):
+    """발행 시 사내 구독 채널에 패치노트 전송 (릴리즈 내용 + Internal 블록, 즉시)"""
+    try:
+        from apps.config.models import SiteConfig
+        from apps.slack_app.models import SlackWorkspace
+        from apps.subscriber.models import Subscription
+        from slack_sdk import WebClient
+
+        if not SiteConfig.get().internal_slack_enabled:
+            return
+
+        internal_workspace = SlackWorkspace.objects.filter(
+            is_internal=True,
+            status=SlackWorkspace.STATUS_APPROVED,
+        ).first()
+        if not internal_workspace:
+            logger.warning('사내 Slack 워크스페이스 미설정 — Admin에서 is_internal 체크 필요')
+            return
+
+        if not patch_note.product_id:
+            return
+
+        subs = (
+            Subscription.objects
+            .filter(
+                product=patch_note.product,
+                channel=Subscription.CHANNEL_SLACK,
+                is_active=True,
+                slack_channel__isnull=False,
+                customer=internal_workspace.customer,
+            )
+            .exclude(slack_channel='')
+        )
+
+        if not subs.exists():
+            return
+
+        solution_name = patch_note.subject.solution.name
+        product_label = f"{solution_name} {patch_note.subject_label}"
+
+        # internals 접근을 위해 prefetch된 인스턴스를 별도로 조회
+        note = (
+            PatchNote.objects
+            .prefetch_related('features', 'improvements', 'bugfixes', 'remarks', 'internals')
+            .get(id=patch_note.id)
+        )
+
+        blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} Release 안내]"}}]
+        blocks.extend(_build_patchnote_slack_blocks(note))
+        blocks.extend(_build_internal_slack_blocks(note))
+
+        fallback_text = f"[사내] {product_label} v{patch_note.version} 패치노트가 발행되었습니다."
+
+        client = WebClient(token=internal_workspace.bot_token)
+        for sub in subs:
+            try:
+                client.chat_postMessage(
+                    channel=sub.slack_channel,
+                    text=fallback_text,
+                    blocks=blocks,
+                )
+            except Exception as e:
+                logger.warning(f'사내 Slack 알림 실패 (channel={sub.slack_channel}): {e}')
+    except Exception as e:
+        logger.warning(f'사내 Slack 알림 처리 실패: {e}')
+
+
 def _send_slack_notifications(patch_note):
-    """발행 시 활성 Slack 구독자에게 최근 max_items건 패치노트 전송"""
+    """발행 시 활성 Slack 구독자에게 최근 max_items건 패치노트 전송 (고객사용)"""
     try:
         from slack_sdk import WebClient
         from apps.slack_app.models import SlackWorkspace
         from apps.subscriber.models import Subscription
+
+        if not patch_note.product_id:
+            return
 
         subs = (
             Subscription.objects
@@ -111,20 +238,114 @@ def _send_slack_notifications(patch_note):
         if not subs.exists():
             return
 
-        solution_name = patch_note.product.solution.name
-        platform = patch_note.product.get_platform_display()
-        category = patch_note.product.get_category_display()
-        product_label = f"{solution_name} {platform} {category}"
+        solution_name = patch_note.subject.solution.name
+        product_label = f"{solution_name} {patch_note.subject_label}"
+
+        fallback_text = f"{product_label} v{patch_note.version} 패치노트가 발행되었습니다."
+        blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} Release 안내]"}}]
+        blocks.extend(_build_patchnote_slack_blocks(patch_note))
 
         for sub in subs:
             workspace = SlackWorkspace.objects.filter(
                 customer=sub.customer,
                 status=SlackWorkspace.STATUS_APPROVED,
+                is_internal=False,
             ).first()
             if not workspace:
                 continue
 
-            # 구독자별 max_items건 조회
+            sent_at = timezone.now()
+            try:
+                client = WebClient(token=workspace.bot_token)
+                client.chat_postMessage(
+                    channel=sub.slack_channel,
+                    text=fallback_text,
+                    blocks=blocks,
+                )
+                _log_dispatch(
+                    channel=DispatchLog.CHANNEL_SLACK,
+                    customer=sub.customer,
+                    solution=patch_note.subject.solution,
+                    recipient=sub.slack_channel,
+                    subject=fallback_text,
+                    status=DispatchLog.STATUS_SUCCESS,
+                    sent_at=sent_at,
+                )
+            except Exception as e:
+                logger.warning(f'Slack 알림 실패 (customer={sub.customer.name}): {e}')
+                _log_dispatch(
+                    channel=DispatchLog.CHANNEL_SLACK,
+                    customer=sub.customer,
+                    solution=patch_note.subject.solution,
+                    recipient=sub.slack_channel,
+                    subject=fallback_text,
+                    status=DispatchLog.STATUS_FAILED,
+                    error_message=str(e)[:1000],
+                    sent_at=sent_at,
+                )
+    except Exception as e:
+        logger.warning(f'Slack 알림 처리 실패: {e}')
+
+
+def _log_dispatch(*, channel, customer, solution, recipient, subject,
+                  status, error_message='', sent_at=None):
+    """발송 결과를 DispatchLog에 기록. 실패해도 호출부 흐름에 영향 없음."""
+    try:
+        DispatchLog.objects.create(
+            log_type=DispatchLog.TYPE_SUBSCRIPTION,
+            channel=channel,
+            customer=customer,
+            solution=solution,
+            recipient=recipient,
+            subject=subject,
+            status=status,
+            error_message=error_message,
+            sent_at=sent_at or timezone.now(),
+        )
+    except Exception as e:
+        logger.warning(f'DispatchLog 기록 실패: {e}')
+
+
+def _send_email_notifications(patch_note):
+    """발행 시 활성 이메일 구독자에게 패치노트 발송 (고객사용)"""
+    try:
+        from apps.config.models import SiteConfig
+        from apps.subscriber.models import Subscription
+
+        cfg = SiteConfig.get()
+        if not cfg.gmail_user or not cfg.gmail_app_password:
+            logger.warning('Gmail 설정 누락 — 이메일 발송 건너뜀')
+            return
+
+        if not patch_note.product_id:
+            return
+
+        subs = (
+            Subscription.objects
+            .filter(
+                product=patch_note.product,
+                channel=Subscription.CHANNEL_EMAIL,
+                is_active=True,
+            )
+            .select_related('customer')
+        )
+
+        if not subs.exists():
+            return
+
+        solution_name = patch_note.subject.solution.name
+        product_label = f"{solution_name} {patch_note.subject_label}"
+        subject_str = f"[Patch Notify] {product_label} v{patch_note.version} 패치노트"
+
+        for sub in subs:
+            emails = list(
+                CustomerEmail.objects
+                .filter(customer=sub.customer)
+                .values_list('email', flat=True)
+            )
+            if not emails:
+                continue
+
             recent_notes = (
                 PatchNote.objects
                 .filter(product=patch_note.product, is_published=True)
@@ -133,39 +354,173 @@ def _send_slack_notifications(patch_note):
                 [:sub.max_items]
             )
 
-            blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} Release 안내]"}}]
-            prev_header_added = False
-            for note in recent_notes:
-                if note.id != patch_note.id and not prev_header_added:
-                    blocks.append({"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} 이전 패치노트]"}})
-                    prev_header_added = True
-                blocks.extend(_build_patchnote_slack_blocks(note))
+            notes_data = [
+                {
+                    'note': n,
+                    'is_new': n.id == patch_note.id,
+                    'features':     list(n.features.filter(parent__isnull=True).order_by('order', 'id')),
+                    'improvements': list(n.improvements.filter(parent__isnull=True).order_by('order', 'id')),
+                    'bugfixes':     list(n.bugfixes.filter(parent__isnull=True).order_by('order', 'id')),
+                    'remarks':      list(n.remarks.filter(parent__isnull=True).order_by('order', 'id')),
+                }
+                for n in recent_notes
+            ]
+            html_body = render_to_string(
+                'patchnote/email/patchnote_notification_email.html',
+                {
+                    'product_label': product_label,
+                    'notes_data': notes_data,
+                },
+            )
+            text_body = strip_tags(html_body)
 
-            fallback_text = f"{product_label} v{patch_note.version} 패치노트가 발행되었습니다."
-
+            sent_at = timezone.now()
             try:
-                client = WebClient(token=workspace.bot_token)
-                client.chat_postMessage(
-                    channel=sub.slack_channel,
-                    text=fallback_text,
-                    blocks=blocks,
+                from django.core.mail import get_connection
+                connection = get_connection(
+                    backend='django.core.mail.backends.smtp.EmailBackend',
+                    host='smtp.gmail.com',
+                    port=587,
+                    use_tls=True,
+                    username=cfg.gmail_user,
+                    password=cfg.gmail_app_password,
+                )
+                msg = EmailMultiAlternatives(
+                    subject=subject_str,
+                    body=text_body,
+                    from_email=cfg.gmail_user,
+                    to=emails,
+                    connection=connection,
+                )
+                msg.attach_alternative(html_body, 'text/html')
+                msg.send(fail_silently=False)
+                _log_dispatch(
+                    channel=DispatchLog.CHANNEL_EMAIL,
+                    customer=sub.customer,
+                    solution=patch_note.subject.solution,
+                    recipient=', '.join(emails),
+                    subject=subject_str,
+                    status=DispatchLog.STATUS_SUCCESS,
+                    sent_at=sent_at,
                 )
             except Exception as e:
-                logger.warning(f'Slack 알림 실패 (customer={sub.customer.name}): {e}')
+                logger.warning(f'이메일 발송 실패 (customer={sub.customer.name}): {e}')
+                _log_dispatch(
+                    channel=DispatchLog.CHANNEL_EMAIL,
+                    customer=sub.customer,
+                    solution=patch_note.subject.solution,
+                    recipient=', '.join(emails),
+                    subject=subject_str,
+                    status=DispatchLog.STATUS_FAILED,
+                    error_message=str(e)[:1000],
+                    sent_at=sent_at,
+                )
     except Exception as e:
-        logger.warning(f'Slack 알림 처리 실패: {e}')
+        logger.warning(f'이메일 발송 처리 실패: {e}')
 
 
-def _push_to_notion_safe(patch_note, is_new=True):
-    """Notion push를 시도하되, 실패해도 DB 저장에는 영향 없게 처리"""
+def _push_to_notion_safe(patch_note, is_new=None):
+    """Notion push를 시도하되, 실패해도 DB 저장에는 영향 없게 처리.
+
+    is_new=None이면 notion_pushed_at 유무로 자동 판단:
+      - 이미 push된 적 있으면 Update(False), 없으면 Insert(True)
+    """
     from apps.config.models import SiteConfig
     if not SiteConfig.get().notion_enabled:
         return
+    if is_new is None:
+        is_new = patch_note.notion_pushed_at is None
     try:
         from apps.notion.services import push_patch_note_to_notion
         push_patch_note_to_notion(patch_note, is_new=is_new)
+        patch_note.notion_pushed_at = timezone.now()
+        patch_note.save(update_fields=['notion_pushed_at'])
     except Exception as e:
         logger.warning(f'Notion push 실패 (v{patch_note.version}): {e}')
+
+
+# ──────────────────────────────────────────────
+# 외부 발송 지연 처리 (Django-Q2 워커가 호출)
+# ──────────────────────────────────────────────
+
+def dispatch_external_notifications(patch_note_id: int):
+    """[Q2 Task] 예약 시각에 도달했을 때 외부(고객사 Slack/Gmail) 발송 실행.
+
+    워커 프로세스가 import 가능해야 하므로 모듈 최상위 함수로 정의.
+    호출 시점에 DB 상태를 다시 읽어 상태가 'pending'이 아니면 skip (취소/중복 방지).
+    """
+    try:
+        note = (
+            PatchNote.objects
+            .select_related('product__solution')
+            .prefetch_related('features', 'improvements', 'bugfixes', 'remarks')
+            .get(id=patch_note_id)
+        )
+    except PatchNote.DoesNotExist:
+        logger.warning(f'외부 발송 task: 패치노트 없음 (id={patch_note_id})')
+        return
+
+    if note.external_send_status != PatchNote.EXTERNAL_SEND_PENDING:
+        logger.info(
+            f'외부 발송 task: 상태가 pending 아님 (id={patch_note_id}, '
+            f'status={note.external_send_status}) — skip'
+        )
+        return
+
+    try:
+        _send_slack_notifications(note)
+        _send_email_notifications(note)
+        note.external_send_status = PatchNote.EXTERNAL_SEND_SENT
+        note.external_send_error = ''
+        note.save(update_fields=['external_send_status', 'external_send_error', 'updated_at'])
+    except Exception as e:
+        logger.exception(f'외부 발송 task 실패 (id={patch_note_id})')
+        note.external_send_status = PatchNote.EXTERNAL_SEND_FAILED
+        note.external_send_error = str(e)[:1000]
+        note.save(update_fields=['external_send_status', 'external_send_error', 'updated_at'])
+
+
+def _schedule_external_send(note):
+    """발행 시 호출 — 지연 시간에 맞춰 Q2 task 등록.
+    delay=0 이면 즉시 실행되도록 task 큐에 넣음 (워커가 처리)."""
+    from apps.config.models import SiteConfig
+    from django_q.tasks import async_task, schedule
+    from django_q.models import Schedule
+
+    delay_minutes = SiteConfig.get().external_send_delay_minutes or 0
+    scheduled_at = timezone.now() + timedelta(minutes=delay_minutes)
+
+    note.external_send_scheduled_at = scheduled_at
+    note.external_send_status = PatchNote.EXTERNAL_SEND_PENDING
+    note.external_send_error = ''
+
+    if delay_minutes <= 0:
+        # 즉시 실행 — 워커에 바로 큐잉
+        task_id = async_task(
+            'apps.patchnote.views.dispatch_external_notifications',
+            note.id,
+            task_name=f'patchnote-extsend-{note.id}',
+        )
+        note.external_send_task_id = task_id or ''
+    else:
+        # 지연 실행 — Schedule 1회성 등록
+        sched = schedule(
+            'apps.patchnote.views.dispatch_external_notifications',
+            note.id,
+            schedule_type=Schedule.ONCE,
+            next_run=scheduled_at,
+            name=f'patchnote-extsend-{note.id}',
+            repeats=-1,
+        )
+        note.external_send_task_id = str(sched.id) if sched else ''
+
+    note.save(update_fields=[
+        'external_send_scheduled_at',
+        'external_send_status',
+        'external_send_task_id',
+        'external_send_error',
+        'updated_at',
+    ])
 
 
 class PatchNoteDetailView(LoginRequiredMixin, TemplateView):
@@ -184,6 +539,28 @@ class PatchNoteDetailView(LoginRequiredMixin, TemplateView):
 
         context.update({
             'selected_product': product,
+            'patch_notes': patch_notes,
+        })
+        return context
+
+
+class UtilityPatchNoteDetailView(LoginRequiredMixin, TemplateView):
+    template_name = "patchnote/patch_list.html"
+
+    def get_context_data(self, **kwargs):
+        from apps.product.models import Utility
+        context = super().get_context_data(**kwargs)
+        context = TemplateLayout.init(self, context)
+
+        utility_id = self.kwargs.get('utility_id')
+        utility = get_object_or_404(Utility, id=utility_id)
+
+        patch_notes = PatchNote.objects.filter(utility=utility).prefetch_related(
+            'features', 'improvements', 'bugfixes', 'remarks', 'internals', 'files'
+        ).order_by('-release_date', '-version')
+
+        context.update({
+            'selected_utility': utility,
             'patch_notes': patch_notes,
         })
         return context
@@ -236,23 +613,36 @@ def patch_note_append(request):
         special_notes_html   = request.POST.get('special_notes', '')
         internal_notes_html  = request.POST.get('internal_notes', '')
 
-        if not product_id:
-            return JsonResponse({'error': '제품 정보가 누락되었습니다.'}, status=400)
+        utility_id = request.POST.get('utility_id', '').strip()
+
+        if not product_id and not utility_id:
+            return JsonResponse({'error': '제품 또는 유틸리티 정보가 누락되었습니다.'}, status=400)
         if not version:
             return JsonResponse({'error': '버전을 입력해주세요.'}, status=400)
         if not patch_date:
             return JsonResponse({'error': '배포 날짜를 입력해주세요.'}, status=400)
 
-        try:
-            product = Product.objects.get(id=product_id)
-        except Product.DoesNotExist:
-            return JsonResponse({'error': '제품을 찾을 수 없습니다.'}, status=400)
-
-        patch_note, created = PatchNote.objects.get_or_create(
-            product=product,
-            version=version,
-            defaults={'release_date': patch_date},
-        )
+        if utility_id:
+            from apps.product.models import Utility
+            try:
+                utility = Utility.objects.get(id=utility_id)
+            except Utility.DoesNotExist:
+                return JsonResponse({'error': '유틸리티를 찾을 수 없습니다.'}, status=400)
+            patch_note, created = PatchNote.objects.get_or_create(
+                utility=utility,
+                version=version,
+                defaults={'release_date': patch_date},
+            )
+        else:
+            try:
+                product = Product.objects.get(id=product_id)
+            except Product.DoesNotExist:
+                return JsonResponse({'error': '제품을 찾을 수 없습니다.'}, status=400)
+            patch_note, created = PatchNote.objects.get_or_create(
+                product=product,
+                version=version,
+                defaults={'release_date': patch_date},
+            )
         if not created:
             return JsonResponse(
                 {'error': f'버전 {version}은 이미 등록되어 있습니다.'},
@@ -268,6 +658,11 @@ def patch_note_append(request):
         patch_note.translation_status = PatchNote.TRANSLATION_PENDING
         patch_note.save(update_fields=["translation_status", "updated_at"])
         start_translation(patch_note.id)
+
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.PATCHNOTE_CREATE,
+                         f'{patch_note.subject} v{version}',
+                         {'version': version, 'release_date': patch_date})
 
         return JsonResponse({'message': '패치노트가 등록되었습니다.', 'patch_note_id': patch_note.id})
 
@@ -331,7 +726,8 @@ def patch_note_update(request):
         except PatchNote.DoesNotExist:
             return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
 
-        if PatchNote.objects.filter(product=note.product, version=version).exclude(id=note.id).exists():
+        dup_filter = {'product': note.product} if note.product_id else {'utility': note.utility}
+        if PatchNote.objects.filter(**dup_filter, version=version).exclude(id=note.id).exists():
             return JsonResponse({'error': f'버전 {version}은 이미 등록되어 있습니다.'}, status=400)
 
         note.version = version
@@ -353,6 +749,11 @@ def patch_note_update(request):
         note.translation_status = PatchNote.TRANSLATION_PENDING
         note.save(update_fields=["translation_status", "updated_at"])
         start_translation(note.id)
+
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.PATCHNOTE_UPDATE,
+                         f'{note.subject} v{version}',
+                         {'version': version, 'release_date': patch_date})
 
         return JsonResponse({'message': '패치노트가 수정되었습니다.', 'patch_note_id': note.id})
 
@@ -377,8 +778,15 @@ def patch_note_delete(request):
         except PatchNote.DoesNotExist:
             return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
 
+        subject_str = str(note.subject)
         version = note.version
         note.delete()
+
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.PATCHNOTE_DELETE,
+                         f'{subject_str} v{version}',
+                         {'version': version})
+
         return JsonResponse({'message': f'버전 {version} 패치노트가 삭제되었습니다.'})
 
     except Exception as e:
@@ -398,7 +806,9 @@ def patch_note_publish(request):
         return JsonResponse({'error': '패치노트 ID가 누락되었습니다.'}, status=400)
 
     try:
-        note = PatchNote.objects.select_related('product__solution').prefetch_related(
+        note = PatchNote.objects.select_related(
+            'product__solution', 'utility'
+        ).prefetch_related(
             'features', 'improvements', 'bugfixes', 'remarks'
         ).get(id=patch_note_id)
     except PatchNote.DoesNotExist:
@@ -407,13 +817,47 @@ def patch_note_publish(request):
     if note.is_published:
         return JsonResponse({'error': '이미 발행된 패치노트입니다.'}, status=400)
 
+    # has_download 유틸리티는 release 파일 필수
+    if note.utility_id and note.utility.has_download:
+        if not note.files.filter(file_type='release').exists():
+            return JsonResponse(
+                {'error': '다운로드 파일(Release)을 먼저 업로드해야 발행할 수 있습니다.'},
+                status=400,
+            )
+
     note.is_published = True
     note.save(update_fields=['is_published', 'updated_at'])
 
-    _push_to_notion_safe(note, is_new=True)
-    _send_slack_notifications(note)
+    # 즉시 처리: Notion 등록, 사내 Slack 알림 (Internal 항목 포함)
+    # notion_pushed_at 유무로 Insert/Update 자동 판단 (수동 push 후 발행 시 중복 방지)
+    _push_to_notion_safe(note)
+    _send_internal_slack_notification(note)
 
-    return JsonResponse({'message': f'버전 {note.version} 이(가) 발행되었습니다.'})
+    # 외부 발송 (고객사 Slack/Gmail) — SiteConfig 의 지연 시간만큼 미뤄서 Q2 task로 처리
+    try:
+        _schedule_external_send(note)
+    except Exception as e:
+        logger.exception(f'외부 발송 예약 실패 (id={note.id}): {e}')
+        note.external_send_status = PatchNote.EXTERNAL_SEND_FAILED
+        note.external_send_error = f'예약 실패: {e}'[:1000]
+        note.save(update_fields=['external_send_status', 'external_send_error', 'updated_at'])
+
+    from apps.logs.models import ActionLog
+    ActionLog.record(request, ActionLog.PATCHNOTE_PUBLISH,
+                     f'{note.subject} v{note.version}',
+                     {'version': note.version, 'release_date': str(note.release_date)})
+
+    msg = f'버전 {note.version} 이(가) 발행되었습니다.'
+    if note.external_send_status == PatchNote.EXTERNAL_SEND_PENDING and note.external_send_scheduled_at:
+        msg += f" 외부 발송 예정 시각: {timezone.localtime(note.external_send_scheduled_at):%Y-%m-%d %H:%M}"
+    return JsonResponse({
+        'message': msg,
+        'external_send_status': note.external_send_status,
+        'external_send_scheduled_at': (
+            timezone.localtime(note.external_send_scheduled_at).isoformat()
+            if note.external_send_scheduled_at else None
+        ),
+    })
 
 
 @require_GET
@@ -428,6 +872,78 @@ def translation_status(request, patch_note_id):
         'patch_note_id': note.id,
         'status': note.translation_status,
     })
+
+
+# ──────────────────────────────────────────────
+# 외부 발송 제어 (즉시 발송 / 취소)
+# ──────────────────────────────────────────────
+
+def _delete_q2_schedule(task_id: str):
+    """Q2 Schedule 레코드를 삭제 (취소/즉시발송 시 중복 실행 방지)."""
+    if not task_id:
+        return
+    try:
+        from django_q.models import Schedule
+        Schedule.objects.filter(id=task_id).delete()
+    except Exception as e:
+        logger.warning(f'Q2 Schedule 삭제 실패 (task_id={task_id}): {e}')
+
+
+@require_POST
+@role_required('manager')
+def external_send_now(request, patch_note_id):
+    """대기 중인 외부 발송을 즉시 실행"""
+    try:
+        note = PatchNote.objects.get(id=patch_note_id)
+    except PatchNote.DoesNotExist:
+        return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
+
+    if note.external_send_status != PatchNote.EXTERNAL_SEND_PENDING:
+        return JsonResponse({
+            'error': f'대기 중인 발송이 아닙니다. (현재 상태: {note.get_external_send_status_display()})'
+        }, status=400)
+
+    _delete_q2_schedule(note.external_send_task_id)
+
+    try:
+        from django_q.tasks import async_task
+        task_id = async_task(
+            'apps.patchnote.views.dispatch_external_notifications',
+            note.id,
+            task_name=f'patchnote-extsend-now-{note.id}',
+        )
+        note.external_send_task_id = task_id or ''
+        note.external_send_scheduled_at = timezone.now()
+        note.save(update_fields=[
+            'external_send_task_id', 'external_send_scheduled_at', 'updated_at',
+        ])
+        return JsonResponse({'message': f'버전 {note.version} 외부 발송을 즉시 실행했습니다.'})
+    except Exception as e:
+        logger.exception(f'외부 즉시 발송 실패 (id={note.id})')
+        return JsonResponse({'error': f'발송 실행 중 오류: {e}'}, status=500)
+
+
+@require_POST
+@role_required('manager')
+def external_send_cancel(request, patch_note_id):
+    """대기 중인 외부 발송을 취소"""
+    try:
+        note = PatchNote.objects.get(id=patch_note_id)
+    except PatchNote.DoesNotExist:
+        return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
+
+    if note.external_send_status != PatchNote.EXTERNAL_SEND_PENDING:
+        return JsonResponse({
+            'error': f'대기 중인 발송이 아닙니다. (현재 상태: {note.get_external_send_status_display()})'
+        }, status=400)
+
+    _delete_q2_schedule(note.external_send_task_id)
+
+    note.external_send_status = PatchNote.EXTERNAL_SEND_CANCELLED
+    note.external_send_task_id = ''
+    note.save(update_fields=['external_send_status', 'external_send_task_id', 'updated_at'])
+
+    return JsonResponse({'message': f'버전 {note.version} 외부 발송이 취소되었습니다.'})
 
 
 # ──────────────────────────────────────────────
@@ -505,8 +1021,7 @@ def patch_note_file_download(request, file_id):
     pf = get_object_or_404(PatchNoteFile, id=file_id)
 
     if pf.file_type == 'debug':
-        role = get_user_role(request.user)
-        if role not in ('admin', 'dev'):
+        if get_user_role(request.user) == 'guest':
             raise PermissionDenied
 
     if not pf.file:
@@ -553,7 +1068,7 @@ def patch_note_files_list(request, patch_note_id):
 
     result = []
     for pf in files:
-        if pf.file_type == 'debug' and role not in ('admin', 'dev'):
+        if pf.file_type == 'debug' and role == 'guest':
             continue
         result.append({
             'id': pf.id,

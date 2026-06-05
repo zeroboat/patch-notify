@@ -7,7 +7,7 @@ from django.views.generic import TemplateView
 from web_project import TemplateLayout
 from apps.base.mixins import RoleRequiredMixin, role_required
 from apps.patchnote.models import PatchNote
-from apps.product.models import Product
+from apps.product.models import Product, Utility
 from .models import NotionPageMapping
 from .services import sync_product, push_patch_note_to_notion
 
@@ -26,19 +26,33 @@ class NotionManagementView(RoleRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = TemplateLayout.init(self, super().get_context_data(**kwargs))
 
-        mappings = NotionPageMapping.objects.select_related(
-            'product', 'product__solution'
-        ).order_by('product__solution__order', 'product__order', 'product__platform')
+        product_mappings = NotionPageMapping.objects.filter(
+            product__isnull=False
+        ).select_related('product', 'product__solution').order_by(
+            'product__solution__order', 'product__order', 'product__platform'
+        )
+        utility_mappings = NotionPageMapping.objects.filter(
+            utility__isnull=False
+        ).select_related('utility').order_by('utility__platform', 'utility__order', 'utility__name')
 
-        mapped_product_ids = set(mappings.values_list('product_id', flat=True))
+        mapped_product_ids = set(product_mappings.values_list('product_id', flat=True))
+        mapped_utility_ids = set(utility_mappings.values_list('utility_id', flat=True))
+
         unmapped_products = Product.objects.select_related('solution').exclude(
             id__in=mapped_product_ids
         ).order_by('solution__order', 'order', 'platform')
+        unmapped_utilities = Utility.objects.exclude(
+            id__in=mapped_utility_ids
+        ).order_by('platform', 'order', 'name')
 
         context.update({
-            'mappings': mappings,
+            'mappings': product_mappings,
+            'utility_mappings': utility_mappings,
             'unmapped_products': unmapped_products,
+            'unmapped_utilities': unmapped_utilities,
             'unmapped_count': unmapped_products.count(),
+            'unmapped_utility_count': unmapped_utilities.count(),
+            'active_tab': self.request.GET.get('tab', 'product'),
         })
         return context
 
@@ -51,25 +65,32 @@ class NotionManagementView(RoleRequiredMixin, TemplateView):
 @role_required()
 def create_mapping(request):
     product_id = request.POST.get('product_id', '').strip()
+    utility_id = request.POST.get('utility_id', '').strip()
     page_id_ko = request.POST.get('page_id_ko', '').strip()
     page_id_en = request.POST.get('page_id_en', '').strip()
 
-    if not product_id or not page_id_ko:
-        return JsonResponse({'error': '제품과 한국어 페이지 ID는 필수입니다.'}, status=400)
+    if not page_id_ko:
+        return JsonResponse({'error': '한국어 페이지 ID는 필수입니다.'}, status=400)
 
+    if utility_id:
+        try:
+            utility = Utility.objects.get(id=utility_id)
+        except Utility.DoesNotExist:
+            return JsonResponse({'error': '유틸리티를 찾을 수 없습니다.'}, status=404)
+        if NotionPageMapping.objects.filter(utility=utility).exists():
+            return JsonResponse({'error': '이미 매핑이 등록된 유틸리티입니다.'}, status=400)
+        NotionPageMapping.objects.create(utility=utility, page_id_ko=page_id_ko, page_id_en=page_id_en)
+        return JsonResponse({'message': f'{utility} 매핑이 등록되었습니다.'})
+
+    if not product_id:
+        return JsonResponse({'error': '제품 또는 유틸리티 ID가 필요합니다.'}, status=400)
     try:
         product = Product.objects.get(id=product_id)
     except Product.DoesNotExist:
         return JsonResponse({'error': '제품을 찾을 수 없습니다.'}, status=404)
-
     if NotionPageMapping.objects.filter(product=product).exists():
         return JsonResponse({'error': '이미 매핑이 등록된 제품입니다.'}, status=400)
-
-    NotionPageMapping.objects.create(
-        product=product,
-        page_id_ko=page_id_ko,
-        page_id_en=page_id_en,
-    )
+    NotionPageMapping.objects.create(product=product, page_id_ko=page_id_ko, page_id_en=page_id_en)
     return JsonResponse({'message': f'{product} 매핑이 등록되었습니다.'})
 
 
@@ -100,11 +121,11 @@ def delete_mapping(request):
     mapping_id = request.POST.get('mapping_id', '').strip()
 
     try:
-        mapping = NotionPageMapping.objects.select_related('product').get(id=mapping_id)
+        mapping = NotionPageMapping.objects.select_related('product', 'utility').get(id=mapping_id)
     except NotionPageMapping.DoesNotExist:
         return JsonResponse({'error': '매핑을 찾을 수 없습니다.'}, status=404)
 
-    name = str(mapping.product)
+    name = str(mapping.subject)
     mapping.delete()
     return JsonResponse({'message': f'{name} 매핑이 삭제되었습니다.'})
 
@@ -125,15 +146,18 @@ def notion_sync(request):
         return JsonResponse({'error': 'Notion 토큰이 설정되지 않았습니다.'}, status=400)
 
     product_id = request.POST.get('product_id', '').strip()
+    utility_id = request.POST.get('utility_id', '').strip()
     version = request.POST.get('version', '').strip() or None
 
-    if not product_id:
-        return JsonResponse({'error': '제품 ID가 누락되었습니다.'}, status=400)
-
     try:
-        mapping = NotionPageMapping.objects.select_related('product').get(product_id=product_id)
+        if utility_id:
+            mapping = NotionPageMapping.objects.select_related('utility').get(utility_id=utility_id)
+        elif product_id:
+            mapping = NotionPageMapping.objects.select_related('product').get(product_id=product_id)
+        else:
+            return JsonResponse({'error': '제품 또는 유틸리티 ID가 누락되었습니다.'}, status=400)
     except NotionPageMapping.DoesNotExist:
-        return JsonResponse({'error': '해당 제품의 Notion 매핑 정보가 없습니다.'}, status=404)
+        return JsonResponse({'error': 'Notion 매핑 정보가 없습니다.'}, status=404)
 
     force = request.POST.get('force', '').lower() in ('true', '1', 'yes')
 
@@ -143,6 +167,10 @@ def notion_sync(request):
             msg = '변경사항 없음 — 동기화 스킵'
         else:
             msg = f'동기화 완료 — 신규: {stats["created"]}, 갱신: {stats["updated"]}, 건너뜀: {stats["skipped"]}'
+            from apps.logs.models import ActionLog
+            ActionLog.record(request, ActionLog.NOTION_SYNC,
+                             str(mapping.subject),
+                             {'created': stats['created'], 'updated': stats['updated']})
         return JsonResponse({'message': msg, **stats})
     except Exception as e:
         logger.exception(f'Notion 동기화 실패 (product_id={product_id})')
@@ -174,6 +202,12 @@ def notion_push(request):
 
     try:
         result = push_patch_note_to_notion(patch_note, is_new=is_new)
+        from django.utils import timezone
+        patch_note.notion_pushed_at = timezone.now()
+        patch_note.save(update_fields=['notion_pushed_at'])
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.NOTION_PUSH,
+                         f'{patch_note.subject} v{patch_note.version}')
         en_status = result.get('en_status', 'skipped')
         en_reason = result.get('en_reason', '')
         msg = f'v{patch_note.version} Notion push 완료 (KO: ✅'

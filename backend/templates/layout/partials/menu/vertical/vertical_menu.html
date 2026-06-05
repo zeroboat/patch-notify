@@ -35,6 +35,12 @@
                 <div class="text-truncate">Product Management</div>
             </a>
         </li>
+        <li class="menu-item {% if '/product/utility/' in request.path %}active{% endif %}">
+            <a href="{% url 'product:utility_management' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-wrench"></i>
+                <div class="text-truncate">Utilities Management</div>
+            </a>
+        </li>
         {% if NOTION_ENABLED %}
         <li class="menu-item {% if '/notion/' in request.path %}active open{% endif %}">
             <a href="{% url 'notion:notion_management' %}" class="menu-link">
@@ -51,28 +57,52 @@
         </li>
         {% endif %}
 
-        <li class="menu-header small text-uppercase">
-            <span class="menu-header-text">Patch Notes</span>
-        </li>
-        {% for solution in side_solutions %}
-            <li class="menu-item">
-                <a href="javascript:void(0);" class="menu-link menu-toggle">
-                    <i class="menu-icon tf-icons bx bx-collection"></i>
-                    <div data-i18n="{{ solution.name }}">{{ solution.name }}</div>
-                </a>
-                <ul class="menu-sub">
-                    {% for product in solution.products.all %}
-                        <li class="menu-item {% if product.id in request.path %}active{% endif %}">
-                            <a href="{% url 'patchnote:product_patch_detail' product.id %}" class="menu-link">
-                                <div class="text-truncate">
-                                    {{ product.get_platform_display }} {{ product.get_category_display }}
-                                </div>
+        <li class="menu-item {% if '/patchnote/' in request.path %}active open{% endif %}">
+            <a href="javascript:void(0);" class="menu-link menu-toggle">
+                <i class="menu-icon icon-base bx bx-file"></i>
+                <div class="text-truncate">Patch Notes</div>
+            </a>
+            <ul class="menu-sub">
+                {% for solution in side_solutions %}
+                    <li class="menu-item {% for product in solution.products.all %}{% url 'patchnote:product_patch_detail' product.id as product_url %}{% if request.path == product_url %}active open{% endif %}{% endfor %}">
+                        <a href="javascript:void(0);" class="menu-link menu-toggle">
+                            <i class="menu-icon tf-icons bx bx-collection"></i>
+                            <div data-i18n="{{ solution.name }}">{{ solution.name }}</div>
+                        </a>
+                        <ul class="menu-sub">
+                            {% for product in solution.products.all %}
+                                {% url 'patchnote:product_patch_detail' product.id as product_url %}
+                                <li class="menu-item {% if request.path == product_url %}active{% endif %}">
+                                    <a href="{{ product_url }}" class="menu-link">
+                                        <div class="text-truncate">
+                                            {{ product.get_platform_display }} {{ product.get_category_display }}
+                                        </div>
+                                    </a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </li>
+                {% endfor %}
+                {% if side_utilities %}
+                <li class="menu-item {% if '/patchnote/utility/' in request.path %}active open{% endif %}">
+                    <a href="javascript:void(0);" class="menu-link menu-toggle">
+                        <i class="menu-icon tf-icons bx bx-wrench"></i>
+                        <div>Utilities</div>
+                    </a>
+                    <ul class="menu-sub">
+                        {% for utility in side_utilities %}
+                        {% url 'patchnote:utility_patch_detail' utility.id as util_url %}
+                        <li class="menu-item {% if request.path == util_url %}active{% endif %}">
+                            <a href="{{ util_url }}" class="menu-link">
+                                <div class="text-truncate">{{ utility.name }}</div>
                             </a>
                         </li>
-                    {% endfor %}
-                </ul>
-            </li>
-        {% endfor %}
+                        {% endfor %}
+                    </ul>
+                </li>
+                {% endif %}
+            </ul>
+        </li>
 
         {% if user_role != 'guest' %}
         <li class="menu-header small text-uppercase">
@@ -101,10 +131,29 @@
                 <div class="text-truncate">Subscribers</div>
             </a>
         </li>
-        <li class="menu-item {% if '/logs/' in request.path %}active{% endif %}">
+        <li class="menu-item {% if '/logs/' in request.path and '/logs/action' not in request.path %}active{% endif %}">
             <a href="{% url 'logs:dispatch_log' %}" class="menu-link">
                 <i class="menu-icon icon-base bx bx-list-check"></i>
                 <div class="text-truncate">Logs</div>
+            </a>
+        </li>
+        {% if user_role == 'admin' or user_role == 'manager' %}
+        <li class="menu-item {% if '/logs/action/' in request.path %}active{% endif %}">
+            <a href="{% url 'logs:action_log' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-shield-quarter"></i>
+                <div class="text-truncate">Action Log</div>
+            </a>
+        </li>
+        {% endif %}
+        {% endif %}
+        {% if user_role != 'guest' %}
+        <li class="menu-item {% if '/feedback/' in request.path %}active{% endif %}">
+            <a href="{% url 'feedback:feedback_list' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-message-square-detail"></i>
+                <div class="text-truncate">Feedback</div>
+                {% if open_feedback_count %}
+                <div class="badge bg-danger rounded-pill ms-auto">{{ open_feedback_count }}</div>
+                {% endif %}
             </a>
         </li>
         {% endif %}

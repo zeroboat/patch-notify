@@ -1,12 +1,15 @@
 from django.urls import path
 from .views import (
     PatchNoteDetailView,
+    UtilityPatchNoteDetailView,
     patch_note_append,
     get_patch_note_data,
     patch_note_update,
     patch_note_delete,
     patch_note_publish,
     translation_status,
+    external_send_now,
+    external_send_cancel,
     patch_note_file_upload,
     patch_note_file_download,
     patch_note_file_delete,
@@ -17,12 +20,15 @@ app_name = 'patchnote'
 
 urlpatterns = [
     path('product/<int:product_id>/', PatchNoteDetailView.as_view(), name='product_patch_detail'),
+    path('utility/<int:utility_id>/', UtilityPatchNoteDetailView.as_view(), name='utility_patch_detail'),
     path('append', patch_note_append, name='patch_note_append'),
     path('data/<int:patch_note_id>/', get_patch_note_data, name='patch_note_data'),
     path('update/', patch_note_update, name='patch_note_update'),
     path('delete/', patch_note_delete, name='patch_note_delete'),
     path('publish/', patch_note_publish, name='patch_note_publish'),
     path('translation-status/<int:patch_note_id>/', translation_status, name='translation_status'),
+    path('external-send/<int:patch_note_id>/now/', external_send_now, name='external_send_now'),
+    path('external-send/<int:patch_note_id>/cancel/', external_send_cancel, name='external_send_cancel'),
     path('file/upload/', patch_note_file_upload, name='file_upload'),
     path('file/download/<int:file_id>/', patch_note_file_download, name='file_download'),
     path('file/delete/', patch_note_file_delete, name='file_delete'),

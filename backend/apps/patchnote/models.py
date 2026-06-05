@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from apps.base.models import BaseModel
 class PatchNote(BaseModel):
     """패치노트 메인 모델"""
@@ -15,7 +16,33 @@ class PatchNote(BaseModel):
         ('skipped',     'Skipped'),
     ]
 
-    product = models.ForeignKey('product.Product', on_delete=models.CASCADE, related_name='patch_notes', verbose_name="제품")
+    EXTERNAL_SEND_NONE      = 'none'
+    EXTERNAL_SEND_PENDING   = 'pending'
+    EXTERNAL_SEND_SENT      = 'sent'
+    EXTERNAL_SEND_CANCELLED = 'cancelled'
+    EXTERNAL_SEND_FAILED    = 'failed'
+    EXTERNAL_SEND_STATUS_CHOICES = [
+        (EXTERNAL_SEND_NONE,      '미발행'),
+        (EXTERNAL_SEND_PENDING,   '발송 대기'),
+        (EXTERNAL_SEND_SENT,      '발송 완료'),
+        (EXTERNAL_SEND_CANCELLED, '발송 취소'),
+        (EXTERNAL_SEND_FAILED,    '발송 실패'),
+    ]
+
+    product = models.ForeignKey(
+        'product.Product',
+        on_delete=models.CASCADE,
+        related_name='patch_notes',
+        verbose_name="제품",
+        null=True, blank=True,
+    )
+    utility = models.ForeignKey(
+        'product.Utility',
+        on_delete=models.CASCADE,
+        related_name='patch_notes',
+        verbose_name="유틸리티",
+        null=True, blank=True,
+    )
     version = models.CharField(max_length=30, verbose_name="버전")
     release_date = models.DateField(verbose_name="배포일")
     translation_status = models.CharField(
@@ -25,15 +52,66 @@ class PatchNote(BaseModel):
         verbose_name="번역 상태",
     )
     is_published = models.BooleanField(default=False, verbose_name="발행 여부")
+    notion_pushed_at = models.DateTimeField(null=True, blank=True, verbose_name="Notion Push 일시")
+
+    # 외부 발송 (고객사 Slack/Gmail) 지연 처리
+    external_send_status = models.CharField(
+        max_length=15,
+        choices=EXTERNAL_SEND_STATUS_CHOICES,
+        default=EXTERNAL_SEND_NONE,
+        verbose_name="외부 발송 상태",
+    )
+    external_send_scheduled_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="외부 발송 예약 시각",
+    )
+    external_send_task_id = models.CharField(
+        max_length=64, blank=True, verbose_name="외부 발송 작업 ID",
+    )
+    external_send_error = models.TextField(
+        blank=True, verbose_name="외부 발송 오류",
+    )
 
     class Meta:
         verbose_name = "패치노트"
         verbose_name_plural = "패치노트 목록"
-        unique_together = ['product', 'version']
         ordering = ['-release_date']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['product', 'version'],
+                condition=Q(product__isnull=False),
+                name='patchnote_product_version_unique',
+            ),
+            models.UniqueConstraint(
+                fields=['utility', 'version'],
+                condition=Q(utility__isnull=False),
+                name='patchnote_utility_version_unique',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(product__isnull=False, utility__isnull=True) |
+                    Q(product__isnull=True, utility__isnull=False)
+                ),
+                name='patchnote_product_xor_utility',
+            ),
+        ]
 
     def __str__(self):
-        return f"{self.product} - {self.version}"
+        subject = self.product or self.utility
+        return f"{subject} - {self.version}"
+
+    @property
+    def subject(self):
+        """product 또는 utility 반환"""
+        return self.product if self.product_id else self.utility
+
+    @property
+    def subject_label(self):
+        """플랫폼+카테고리(product) 또는 이름(utility) 표시용 문자열"""
+        if self.product_id:
+            return f"{self.product.get_platform_display()} {self.product.get_category_display()}"
+        if self.utility_id:
+            return self.utility.name
+        return ''
 
 class PatchItemBase(BaseModel):
     """패치노트 공통 베이스 모델"""
@@ -74,10 +152,13 @@ class Internal(PatchItemBase):
 
 def patchnote_file_upload_path(instance, filename):
     note = instance.patch_note
-    solution = note.product.solution.name
-    product = f"{note.product.get_platform_display()}_{note.product.get_category_display()}"
-    version = note.version
-    return f"patchnotes/{solution}/{product}/{version}/{instance.file_type}/{filename}"
+    if note.product_id:
+        group = note.product.solution.name.replace(' ', '_')
+        sub = f"{note.product.get_platform_display()}_{note.product.get_category_display()}"
+    else:
+        group = 'utilities'
+        sub = note.utility.name.replace(' ', '_')
+    return f"patchnotes/{group}/{sub}/{note.version}/{instance.file_type}/{filename}"
 
 
 class PatchNoteFile(BaseModel):

@@ -39,6 +39,7 @@ class SAInstallationStore(InstallationStore):
                     team_name=installation.team_name or '',
                     bot_token=installation.bot_token,
                     status='pending',
+                    is_internal=False,
                     created_at=now,
                     updated_at=now,
                 ))
@@ -97,17 +98,24 @@ def _get_approved_workspace(team_id: str):
 def _pending_view():
     return {
         "type": "home",
-        "blocks": [{
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": (
-                    "⏳ *승인 대기 중*\n\n"
-                    "관리자가 워크스페이스를 확인 후 승인하면 이용할 수 있습니다.\n"
-                    "문의: 담당자에게 연락해 주세요."
-                ),
+        "blocks": [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "📋 Patch Notify 구독 관리"},
             },
-        }],
+            {"type": "divider"},
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*⏳ 승인 대기 중*\n\n관리자가 워크스페이스를 확인한 후 승인하면 이용할 수 있습니다.",
+                },
+            },
+            {
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": "문의가 있으시면 담당자에게 연락해 주세요."}],
+            },
+        ],
     }
 
 
@@ -199,10 +207,7 @@ def handle_save_subscription(ack, body, view, client):
         values.get('slack_channel_input', {}).get('slack_channel_value', {})
         .get('selected_conversation') or ''
     )
-    slack_max = int(
-        values.get('slack_max_items', {}).get('slack_max_select', {})
-        .get('selected_option', {}).get('value', '5')
-    )
+    slack_max = 1
 
     db = SessionLocal()
     try:
@@ -334,4 +339,10 @@ def handle_send_patchnote_dm(ack, body, view, client):
     finally:
         db.close()
 
-    client.chat_postMessage(channel=user_id, blocks=blocks, text=f"{solution_name} 최근 패치노트")
+    try:
+        client.chat_postMessage(channel=user_id, blocks=blocks, text=f"{solution_name} 최근 패치노트")
+    except Exception as e:
+        client.chat_postMessage(
+            channel=user_id,
+            text=f"패치노트 전송 중 오류가 발생했습니다: {e}",
+        )

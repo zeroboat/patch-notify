@@ -5,9 +5,22 @@ from apps.base.models import BaseModel
 # Create your models here.
 
 class Solution(BaseModel):
+    TYPE_PRODUCT = 'product'
+    TYPE_TOOL = 'tool'
+    TYPE_CHOICES = [
+        (TYPE_PRODUCT, 'Product'),
+        (TYPE_TOOL, 'Tool'),
+    ]
+
     name = models.CharField(max_length=100, verbose_name="솔루션 명")
     icon = models.CharField(max_length=50, verbose_name="아이콘", null=True, blank=True)
     order = models.PositiveIntegerField(default=0, verbose_name="정렬 순서")
+    solution_type = models.CharField(
+        max_length=10,
+        choices=TYPE_CHOICES,
+        default=TYPE_PRODUCT,
+        verbose_name="솔루션 유형",
+    )
 
     class Meta:
         verbose_name = "솔루션"
@@ -16,6 +29,10 @@ class Solution(BaseModel):
 
     def __str__(self):
         return self.name
+
+    @property
+    def is_tool(self):
+        return self.solution_type == self.TYPE_TOOL
     
 class Product(BaseModel):
     class Platform(models.TextChoices):
@@ -57,3 +74,42 @@ class Product(BaseModel):
             'FLUTTER': 'danger',
         }
         return colors.get(self.platform, 'secondary')
+
+
+class Utility(BaseModel):
+    """독립 유틸리티 — 플랫폼 기준으로 분류, 솔루션 종속 없음"""
+    PLATFORM_IOS = 'ios'
+    PLATFORM_ANDROID = 'android'
+    PLATFORM_WEB = 'web'
+    PLATFORM_COMMON = 'common'
+    PLATFORM_CHOICES = [
+        (PLATFORM_IOS, 'iOS'),
+        (PLATFORM_ANDROID, 'Android'),
+        (PLATFORM_WEB, 'Web'),
+        (PLATFORM_COMMON, '공통'),
+    ]
+
+    name = models.CharField(max_length=100, verbose_name="유틸리티 명", unique=True)
+    platform = models.CharField(
+        max_length=10,
+        choices=PLATFORM_CHOICES,
+        default=PLATFORM_COMMON,
+        verbose_name="플랫폼",
+    )
+    has_download = models.BooleanField(
+        default=False,
+        verbose_name="다운로드 파일 여부",
+        help_text="체크 시 패치노트에 파일 업로드 UI가 표시됩니다.",
+    )
+    order = models.PositiveIntegerField(default=0, verbose_name="정렬 순서")
+
+    class Meta:
+        verbose_name = "유틸리티"
+        verbose_name_plural = "유틸리티 목록"
+        ordering = ['platform', 'order', 'name']
+
+    def __str__(self):
+        return self.name
+
+    def get_platform_display_ko(self):
+        return dict(self.PLATFORM_CHOICES).get(self.platform, self.platform)

@@ -7,7 +7,7 @@ from django.views.decorators.http import require_POST
 
 from web_project import TemplateLayout
 from apps.base.mixins import RoleRequiredMixin, role_required
-from .models import Product, Solution
+from .models import Product, Solution, Utility
 
 
 class ProductManagementView(RoleRequiredMixin, TemplateView):
@@ -44,6 +44,9 @@ def create_solution(request):
         order = request.POST.get('order', '0').strip()
         if name:
             Solution.objects.create(name=name, icon=icon, order=int(order or 0))
+            from apps.logs.models import ActionLog
+            ActionLog.record(request, ActionLog.SOLUTION_CREATE, name,
+                             {'이름': name})
             messages.success(request, f'솔루션 "{name}"이 등록되었습니다.')
         else:
             messages.error(request, '솔루션 이름을 입력해주세요.')
@@ -61,13 +64,17 @@ def create_product(request):
 
         try:
             solution = Solution.objects.get(id=solution_id)
-            Product.objects.create(
+            product = Product.objects.create(
                 solution=solution,
                 platform=platform,
                 category=category,
                 description=description or None,
                 order=int(order or 0),
             )
+            from apps.logs.models import ActionLog
+            ActionLog.record(request, ActionLog.PRODUCT_CREATE, str(product),
+                             {'솔루션': solution.name, '플랫폼': product.get_platform_display(),
+                              '카테고리': product.get_category_display()})
             messages.success(request, '제품이 등록되었습니다.')
         except Solution.DoesNotExist:
             messages.error(request, '선택한 솔루션을 찾을 수 없습니다.')
@@ -100,6 +107,10 @@ def update_product(request):
         if order:
             product.order = int(order)
         product.save()
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.PRODUCT_UPDATE, str(product),
+                         {'플랫폼': product.get_platform_display(),
+                          '카테고리': product.get_category_display()})
         return JsonResponse({'message': '제품 정보가 수정되었습니다.'})
     except Product.DoesNotExist:
         return JsonResponse({'error': '제품을 찾을 수 없습니다.'}, status=404)
@@ -115,6 +126,8 @@ def delete_product(request):
         product = Product.objects.get(id=product_id)
         name = str(product)
         product.delete()
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.PRODUCT_DELETE, name)
         return JsonResponse({'message': f'제품 "{name}"이 삭제되었습니다.'})
     except Product.DoesNotExist:
         return JsonResponse({'error': '제품을 찾을 수 없습니다.'}, status=404)
@@ -142,6 +155,8 @@ def update_solution(request):
         if order:
             solution.order = int(order)
         solution.save()
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.SOLUTION_UPDATE, solution.name)
         return JsonResponse({'message': f'솔루션 "{solution.name}" 정보가 수정되었습니다.'})
     except Solution.DoesNotExist:
         return JsonResponse({'error': '솔루션을 찾을 수 없습니다.'}, status=404)
@@ -162,8 +177,134 @@ def delete_solution(request):
             )
         name = solution.name
         solution.delete()
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.SOLUTION_DELETE, name)
         return JsonResponse({'message': f'솔루션 "{name}"이 삭제되었습니다.'})
     except Solution.DoesNotExist:
         return JsonResponse({'error': '솔루션을 찾을 수 없습니다.'}, status=404)
     except Exception as e:
         return JsonResponse({'error': f'삭제 중 오류가 발생했습니다: {e}'}, status=500)
+
+
+# ---------------------------------------------------------------------------
+# Utility Management Views
+# ---------------------------------------------------------------------------
+
+class UtilityManagementView(RoleRequiredMixin, TemplateView):
+    """Admin 전용: 유틸리티 관리 (플랫폼별 분류)"""
+    allowed_roles = []
+    template_name = "product/utility_management.html"
+
+    def get_context_data(self, **kwargs):
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+
+        utilities = Utility.objects.annotate(
+            latest_release=Max('patch_notes__release_date')
+        ).order_by('platform', 'order', 'name')
+
+        # 플랫폼별 그룹핑
+        platform_map = {}
+        for u in utilities:
+            platform_map.setdefault(u.platform, []).append(u)
+
+        platforms = [
+            {'key': key, 'label': label, 'utilities': platform_map.get(key, [])}
+            for key, label in Utility.PLATFORM_CHOICES
+        ]
+
+        context.update({
+            'platforms': platforms,
+            'platform_choices': Utility.PLATFORM_CHOICES,
+            'total_utilities': utilities.count(),
+        })
+        return context
+
+
+@role_required()
+def create_utility(request):
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        platform = request.POST.get('platform', Utility.PLATFORM_COMMON)
+        order = request.POST.get('order', '0').strip()
+        has_download = request.POST.get('has_download') == 'true'
+        if not name:
+            messages.error(request, '유틸리티 이름을 입력해주세요.')
+        else:
+            try:
+                u = Utility.objects.create(name=name, platform=platform,
+                                           has_download=has_download, order=int(order or 0))
+                from apps.logs.models import ActionLog
+                ActionLog.record(request, ActionLog.UTILITY_CREATE, name,
+                                 {'이름': name, '플랫폼': u.get_platform_display()})
+                messages.success(request, f'유틸리티 "{name}"이 등록되었습니다.')
+            except Exception as e:
+                messages.error(request, f'등록 중 오류가 발생했습니다: {e}')
+    return redirect('product:utility_management')
+
+
+@require_POST
+@role_required()
+def update_utility(request):
+    utility_id = request.POST.get('utility_id', '').strip()
+    name = request.POST.get('name', '').strip()
+    platform = request.POST.get('platform', '').strip()
+    order = request.POST.get('order', '').strip()
+
+    if not utility_id:
+        return JsonResponse({'error': '유틸리티 ID가 누락되었습니다.'}, status=400)
+    if not name:
+        return JsonResponse({'error': '유틸리티 이름은 필수입니다.'}, status=400)
+
+    try:
+        utility = Utility.objects.get(id=utility_id)
+        utility.name = name
+        if platform:
+            utility.platform = platform
+        if order:
+            utility.order = int(order)
+        has_download = request.POST.get('has_download', '').lower() in ('true', '1', 'on')
+        utility.has_download = has_download
+        utility.save()
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.UTILITY_UPDATE, utility.name,
+                         {'이름': utility.name, '플랫폼': utility.get_platform_display()})
+        return JsonResponse({'message': f'유틸리티 "{utility.name}" 정보가 수정되었습니다.'})
+    except Utility.DoesNotExist:
+        return JsonResponse({'error': '유틸리티를 찾을 수 없습니다.'}, status=404)
+    except (ValueError, TypeError):
+        return JsonResponse({'error': '순서 값이 올바르지 않습니다.'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': f'수정 중 오류가 발생했습니다: {e}'}, status=500)
+
+
+@require_POST
+@role_required()
+def delete_utility(request):
+    utility_id = request.POST.get('utility_id', '').strip()
+    try:
+        utility = Utility.objects.get(id=utility_id)
+        if utility.patch_notes.exists():
+            return JsonResponse(
+                {'error': '유틸리티에 패치노트가 등록되어 있어 삭제할 수 없습니다. 패치노트를 먼저 삭제해주세요.'},
+                status=400
+            )
+        name = str(utility)
+        utility.delete()
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.UTILITY_DELETE, name)
+        return JsonResponse({'message': f'유틸리티 "{name}"이 삭제되었습니다.'})
+    except Utility.DoesNotExist:
+        return JsonResponse({'error': '유틸리티를 찾을 수 없습니다.'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': f'삭제 중 오류가 발생했습니다: {e}'}, status=500)
+
+
+# solution 기반 유틸리티 뷰는 제거됨 (platform 기반으로 전환)
+def create_utility_solution(request):
+    return redirect('product:utility_management')
+
+def update_utility_solution(request):
+    return JsonResponse({'error': '사용되지 않는 엔드포인트입니다.'}, status=410)
+
+def delete_utility_solution(request):
+    return JsonResponse({'error': '사용되지 않는 엔드포인트입니다.'}, status=410)

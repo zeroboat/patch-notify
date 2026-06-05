@@ -56,6 +56,126 @@
   <!--Page Javascript-->
   {% block page_js %} {% endblock page_js %}
 
+  <!-- 피드백 플로팅 버튼 (Guest 제외) -->
+  {% if user_role != 'guest' and user_role != 'anonymous' %}
+  <style>
+    #feedback-float-btn {
+      position: fixed; bottom: 28px; right: 28px; z-index: 1050;
+      width: 52px; height: 52px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,.25);
+      padding: 0;
+      font-size: 1.5rem;
+    }
+  </style>
+  <button id="feedback-float-btn" class="btn btn-primary btn-icon" title="피드백 등록"
+          onclick="openFloatingFeedbackModal()">
+    <i class="bx bx-message-square-add"></i>
+  </button>
+
+  <div class="modal fade" id="floatingFeedbackModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">피드백 등록</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label">작성자</label>
+            <input type="text" id="floatFbAuthorName" class="form-control"
+                   value="{{ request.user.get_full_name|default:request.user.username }}"
+                   placeholder="이름을 입력하세요">
+            <div class="form-text">그룹 계정 사용 시 본인 이름으로 변경하세요.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">제목 <span class="text-danger">*</span></label>
+            <input type="text" id="floatFbTitle" class="form-control" placeholder="피드백 제목을 입력하세요">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">분류</label>
+            <select id="floatFbCategory" class="form-select">
+              <option value="bug">버그 / 오류</option>
+              <option value="ux" selected>사용성 개선</option>
+              <option value="feature">신규 기능 요청</option>
+              <option value="question">질문 / 사용 문의</option>
+              <option value="other">기타</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">내용 <span class="text-danger">*</span></label>
+            <textarea id="floatFbContent" class="form-control" rows="5" placeholder="불편하신 점이나 개선 아이디어를 자세히 적어주세요."></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">첨부 파일 <span class="text-muted small">(jpg/png/gif, 5MB 이하)</span></label>
+            <input type="file" id="floatFbAttachment" class="form-control" accept=".jpg,.jpeg,.png,.gif">
+          </div>
+          <div class="mb-0">
+            <label class="form-label small text-muted mb-1">발생 화면</label>
+            <input type="text" id="floatFbPageUrl" class="form-control form-control-sm" readonly>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">취소</button>
+          <button type="button" class="btn btn-primary" onclick="submitFloatingFeedback()">등록</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // scroll-to-top 버튼이 나타나면 피드백 버튼을 그 위로 밀어올림
+  (function() {
+    const scrollTopBtn = document.getElementById('btn-scroll-top');
+    const feedbackBtn = document.getElementById('feedback-float-btn');
+    if (!scrollTopBtn || !feedbackBtn) return;
+    new MutationObserver(() => {
+      feedbackBtn.style.bottom = scrollTopBtn.style.display === 'none' ? '28px' : '84px';
+    }).observe(scrollTopBtn, { attributes: true, attributeFilter: ['style'] });
+  })();
+
+  const _floatDefaultAuthorName = '{{ request.user.get_full_name|default:request.user.username }}';
+
+  function openFloatingFeedbackModal() {
+    document.getElementById('floatFbPageUrl').value = window.location.pathname;
+    document.getElementById('floatFbTitle').value = '';
+    document.getElementById('floatFbContent').value = '';
+    document.getElementById('floatFbAttachment').value = '';
+    document.getElementById('floatFbAuthorName').value = _floatDefaultAuthorName;
+    new bootstrap.Modal(document.getElementById('floatingFeedbackModal')).show();
+  }
+
+  async function submitFloatingFeedback() {
+    const title = document.getElementById('floatFbTitle').value.trim();
+    const content = document.getElementById('floatFbContent').value.trim();
+    if (!title || !content) {
+      Swal.fire('입력 오류', '제목과 내용을 입력해주세요.', 'warning');
+      return;
+    }
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}');
+    formData.append('author_name', document.getElementById('floatFbAuthorName').value.trim());
+    formData.append('title', title);
+    formData.append('content', content);
+    formData.append('category', document.getElementById('floatFbCategory').value);
+    formData.append('page_url', document.getElementById('floatFbPageUrl').value);
+    const file = document.getElementById('floatFbAttachment').files[0];
+    if (file) formData.append('attachment', file);
+
+    const res = await fetch('/feedback/new/', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (res.ok) {
+      bootstrap.Modal.getInstance(document.getElementById('floatingFeedbackModal')).hide();
+      await Swal.fire({ icon: 'success', title: '등록 완료', text: data.message, timer: 1200, showConfirmButton: false });
+      location.href = '/feedback/' + data.id + '/';
+    } else {
+      Swal.fire('오류', data.error || '등록 중 오류가 발생했습니다.', 'error');
+    }
+  }
+  </script>
+  {% endif %}
+
 </body>
 
 </html>

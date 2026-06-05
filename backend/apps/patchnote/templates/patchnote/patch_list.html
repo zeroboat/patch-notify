@@ -39,6 +39,12 @@
         <!-- 좌측: 제품 정보 -->
         <div>
             <div class="d-flex align-items-center flex-wrap gap-2">
+                {% if selected_utility %}
+                <i class="bx bx-wrench text-warning" style="font-size:1.2rem;"></i>
+                <span class="fw-semibold">{{ selected_utility.name }}</span>
+                <span class="text-muted">/</span>
+                <span class="badge bg-label-warning rounded-pill">{{ selected_utility.get_platform_display }}</span>
+                {% else %}
                 {% if selected_product.solution.icon %}
                 <i class="bx {{ selected_product.solution.icon }} text-{{ selected_product.platform_color }}" style="font-size:1.2rem;"></i>
                 {% endif %}
@@ -47,10 +53,11 @@
                 <span class="badge bg-label-{{ selected_product.platform_color }} rounded-pill">{{ selected_product.get_platform_display }}</span>
                 <span class="text-muted">/</span>
                 <span class="badge bg-label-secondary rounded-pill">{{ selected_product.get_category_display }}</span>
+                {% if selected_product.description %}
+                <p class="mb-0 small text-muted mt-1">{{ selected_product.description }}</p>
+                {% endif %}
+                {% endif %}
             </div>
-            {% if selected_product.description %}
-            <p class="mb-0 small text-muted mt-1">{{ selected_product.description }}</p>
-            {% endif %}
         </div>
         <!-- 우측: 검색 + 언어 토글 + 등록 버튼 -->
         <div class="d-flex align-items-center gap-2 flex-shrink-0">
@@ -76,7 +83,11 @@
             <form id="appendForm" action="{% url 'patchnote:patch_note_append' %}" method="POST" class="modal-content">
                 {% csrf_token %}
 
+                {% if selected_utility %}
+                <input type="hidden" name="utility_id" value="{{ selected_utility.id }}">
+                {% else %}
                 <input type="hidden" name="product_id" value="{{ selected_product.id }}">
+                {% endif %}
 
                 <div class="modal-header border-bottom pb-3">
                     <div class="d-flex align-items-center">
@@ -88,7 +99,7 @@
                         <div>
                             <h4 class="modal-title mb-0 fw-bold">패치내역 등록</h4>
                             <small class="text-muted">
-                                <span class="badge bg-label-secondary text-capitalize">{{ selected_product }}</span>
+                                <span class="badge bg-label-secondary text-capitalize">{% if selected_utility %}{{ selected_utility }}{% else %}{{ selected_product }}{% endif %}</span>
                                 전용 릴리즈 노트를 작성합니다.
                             </small>
                         </div>
@@ -337,6 +348,23 @@
                             <span class="badge bg-label-success fs-small">
                                 <i class="bx bx-send me-1"></i>발행됨
                             </span>
+                            {% if note.external_send_status == 'pending' %}
+                            <span class="badge bg-label-warning fs-small" title="외부 발송 예정">
+                                <i class="bx bx-time me-1"></i>발송 대기 · {{ note.external_send_scheduled_at|date:"H:i" }}
+                            </span>
+                            {% elif note.external_send_status == 'sent' %}
+                            <span class="badge bg-label-info fs-small">
+                                <i class="bx bx-check-double me-1"></i>외부 발송 완료
+                            </span>
+                            {% elif note.external_send_status == 'cancelled' %}
+                            <span class="badge bg-label-secondary fs-small">
+                                <i class="bx bx-block me-1"></i>발송 취소됨
+                            </span>
+                            {% elif note.external_send_status == 'failed' %}
+                            <span class="badge bg-label-danger fs-small" title="{{ note.external_send_error }}">
+                                <i class="bx bx-error me-1"></i>발송 실패
+                            </span>
+                            {% endif %}
                             {% else %}
                             <span class="badge bg-label-warning fs-small">
                                 <i class="bx bx-edit-alt me-1"></i>미발행
@@ -356,6 +384,16 @@
                             <button class="btn btn-sm btn-label-success btn-publish-note"
                                     data-id="{{ note.id }}" data-version="{{ note.version }}" title="발행">
                                 <i class="bx bx-send me-1"></i>발행
+                            </button>
+                            {% endif %}
+                            {% if note.external_send_status == 'pending' and user_role in 'admin manager' %}
+                            <button class="btn btn-sm btn-label-primary btn-ext-send-now"
+                                    data-id="{{ note.id }}" data-version="{{ note.version }}" title="지금 바로 외부 발송">
+                                <i class="bx bx-fast-forward me-1"></i>지금 발송
+                            </button>
+                            <button class="btn btn-sm btn-label-danger btn-ext-send-cancel"
+                                    data-id="{{ note.id }}" data-version="{{ note.version }}" title="외부 발송 취소">
+                                <i class="bx bx-x me-1"></i>발송 취소
                             </button>
                             {% endif %}
                             <button class="btn btn-sm btn-icon btn-label-success btn-push-notion"
@@ -439,7 +477,7 @@
                         {% endwith %}
 
                         {% with intl=note.internals.first %}
-                        {% if intl and intl.content %}
+                        {% if intl and intl.content and user_role != 'guest' %}
                         {% if note.features.exists or note.improvements.exists or note.bugfixes.exists or note.remarks.exists %}<hr class="my-3 opacity-25">{% endif %}
                         <div class="patch-section border-start border-3 border-dark ps-3 mb-4">
                             <div class="d-flex align-items-center gap-2 mb-2">
@@ -471,7 +509,7 @@
                             </div>
                             <div id="file-list-{{ note.id }}">
                                 {% for pf in note.files.all %}
-                                    {% if pf.file_type == 'release' or user_role == 'admin' or user_role == 'manager' or user_role == 'dev' %}
+                                    {% if pf.file_type == 'release' or user_role != 'guest' %}
                                     <div class="d-flex align-items-center gap-2 mb-1 file-item" data-file-id="{{ pf.id }}">
                                         <span class="badge {% if pf.file_type == 'release' %}bg-label-success{% else %}bg-label-danger{% endif %}" style="font-size:0.65rem;">
                                             {{ pf.get_file_type_display }}
@@ -511,8 +549,12 @@
                         <div class="mb-3" style="font-size:3rem; opacity:0.25;">📋</div>
                         <h6 class="fw-semibold mb-1">아직 등록된 패치노트가 없습니다.</h6>
                         <p class="text-muted small mb-3">
+                            {% if selected_utility %}
+                            <span class="badge bg-label-warning rounded-pill">{{ selected_utility.name }}</span>
+                            {% else %}
                             <span class="badge bg-label-{{ selected_product.platform_color }} rounded-pill">{{ selected_product.get_platform_display }}</span>
                             <span class="badge bg-label-secondary rounded-pill ms-1">{{ selected_product.get_category_display }}</span>
+                            {% endif %}
                             의 첫 번째 릴리즈 노트를 작성해 보세요.
                         </p>
                         <button type="button" class="btn btn-primary btn-sm"
@@ -790,6 +832,59 @@
                     }
                 } catch (e) {
                     Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
+                }
+            });
+        });
+
+        // ── 외부 발송 즉시 실행 / 취소 버튼 ─────────────────────────────────────
+        document.querySelectorAll('.btn-ext-send-now').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                const noteId = this.dataset.id;
+                const version = this.dataset.version;
+                const result = await Swal.fire({
+                    title: `버전 ${version} 즉시 발송`,
+                    text: '예약 시각 이전에 지금 바로 고객사로 발송합니다. 계속하시겠습니까?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: '지금 발송',
+                    cancelButtonText: '취소',
+                    confirmButtonColor: '#0d6efd',
+                });
+                if (!result.isConfirmed) return;
+                const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                const res = await fetch(`/patchnote/external-send/${noteId}/now/`, { method: 'POST', headers: {'X-CSRFToken': csrf} });
+                const data = await res.json();
+                if (res.ok) {
+                    await Swal.fire({ icon: 'success', title: '발송 완료', text: data.message, timer: 1500, showConfirmButton: false });
+                    location.reload();
+                } else {
+                    Swal.fire('오류', data.error || '발송 중 오류가 발생했습니다.', 'error');
+                }
+            });
+        });
+
+        document.querySelectorAll('.btn-ext-send-cancel').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                const noteId = this.dataset.id;
+                const version = this.dataset.version;
+                const result = await Swal.fire({
+                    title: `버전 ${version} 발송 취소`,
+                    text: '고객사로의 외부 발송을 취소합니다. 취소 후에는 다시 발송할 수 없습니다.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: '발송 취소',
+                    cancelButtonText: '닫기',
+                    confirmButtonColor: '#d33',
+                });
+                if (!result.isConfirmed) return;
+                const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                const res = await fetch(`/patchnote/external-send/${noteId}/cancel/`, { method: 'POST', headers: {'X-CSRFToken': csrf} });
+                const data = await res.json();
+                if (res.ok) {
+                    await Swal.fire({ icon: 'success', title: '취소 완료', text: data.message, timer: 1500, showConfirmButton: false });
+                    location.reload();
+                } else {
+                    Swal.fire('오류', data.error || '취소 중 오류가 발생했습니다.', 'error');
                 }
             });
         });

@@ -45,6 +45,12 @@ def update_workspace_status(request):
     workspace.status = status
     workspace.save(update_fields=['status', 'updated_at'])
 
+    from apps.logs.models import ActionLog
+    action = ActionLog.SLACK_APPROVE if status == 'approved' else (
+             ActionLog.SLACK_REJECT  if status == 'rejected' else None)
+    if action:
+        ActionLog.record(request, action, workspace.team_name)
+
     return JsonResponse({
         'ok': True,
         'message': f'{workspace.team_name} 상태가 {workspace.get_status_display()}(으)로 변경되었습니다.',

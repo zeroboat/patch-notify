@@ -1,0 +1,73 @@
+{% extends layout_path %}
+{% load static %}
+
+{% block title %}Action Log 상세{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h4 class="fw-bold mb-1">Action Log 상세</h4>
+      <p class="text-muted mb-0 small">
+        <a href="{% url 'logs:action_log' %}" class="text-muted">← 목록으로</a>
+      </p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="row g-3 mb-4">
+        <div class="col-md-3">
+          <p class="text-muted small mb-1">일시</p>
+          <p class="fw-semibold mb-0">{{ log.timestamp|date:"Y-m-d H:i:s" }}</p>
+        </div>
+        <div class="col-md-2">
+          <p class="text-muted small mb-1">사용자</p>
+          <p class="fw-semibold mb-0">{{ log.actor.username|default:"—" }}</p>
+        </div>
+        <div class="col-md-2">
+          <p class="text-muted small mb-1">액션</p>
+          <p class="mb-0">
+            {% if 'publish' in log.action or 'approve' in log.action %}
+              <span class="badge bg-label-success">{{ log.action_label }}</span>
+            {% elif 'delete' in log.action or 'reject' in log.action %}
+              <span class="badge bg-label-danger">{{ log.action_label }}</span>
+            {% elif 'create' in log.action %}
+              <span class="badge bg-label-primary">{{ log.action_label }}</span>
+            {% else %}
+              <span class="badge bg-label-secondary">{{ log.action_label }}</span>
+            {% endif %}
+          </p>
+        </div>
+        <div class="col-md-3">
+          <p class="text-muted small mb-1">대상</p>
+          <p class="fw-semibold mb-0">{{ log.target }}</p>
+        </div>
+        <div class="col-md-2">
+          <p class="text-muted small mb-1">IP</p>
+          <p class="font-monospace small mb-0">{{ log.ip_address|default:"—" }}</p>
+        </div>
+      </div>
+
+      {% if log.detail %}
+      <hr>
+      <p class="text-muted small mb-2">상세 정보</p>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered mb-0" style="max-width:500px">
+          <tbody>
+            {% for key, value in log.detail.items %}
+            <tr>
+              <td class="text-muted" style="width:40%">{{ key }}</td>
+              <td class="fw-semibold">{{ value }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

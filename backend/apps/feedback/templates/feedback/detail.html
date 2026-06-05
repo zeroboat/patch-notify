@@ -1,0 +1,370 @@
+{% extends layout_path %}
+{% load static %}
+
+{% block title %}피드백 — {{ feedback.title }}{% endblock %}
+
+{% block page_css %}
+<style>
+  .avatar-initial {
+    width: 36px; height: 36px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 600; flex-shrink: 0;
+  }
+  .comment-item { border-left: 3px solid #e9ecef; padding-left: 14px; }
+  .comment-item:hover { border-left-color: #696cff; }
+  .meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .info-item { padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+  .info-item:last-child { border-bottom: none; padding-bottom: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+  {% csrf_token %}
+
+  <!-- 헤더 -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <a href="{% url 'feedback:feedback_list' %}" class="btn btn-sm btn-label-secondary">
+      <i class="bx bx-arrow-back me-1"></i>목록으로
+    </a>
+    {% if can_edit %}
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm btn-label-primary" onclick="openEditModal()">
+        <i class="bx bx-edit me-1"></i>수정
+      </button>
+      <button class="btn btn-sm btn-label-danger" onclick="deleteFeedback()">
+        <i class="bx bx-trash me-1"></i>삭제
+      </button>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="row g-4">
+    <!-- 본문 + 댓글 -->
+    <div class="col-12 col-lg-8">
+
+      <!-- 피드백 본문 카드 -->
+      <div class="card mb-4">
+        <div class="card-body p-4">
+          <!-- 배지 행 -->
+          <div class="d-flex align-items-center gap-2 mb-3">
+            <span class="badge bg-label-primary">{{ feedback.get_category_display }}</span>
+            {% if feedback.priority == 'high' %}
+              <span class="badge bg-label-danger">🔴 높음</span>
+            {% elif feedback.priority == 'medium' %}
+              <span class="badge bg-label-warning">🟡 보통</span>
+            {% else %}
+              <span class="badge bg-label-secondary">⚪ 낮음</span>
+            {% endif %}
+            {% if feedback.status == 'open' %}<span class="badge bg-label-warning">{{ feedback.get_status_display }}</span>
+            {% elif feedback.status == 'reviewing' %}<span class="badge bg-label-info">{{ feedback.get_status_display }}</span>
+            {% elif feedback.status == 'planned' or feedback.status == 'in_progress' %}<span class="badge bg-label-primary">{{ feedback.get_status_display }}</span>
+            {% elif feedback.status == 'done' %}<span class="badge bg-label-success">{{ feedback.get_status_display }}</span>
+            {% else %}<span class="badge bg-label-secondary">{{ feedback.get_status_display }}</span>
+            {% endif %}
+          </div>
+
+          <!-- 제목 -->
+          <h4 class="fw-bold mb-3">{{ feedback.title }}</h4>
+
+          <!-- 작성자 + 날짜 -->
+          <div class="meta-row mb-4">
+            {% with name=feedback.author_name|default:feedback.author.get_full_name|default:feedback.author.username|default:"알 수 없음" %}
+            <span class="avatar-initial bg-label-primary text-primary">{{ name|slice:":1" }}</span>
+            <span class="fw-semibold">{{ name }}</span>
+            {% endwith %}
+            <span class="text-muted small">·</span>
+            <span class="text-muted small">{{ feedback.created_at|date:"Y년 m월 d일 H:i" }}</span>
+            {% if feedback.page_url %}
+            <span class="text-muted small">·</span>
+            <span class="text-muted small"><i class="bx bx-link me-1"></i>{{ feedback.page_url }}</span>
+            {% endif %}
+          </div>
+
+          <!-- 본문 -->
+          <div class="p-3 rounded" style="background:#f8f9fa; white-space:pre-wrap; line-height:1.7">{{ feedback.content }}</div>
+
+          <!-- 첨부 파일 -->
+          {% if feedback.attachment %}
+          <div class="mt-3">
+            <a href="{{ feedback.attachment.url }}" target="_blank" class="btn btn-sm btn-label-secondary">
+              <i class="bx bx-paperclip me-1"></i>첨부 파일 보기
+            </a>
+          </div>
+          {% endif %}
+
+          <!-- 처리 메모 (있을 때만) -->
+          {% if feedback.resolution_note %}
+          <div class="mt-4 p-3 rounded border-start border-3 border-success" style="background:#f0fdf4">
+            <div class="small text-success fw-semibold mb-1"><i class="bx bx-check-circle me-1"></i>처리 메모</div>
+            <p class="mb-0 small" style="white-space:pre-wrap">{{ feedback.resolution_note }}</p>
+            {% if feedback.resolved_at %}
+            <div class="text-muted small mt-1">{{ feedback.resolved_at|date:"Y-m-d H:i" }} 완료</div>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- 댓글 카드 -->
+      <div class="card">
+        <div class="card-header py-3 d-flex align-items-center gap-2">
+          <i class="bx bx-comment-dots text-primary"></i>
+          <h6 class="mb-0 fw-bold">댓글</h6>
+          <span class="badge bg-label-secondary">{{ feedback.comments.count }}</span>
+        </div>
+        <div class="card-body p-4">
+          <div id="comment-list">
+            {% for comment in feedback.comments.all %}
+            {% with cname=comment.author_name|default:comment.author.get_full_name|default:comment.author.username|default:"알 수 없음" %}
+            <div class="comment-item mb-4" id="comment-{{ comment.id }}">
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="avatar-initial bg-label-info text-info" style="width:28px;height:28px;font-size:12px;">{{ cname|slice:":1" }}</span>
+                <span class="fw-semibold small">{{ cname }}</span>
+                <span class="text-muted small">{{ comment.created_at|date:"Y-m-d H:i" }}</span>
+                {% if user_role == 'admin' or user_role == 'manager' or comment.author == request.user %}
+                <button class="btn btn-sm btn-icon p-0 ms-auto text-muted" style="width:20px;height:20px;"
+                        onclick="deleteComment({{ feedback.pk }}, {{ comment.id }})" title="삭제">
+                  <i class="bx bx-x" style="font-size:16px;"></i>
+                </button>
+                {% endif %}
+              </div>
+              <p class="mb-0 small ps-1" style="white-space:pre-wrap; line-height:1.6">{{ comment.content }}</p>
+            </div>
+            {% endwith %}
+            {% empty %}
+            <p class="text-muted small text-center py-2">아직 댓글이 없습니다.</p>
+            {% endfor %}
+          </div>
+
+          <!-- 댓글 입력 -->
+          <div class="mt-4 pt-3 border-top">
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <span class="avatar-initial bg-label-primary text-primary" id="commentAvatarInitial"
+                    style="width:28px;height:28px;font-size:12px;">{{ request.user.get_full_name|default:request.user.username|slice:":1" }}</span>
+              <input type="text" id="commentAuthorName" class="form-control form-control-sm"
+                     style="max-width:160px;"
+                     placeholder="작성자 이름"
+                     value="{{ request.user.get_full_name|default:request.user.username }}">
+            </div>
+            <div class="d-flex gap-2">
+              <textarea id="commentContent" class="form-control form-control-sm" rows="2"
+                        placeholder="댓글을 입력하세요" style="resize:none;"></textarea>
+              <button class="btn btn-primary btn-sm align-self-end px-3" onclick="submitComment()">등록</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 사이드 정보 -->
+    <div class="col-12 col-lg-4">
+      <div class="card">
+        <div class="card-header py-3">
+          <h6 class="mb-0 fw-bold">정보</h6>
+        </div>
+        <div class="card-body px-4 py-3">
+
+          <div class="info-item">
+            <div class="small text-muted mb-1">상태</div>
+            {% if can_change_status %}
+            <select id="statusSelect" class="form-select form-select-sm" onchange="updateStatus(this.value)">
+              {% for val, label in status_choices %}
+              <option value="{{ val }}" {% if feedback.status == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% else %}
+            {% if feedback.status == 'open' %}<span class="badge bg-label-warning">{{ feedback.get_status_display }}</span>
+            {% elif feedback.status == 'reviewing' %}<span class="badge bg-label-info">{{ feedback.get_status_display }}</span>
+            {% elif feedback.status == 'done' %}<span class="badge bg-label-success">{{ feedback.get_status_display }}</span>
+            {% else %}<span class="badge bg-label-secondary">{{ feedback.get_status_display }}</span>{% endif %}
+            {% endif %}
+          </div>
+
+          <div class="info-item">
+            <div class="small text-muted mb-1">우선순위</div>
+            {% if can_change_status %}
+            <select id="prioritySelect" class="form-select form-select-sm" onchange="updatePriority(this.value)">
+              {% for val, label in priority_choices %}
+              <option value="{{ val }}" {% if feedback.priority == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% else %}
+            {% if feedback.priority == 'high' %}<span class="badge bg-label-danger">높음</span>
+            {% elif feedback.priority == 'medium' %}<span class="badge bg-label-warning">보통</span>
+            {% else %}<span class="badge bg-label-secondary">낮음</span>{% endif %}
+            {% endif %}
+          </div>
+
+          <div class="info-item">
+            <div class="small text-muted mb-1">분류</div>
+            <span class="small">{{ feedback.get_category_display }}</span>
+          </div>
+
+          <div class="info-item">
+            <div class="small text-muted mb-1">작성자</div>
+            {% with name=feedback.author_name|default:feedback.author.get_full_name|default:feedback.author.username|default:"알 수 없음" %}
+            <div class="d-flex align-items-center gap-2">
+              <span class="avatar-initial bg-label-primary text-primary" style="width:26px;height:26px;font-size:11px;">{{ name|slice:":1" }}</span>
+              <span class="small">{{ name }}</span>
+            </div>
+            {% endwith %}
+          </div>
+
+          <div class="info-item">
+            <div class="small text-muted mb-1">등록일</div>
+            <span class="small">{{ feedback.created_at|date:"Y-m-d H:i" }}</span>
+          </div>
+
+          {% if feedback.page_url %}
+          <div class="info-item">
+            <div class="small text-muted mb-1">발생 화면</div>
+            <span class="small text-break">{{ feedback.page_url }}</span>
+          </div>
+          {% endif %}
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 수정 모달 -->
+{% if can_edit %}
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">피드백 수정</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">제목</label>
+          <input type="text" id="editTitle" class="form-control" value="{{ feedback.title }}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">분류</label>
+          <select id="editCategory" class="form-select">
+            {% for val, label in feedback.Category.choices %}
+            <option value="{{ val }}" {% if feedback.category == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">내용</label>
+          <textarea id="editContent" class="form-control" rows="6">{{ feedback.content }}</textarea>
+        </div>
+        {% if can_change_status %}
+        <div class="mt-3">
+          <label class="form-label">처리 메모</label>
+          <textarea id="editResolutionNote" class="form-control" rows="3">{{ feedback.resolution_note }}</textarea>
+        </div>
+        {% endif %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">취소</button>
+        <button type="button" class="btn btn-primary" onclick="submitEdit()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+const feedbackId = {{ feedback.pk }};
+const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+function openEditModal() {
+  new bootstrap.Modal(document.getElementById('editModal')).show();
+}
+
+async function submitEdit() {
+  const formData = new FormData();
+  formData.append('csrfmiddlewaretoken', csrf);
+  formData.append('title', document.getElementById('editTitle').value.trim());
+  formData.append('content', document.getElementById('editContent').value.trim());
+  formData.append('category', document.getElementById('editCategory').value);
+  {% if can_change_status %}
+  formData.append('resolution_note', document.getElementById('editResolutionNote').value);
+  {% endif %}
+  const res = await fetch(`/feedback/${feedbackId}/update/`, { method: 'POST', body: formData });
+  const data = await res.json();
+  if (res.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+    location.reload();
+  } else {
+    Swal.fire('오류', data.error || '수정 중 오류 발생', 'error');
+  }
+}
+
+async function deleteFeedback() {
+  const result = await Swal.fire({
+    title: '피드백 삭제', text: '삭제 후 복구할 수 없습니다.', icon: 'warning',
+    showCancelButton: true, confirmButtonText: '삭제', cancelButtonText: '취소', confirmButtonColor: '#d33',
+  });
+  if (!result.isConfirmed) return;
+  const res = await fetch(`/feedback/${feedbackId}/delete/`, { method: 'POST', headers: {'X-CSRFToken': csrf} });
+  if (res.ok) { location.href = '/feedback/'; }
+  else { Swal.fire('오류', '삭제 중 오류 발생', 'error'); }
+}
+
+async function updateStatus(status) {
+  const formData = new FormData();
+  formData.append('csrfmiddlewaretoken', csrf);
+  formData.append('status', status);
+  await fetch(`/feedback/${feedbackId}/status/`, { method: 'POST', body: formData });
+}
+
+async function updatePriority(priority) {
+  const formData = new FormData();
+  formData.append('csrfmiddlewaretoken', csrf);
+  formData.append('priority', priority);
+  await fetch(`/feedback/${feedbackId}/priority/`, { method: 'POST', body: formData });
+}
+
+// 작성자 이름 입력 시 아바타 이니셜 실시간 반영
+document.getElementById('commentAuthorName').addEventListener('input', function() {
+  document.getElementById('commentAvatarInitial').textContent = this.value.slice(0, 1) || '?';
+});
+
+async function submitComment() {
+  const content = document.getElementById('commentContent').value.trim();
+  const authorName = document.getElementById('commentAuthorName').value.trim();
+  if (!content) return;
+  const formData = new FormData();
+  formData.append('csrfmiddlewaretoken', csrf);
+  formData.append('content', content);
+  formData.append('author_name', authorName);
+  const res = await fetch(`/feedback/${feedbackId}/comment/`, { method: 'POST', body: formData });
+  const data = await res.json();
+  if (res.ok) {
+    document.getElementById('commentContent').value = '';
+    const initial = data.author ? data.author.slice(0, 1) : '?';
+    document.getElementById('comment-list').innerHTML += `
+      <div class="comment-item mb-4" id="comment-${data.id}">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="avatar-initial bg-label-info text-info" style="width:28px;height:28px;font-size:12px;">${initial}</span>
+          <span class="fw-semibold small">${data.author}</span>
+          <span class="text-muted small">${data.created_at}</span>
+          <button class="btn btn-sm btn-icon p-0 ms-auto text-muted" style="width:20px;height:20px;"
+                  onclick="deleteComment(${feedbackId}, ${data.id})" title="삭제">
+            <i class="bx bx-x" style="font-size:16px;"></i>
+          </button>
+        </div>
+        <p class="mb-0 small ps-1" style="white-space:pre-wrap;line-height:1.6">${data.content.replace(/\n/g,'<br>')}</p>
+      </div>`;
+  }
+}
+
+async function deleteComment(feedbackId, commentId) {
+  const result = await Swal.fire({
+    title: '댓글 삭제', text: '삭제 후 복구할 수 없습니다.', icon: 'warning',
+    showCancelButton: true, confirmButtonText: '삭제', cancelButtonText: '취소', confirmButtonColor: '#d33',
+  });
+  if (!result.isConfirmed) return;
+  const res = await fetch(`/feedback/${feedbackId}/comment/${commentId}/delete/`, { method: 'POST', headers: {'X-CSRFToken': csrf} });
+  if (res.ok) { document.getElementById(`comment-${commentId}`)?.remove(); }
+}
+</script>
+{% endblock %}

@@ -29,9 +29,11 @@ urlpatterns = [
     path("logs/", include(("apps.logs.urls", "logs"), namespace="logs")),
     path("slack/", include(("apps.slack_app.urls", "slack_app"), namespace="slack_app")),
     path("notion/", include(("apps.notion.urls", "notion"), namespace="notion")),
+    path("feedback/", include(("apps.feedback.urls", "feedback"), namespace="feedback")),
 
     path("", include("apps.dashboards.urls")),
     path("", include("apps.authentication.urls")),
+    path("accounts/", include("allauth.urls")),
 ]
 
 if settings.DEBUG:

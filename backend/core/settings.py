@@ -19,7 +19,7 @@ from .template import  THEME_LAYOUT_DIR, THEME_VARIABLES
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-load_dotenv(f"{BASE_DIR}/../dev.env")
+load_dotenv(f"{BASE_DIR}/../.env")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -40,6 +40,10 @@ CSRF_TRUSTED_ORIGINS = (
 )
 ENVIRONMENT = os.environ.get("DJANGO_ENVIRONMENT", default="local")
 
+# 리버스 프록시(Nginx 등) 뒤에서 HTTPS 인식
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+
 
 # Application definition
 
@@ -50,6 +54,11 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',
     'apps.patchnote',
     'apps.product',
     'apps.customer',
@@ -62,7 +71,25 @@ INSTALLED_APPS = [
     "apps.authentication",
     "apps.notion",
     "apps.config",
+    "apps.feedback",
+    "django_q",
 ]
+
+# Django-Q2 (외부 발송 지연 처리용)
+Q_CLUSTER = {
+    'name': 'patch_notify',
+    'workers': 2,
+    'recycle': 500,
+    'timeout': 300,
+    'retry': 360,
+    'compress': True,
+    'save_limit': 250,
+    'queue_limit': 500,
+    'cpu_affinity': 1,
+    'label': 'Patch Notify Q',
+    'orm': 'default',  # ORM broker (별도 Redis 불필요)
+    'catch_up': False,  # 워커 다운 중 누락된 작업은 즉시 실행하지 않고 정상 처리
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -74,7 +101,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    
+    'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -93,6 +120,7 @@ TEMPLATES = [
                 "core.context_processors.my_setting",
                 "core.context_processors.environment",
                 "core.context_processors.user_role",
+                "core.context_processors.open_feedback_count",
                 "apps.product.context_processors.sidebar_menu",
             ],
             "libraries": {
@@ -156,7 +184,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Seoul'
 
 USE_I18N = True
 
@@ -188,6 +216,33 @@ THEME_VARIABLES = THEME_VARIABLES
 LOGIN_URL = '/auth/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/auth/login/'
+
+# ── Authentication ────────────────────────────────────────────────────────────
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    'allauth.account.auth_backends.AuthenticationBackend',
+]
+
+SITE_ID = int(os.getenv('DJANGO_SITE_ID', '1'))
+
+SOCIALACCOUNT_ADAPTER = 'apps.authentication.adapter.SocialAccountAdapter'
+
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'SCOPE': ['profile', 'email'],
+        'AUTH_PARAMS': {'access_type': 'online'},
+    }
+}
+
+# Google 로그인 시 같은 이메일의 기존 계정에 자동 연결
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
+# 이메일 인증 없이 소셜 로그인 바로 허용
+SOCIALACCOUNT_EMAIL_VERIFICATION = 'none'
+ACCOUNT_EMAIL_VERIFICATION = 'none'
+# 중간 확인 페이지 없이 바로 로그인 처리
+SOCIALACCOUNT_AUTO_SIGNUP = True
+SOCIALACCOUNT_LOGIN_ON_GET = True
 
 # ── Slack App ────────────────────────────────────────────────────────────────
 # Slack App 설정: https://api.slack.com/apps 에서 발급

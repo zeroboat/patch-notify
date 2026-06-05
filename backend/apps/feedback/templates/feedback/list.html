@@ -1,0 +1,211 @@
+{% extends layout_path %}
+{% load static %}
+
+{% block title %}Feedback{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+  {% csrf_token %}
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h4 class="fw-bold mb-1">피드백</h4>
+      <p class="text-muted mb-0 small">Patch Notify 시스템 사용 경험에 대한 불편·개선 의견</p>
+    </div>
+    <button class="btn btn-primary" onclick="openFeedbackModal()">
+      <i class="bx bx-plus me-1"></i>피드백 등록
+    </button>
+  </div>
+
+  <!-- 필터 -->
+  <div class="card mb-4">
+    <div class="card-body py-3">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-12 col-md-3">
+          <input type="text" name="q" class="form-control form-control-sm" placeholder="제목/내용 검색" value="{{ filter_q }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <select name="category" class="form-select form-select-sm">
+            <option value="">전체 분류</option>
+            {% for val, label in category_choices %}
+            <option value="{{ val }}" {% if filter_category == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <select name="status" class="form-select form-select-sm">
+            <option value="">전체 상태</option>
+            {% for val, label in status_choices %}
+            <option value="{{ val }}" {% if filter_status == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <select name="priority" class="form-select form-select-sm">
+            <option value="">전체 우선순위</option>
+            {% for val, label in priority_choices %}
+            <option value="{{ val }}" {% if filter_priority == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2 d-flex gap-2 align-items-center">
+          <div class="form-check mb-0">
+            <input class="form-check-input" type="checkbox" name="mine" value="1" id="chkMine" {% if filter_mine %}checked{% endif %}>
+            <label class="form-check-label small" for="chkMine">내 글만</label>
+          </div>
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-sm btn-primary">검색</button>
+          <a href="{% url 'feedback:feedback_list' %}" class="btn btn-sm btn-label-secondary">초기화</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 목록 -->
+  <div class="card">
+    <div class="card-body p-0">
+      {% if feedbacks %}
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-4">제목</th>
+              <th style="width:120px; white-space:nowrap">분류</th>
+              <th style="width:90px; white-space:nowrap">상태</th>
+              <th style="width:80px; white-space:nowrap">우선순위</th>
+              <th style="width:100px; white-space:nowrap">작성자</th>
+              <th style="width:100px; white-space:nowrap">등록일</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fb in feedbacks %}
+            <tr class="cursor-pointer" onclick="location.href='{% url 'feedback:feedback_detail' fb.pk %}'">
+              <td class="ps-4">
+                <span class="fw-semibold">{{ fb.title }}</span>
+                {% if fb.comments.count %}
+                <span class="badge bg-label-secondary ms-1 small">댓글 {{ fb.comments.count }}</span>
+                {% endif %}
+                {% if fb.attachment %}
+                <i class="bx bx-paperclip text-muted ms-1 small"></i>
+                {% endif %}
+              </td>
+              <td style="white-space:nowrap"><span class="badge bg-label-primary small">{{ fb.get_category_display }}</span></td>
+              <td style="white-space:nowrap">
+                {% if fb.status == 'open' %}<span class="badge bg-label-warning small">{{ fb.get_status_display }}</span>
+                {% elif fb.status == 'reviewing' %}<span class="badge bg-label-info small">{{ fb.get_status_display }}</span>
+                {% elif fb.status == 'planned' or fb.status == 'in_progress' %}<span class="badge bg-label-primary small">{{ fb.get_status_display }}</span>
+                {% elif fb.status == 'done' %}<span class="badge bg-label-success small">{{ fb.get_status_display }}</span>
+                {% else %}<span class="badge bg-label-secondary small">{{ fb.get_status_display }}</span>
+                {% endif %}
+              </td>
+              <td style="white-space:nowrap">
+                {% if fb.priority == 'high' %}<span class="badge bg-danger small">높음</span>
+                {% elif fb.priority == 'medium' %}<span class="badge bg-label-warning small">보통</span>
+                {% else %}<span class="badge bg-label-secondary small">낮음</span>
+                {% endif %}
+              </td>
+              <td class="small text-muted" style="white-space:nowrap">{% if fb.author %}{{ fb.author.get_full_name|default:fb.author.username }}{% else %}(알 수 없음){% endif %}</td>
+              <td class="small text-muted" style="white-space:nowrap">{{ fb.created_at|date:"Y-m-d" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="bx bx-message-square-detail fs-1 mb-2 d-block"></i>
+        등록된 피드백이 없습니다.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- 피드백 등록 모달 -->
+<div class="modal fade" id="feedbackModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">피드백 등록</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">작성자</label>
+          <input type="text" id="fbAuthorName" class="form-control"
+                 value="{{ request.user.get_full_name|default:request.user.username }}"
+                 placeholder="이름을 입력하세요">
+          <div class="form-text">그룹 계정 사용 시 본인 이름으로 변경하세요.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">제목 <span class="text-danger">*</span></label>
+          <input type="text" id="fbTitle" class="form-control" placeholder="피드백 제목을 입력하세요">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">분류</label>
+          <select id="fbCategory" class="form-select">
+            {% for val, label in category_choices %}
+            <option value="{{ val }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">내용 <span class="text-danger">*</span></label>
+          <textarea id="fbContent" class="form-control" rows="5" placeholder="불편하신 점이나 개선 아이디어를 자세히 적어주세요."></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">첨부 파일 <span class="text-muted small">(jpg/png/gif, 5MB 이하)</span></label>
+          <input type="file" id="fbAttachment" class="form-control" accept=".jpg,.jpeg,.png,.gif">
+        </div>
+        <input type="hidden" id="fbPageUrl">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">취소</button>
+        <button type="button" class="btn btn-primary" onclick="submitFeedback()">등록</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const _fbDefaultAuthorName = "{{ request.user.get_full_name|default:request.user.username }}";
+
+function openFeedbackModal(pageUrl) {
+  document.getElementById('fbPageUrl').value = pageUrl || window.location.pathname;
+  document.getElementById('fbTitle').value = '';
+  document.getElementById('fbContent').value = '';
+  document.getElementById('fbAttachment').value = '';
+  document.getElementById('fbAuthorName').value = _fbDefaultAuthorName;
+  new bootstrap.Modal(document.getElementById('feedbackModal')).show();
+}
+
+async function submitFeedback() {
+  const title = document.getElementById('fbTitle').value.trim();
+  const content = document.getElementById('fbContent').value.trim();
+  if (!title || !content) {
+    Swal.fire('입력 오류', '제목과 내용을 입력해주세요.', 'warning');
+    return;
+  }
+  const formData = new FormData();
+  formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+  formData.append('author_name', document.getElementById('fbAuthorName').value.trim());
+  formData.append('title', title);
+  formData.append('content', content);
+  formData.append('category', document.getElementById('fbCategory').value);
+  formData.append('page_url', document.getElementById('fbPageUrl').value);
+  const file = document.getElementById('fbAttachment').files[0];
+  if (file) formData.append('attachment', file);
+
+  const res = await fetch('{% url "feedback:feedback_create" %}', { method: 'POST', body: formData });
+  const data = await res.json();
+  if (res.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('feedbackModal')).hide();
+    await Swal.fire({ icon: 'success', title: '등록 완료', text: data.message, timer: 1200, showConfirmButton: false });
+    location.href = '/feedback/' + data.id + '/';
+  } else {
+    Swal.fire('오류', data.error || '등록 중 오류가 발생했습니다.', 'error');
+  }
+}
+</script>
+{% endblock %}

@@ -1,12 +1,14 @@
 services:
   db:
     container_name: patch-db
+    restart: unless-stopped
     image: postgres:18-alpine
     environment:
       POSTGRES_DB: ${DB_NAME:-patchnotify}
       POSTGRES_USER: ${DB_USER:-patchuser}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-patchpass}
       PGDATA: /var/lib/postgresql/18/docker
+      TZ: Asia/Seoul
     volumes:
       - postgres_data:/var/lib/postgresql
     ports:
@@ -19,24 +21,48 @@ services:
 
   backend:
     container_name: patch-web
+    restart: unless-stopped
     build: ./backend
-    command: sh -c "python manage.py migrate --noinput && (python manage.py createsuperuser --noinput || true) && gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 2"
+    command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && (python manage.py createsuperuser --noinput || true) && gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 2"
     ports:
       - "8000:8000"
     env_file: .env
+    environment:
+      TZ: Asia/Seoul
+    volumes:
+      - notion_md_data:/app/notion_md
+      - patchnote_files:/app/media/patchnotes
+      - feedback_files:/app/media/feedback
+    depends_on:
+      db:
+        condition: service_healthy
+
+  qcluster:
+    container_name: patch-qcluster
+    restart: unless-stopped
+    build: ./backend
+    command: sh -c "python manage.py qcluster"
+    env_file: .env
+    environment:
+      TZ: Asia/Seoul
     volumes:
       - notion_md_data:/app/notion_md
       - patchnote_files:/app/media/patchnotes
     depends_on:
       db:
         condition: service_healthy
+      backend:
+        condition: service_started
 
   slack-api:
     container_name: patch-slack
+    restart: unless-stopped
     build: ./slack-api
     ports:
       - "8001:8001"
     env_file: .env
+    environment:
+      TZ: Asia/Seoul
     depends_on:
       db:
         condition: service_healthy
@@ -45,3 +71,4 @@ volumes:
   postgres_data:
   notion_md_data:
   patchnote_files:
+  feedback_files:
