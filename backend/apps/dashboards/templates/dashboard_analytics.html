@@ -156,7 +156,8 @@
           {% if recent_patches %}
           <ul class="list-group list-group-flush">
             {% for patch in recent_patches %}
-            <li class="list-group-item px-4 py-3">
+            <li class="list-group-item px-4 py-3 list-group-item-action" style="cursor:pointer;"
+                onclick="location.href='{% if patch.product %}{% url 'patchnote:product_patch_detail' patch.product.id %}{% else %}{% url 'patchnote:utility_patch_detail' patch.utility.id %}{% endif %}'">
               <div class="d-flex justify-content-between align-items-start">
                 <div>
                   <div class="d-flex align-items-center gap-2 mb-1">
