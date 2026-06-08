@@ -72,6 +72,8 @@ class ActionLog(models.Model):
     """웹 페이지 액션 로그 — 사용자가 수행한 주요 작업 기록"""
 
     # 액션 코드 상수
+    LOGIN_SUCCESS     = 'login_success'
+    LOGIN_FAILED      = 'login_failed'
     PATCHNOTE_CREATE  = 'patchnote_create'
     PATCHNOTE_UPDATE  = 'patchnote_update'
     PATCHNOTE_DELETE  = 'patchnote_delete'
@@ -95,6 +97,8 @@ class ActionLog(models.Model):
     UTILITY_DELETE    = 'utility_delete'
 
     ACTION_LABELS = {
+        LOGIN_SUCCESS:      '로그인 성공',
+        LOGIN_FAILED:       '로그인 실패',
         PATCHNOTE_CREATE:   '패치노트 등록',
         PATCHNOTE_UPDATE:   '패치노트 수정',
         PATCHNOTE_DELETE:   '패치노트 삭제',
