@@ -107,7 +107,7 @@
         {% endif %}
 
         <!-- ── Management ── -->
-        {% if user_role == 'admin' or user_role == 'manager' or user_role == 'se' %}
+        {% if user_role != 'guest' %}
         <li class="menu-header small text-uppercase">
             <span class="menu-header-text">Management</span>
         </li>
