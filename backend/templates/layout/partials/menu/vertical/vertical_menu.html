@@ -28,6 +28,10 @@
             </a>
         </li>
 
+        <li class="menu-header small text-uppercase">
+            <span class="menu-header-text">Management</span>
+        </li>
+
         {% if user_role == 'admin' or user_role == 'manager' %}
         <li class="menu-item {% if 'product/management' in request.path %}active open{% endif %}">
             <a href="{% url 'product:product_management' %}" class="menu-link">
@@ -105,9 +109,6 @@
         </li>
 
         {% if user_role != 'guest' %}
-        <li class="menu-header small text-uppercase">
-            <span class="menu-header-text">Notification</span>
-        </li>
 
         {% if user_role == 'admin' or user_role == 'manager' %}
         <li class="menu-item {% if 'official_notice' in request.path %}active{% endif %}">
