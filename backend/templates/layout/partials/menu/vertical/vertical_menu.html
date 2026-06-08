@@ -18,6 +18,7 @@
 
     <ul class="menu-inner py-1" style="flex: 1 1 0 !important; min-height: 0 !important;">
 
+        <!-- ── Dashboards ── -->
         <li class="menu-header small text-uppercase">
             <span class="menu-header-text">Dashboards</span>
         </li>
@@ -27,39 +28,6 @@
                 <div class="text-truncate">Dashboards</div>
             </a>
         </li>
-
-        <li class="menu-header small text-uppercase">
-            <span class="menu-header-text">Management</span>
-        </li>
-
-        {% if user_role == 'admin' or user_role == 'manager' %}
-        <li class="menu-item {% if 'product/management' in request.path %}active open{% endif %}">
-            <a href="{% url 'product:product_management' %}" class="menu-link">
-                <i class="menu-icon icon-base bx bx-cube-alt"></i>
-                <div class="text-truncate">Product Management</div>
-            </a>
-        </li>
-        <li class="menu-item {% if '/product/utility/' in request.path %}active{% endif %}">
-            <a href="{% url 'product:utility_management' %}" class="menu-link">
-                <i class="menu-icon icon-base bx bx-wrench"></i>
-                <div class="text-truncate">Utilities Management</div>
-            </a>
-        </li>
-        {% if NOTION_ENABLED %}
-        <li class="menu-item {% if '/notion/' in request.path %}active open{% endif %}">
-            <a href="{% url 'notion:notion_management' %}" class="menu-link">
-                <i class="menu-icon icon-base bx bx-link"></i>
-                <div class="text-truncate">Notion Integration</div>
-            </a>
-        </li>
-        {% endif %}
-        <li class="menu-item {% if '/slack/' in request.path %}active{% endif %}">
-            <a href="{% url 'slack_app:slack_workspace_management' %}" class="menu-link">
-                <i class="menu-icon icon-base bx bx-message-square-dots"></i>
-                <div class="text-truncate">Slack Workspaces</div>
-            </a>
-        </li>
-        {% endif %}
 
         <li class="menu-item {% if '/patchnote/' in request.path %}active open{% endif %}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
@@ -109,7 +77,6 @@
         </li>
 
         {% if user_role != 'guest' %}
-
         {% if user_role == 'admin' or user_role == 'manager' %}
         <li class="menu-item {% if 'official_notice' in request.path %}active{% endif %}">
             <a href="{% url 'notification:official_notice' %}" class="menu-link">
@@ -120,18 +87,6 @@
         {% endif %}
 
         {% if user_role == 'admin' or user_role == 'manager' or user_role == 'se' %}
-        <li class="menu-item {% if '/customer/' in request.path %}active{% endif %}">
-            <a href="{% url 'customer:customer_management' %}" class="menu-link">
-                <i class="menu-icon icon-base bx bx-buildings"></i>
-                <div class="text-truncate">Customer Management</div>
-            </a>
-        </li>
-        <li class="menu-item {% if '/subscriber/' in request.path %}active{% endif %}">
-            <a href="{% url 'subscriber:subscriber_management' %}" class="menu-link">
-                <i class="menu-icon icon-base bx bx-bell"></i>
-                <div class="text-truncate">Subscribers</div>
-            </a>
-        </li>
         <li class="menu-item {% if '/logs/' in request.path and '/logs/action' not in request.path %}active{% endif %}">
             <a href="{% url 'logs:dispatch_log' %}" class="menu-link">
                 <i class="menu-icon icon-base bx bx-list-check"></i>
@@ -147,7 +102,7 @@
         </li>
         {% endif %}
         {% endif %}
-        {% if user_role != 'guest' %}
+
         <li class="menu-item {% if '/feedback/' in request.path %}active{% endif %}">
             <a href="{% url 'feedback:feedback_list' %}" class="menu-link">
                 <i class="menu-icon icon-base bx bx-message-square-detail"></i>
@@ -158,7 +113,55 @@
             </a>
         </li>
         {% endif %}
-        {% endif %}{# end user_role != 'guest' #}
+
+        <!-- ── Management ── -->
+        {% if user_role == 'admin' or user_role == 'manager' or user_role == 'se' %}
+        <li class="menu-header small text-uppercase">
+            <span class="menu-header-text">Management</span>
+        </li>
+
+        {% if user_role == 'admin' or user_role == 'manager' %}
+        <li class="menu-item {% if 'product/management' in request.path %}active open{% endif %}">
+            <a href="{% url 'product:product_management' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-cube-alt"></i>
+                <div class="text-truncate">Product Management</div>
+            </a>
+        </li>
+        <li class="menu-item {% if '/product/utility/' in request.path %}active{% endif %}">
+            <a href="{% url 'product:utility_management' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-wrench"></i>
+                <div class="text-truncate">Utilities Management</div>
+            </a>
+        </li>
+        {% if NOTION_ENABLED %}
+        <li class="menu-item {% if '/notion/' in request.path %}active open{% endif %}">
+            <a href="{% url 'notion:notion_management' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-link"></i>
+                <div class="text-truncate">Notion Integration</div>
+            </a>
+        </li>
+        {% endif %}
+        <li class="menu-item {% if '/slack/' in request.path %}active{% endif %}">
+            <a href="{% url 'slack_app:slack_workspace_management' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-message-square-dots"></i>
+                <div class="text-truncate">Slack Workspaces</div>
+            </a>
+        </li>
+        {% endif %}
+
+        <li class="menu-item {% if '/customer/' in request.path %}active{% endif %}">
+            <a href="{% url 'customer:customer_management' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-buildings"></i>
+                <div class="text-truncate">Customer Management</div>
+            </a>
+        </li>
+        <li class="menu-item {% if '/subscriber/' in request.path %}active{% endif %}">
+            <a href="{% url 'subscriber:subscriber_management' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-bell"></i>
+                <div class="text-truncate">Subscribers</div>
+            </a>
+        </li>
+        {% endif %}
 
     </ul>
 
