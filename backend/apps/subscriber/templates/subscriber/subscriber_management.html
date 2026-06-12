@@ -76,6 +76,7 @@
             <th><i class="bx bx-envelope me-1 text-danger"></i>Gmail 구독</th>
             <th><i class="bxl bxl-slack me-1 text-success"></i>Slack 구독</th>
             <th class="text-center">총 구독</th>
+            <th class="text-center">구독 링크</th>
             <th class="text-end">설정</th>
           </tr>
         </thead>
@@ -108,7 +109,33 @@
               <span class="text-muted small">0</span>
               {% endif %}
             </td>
+            <td class="text-center align-middle">
+              {% if row.token.exists %}
+                {% if row.token.is_expired %}
+                  <span class="badge bg-label-secondary">만료됨</span>
+                {% elif row.token.days_left <= 7 %}
+                  <span class="badge bg-label-warning">D-{{ row.token.days_left }}</span>
+                {% else %}
+                  <span class="badge bg-label-success">D-{{ row.token.days_left }}</span>
+                {% endif %}
+              {% else %}
+                <span class="text-muted small">미발행</span>
+              {% endif %}
+            </td>
             <td class="text-end align-middle">
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-info btn-open-token me-1"
+                data-customer-id="{{ row.id }}"
+                data-customer-name="{{ row.name }}"
+                data-token-exists="{{ row.token.exists|yesno:'true,false' }}"
+                data-token-value="{{ row.token.token|default:'' }}"
+                data-token-expires="{{ row.token.expires_at|default:'' }}"
+                data-token-expired="{{ row.token.is_expired|yesno:'true,false' }}"
+                title="구독 링크 관리"
+              >
+                <i class="bx bx-link-alt"></i>
+              </button>
               <button
                 type="button"
                 class="btn btn-sm btn-outline-primary btn-open-subscription"
@@ -121,7 +148,7 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="5" class="text-center py-5 text-muted">
+            <td colspan="6" class="text-center py-5 text-muted">
               <i class="bx bx-buildings fs-2 d-block mb-2"></i>
               등록된 고객사가 없습니다.
             </td>
@@ -132,6 +159,38 @@
     </div>
   </div>
 
+</div>
+
+<!-- ── 구독 링크 관리 모달 ──────────────────────────── -->
+<div class="modal fade" id="modalToken" tabindex="-1" aria-labelledby="modalTokenLabel">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTokenLabel">구독 링크 관리</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3" id="tokenCustomerName"></p>
+
+        <div id="tokenStatusArea" class="mb-3"></div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">만료일 <span class="text-danger">*</span></label>
+          <input type="datetime-local" id="tokenExpiresAt" class="form-control form-control-sm">
+          <div class="form-text">링크 만료 후에는 고객사가 접근할 수 없습니다.</div>
+        </div>
+        <div id="tokenIssueError" class="text-danger small mb-2 d-none"></div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-primary btn-sm" id="btnIssueToken">
+            <i class="bx bx-link-alt me-1"></i><span id="btnIssueLabel">링크 발행</span>
+          </button>
+          <button type="button" class="btn btn-outline-danger btn-sm d-none" id="btnRevokeToken">
+            <i class="bx bx-trash me-1"></i>링크 취소
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ── 구독 설정 오프캔버스 ──────────────────────────── -->
@@ -170,6 +229,159 @@ document.addEventListener('DOMContentLoaded', function () {
   const csrfForm = document.createElement('form');
   csrfForm.innerHTML = '{% csrf_token %}';
   const realCsrf = csrfForm.querySelector('[name=csrfmiddlewaretoken]').value;
+
+  // ── 구독 링크 관리 모달 ────────────────────────────
+  let currentTokenCustomerId = null;
+  const modalTokenEl = document.getElementById('modalToken');
+  const modalTokenInstance = new bootstrap.Modal(modalTokenEl);
+
+  document.querySelectorAll('.btn-open-token').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      currentTokenCustomerId = this.dataset.customerId;
+      const customerName = this.dataset.customerName;
+      const tokenExists = this.dataset.tokenExists === 'true';
+      const tokenValue = this.dataset.tokenValue;
+      const tokenExpires = this.dataset.tokenExpires;
+      const tokenExpired = this.dataset.tokenExpired === 'true';
+
+      document.getElementById('tokenCustomerName').textContent = customerName;
+      document.getElementById('tokenIssueError').classList.add('d-none');
+
+      // 만료일 기본값: 현재 + 90일
+      const defaultExpiry = new Date();
+      defaultExpiry.setDate(defaultExpiry.getDate() + 90);
+      document.getElementById('tokenExpiresAt').value = defaultExpiry.toISOString().slice(0, 16);
+
+      const statusArea = document.getElementById('tokenStatusArea');
+      const btnIssue = document.getElementById('btnIssueToken');
+      const btnRevoke = document.getElementById('btnRevokeToken');
+      const btnIssueLabel = document.getElementById('btnIssueLabel');
+
+      if (tokenExists && !tokenExpired) {
+        const subscribeUrl = window.location.origin + '/subscriber/subscribe/' + tokenValue + '/';
+        statusArea.innerHTML =
+          '<div class="alert alert-success py-2 mb-0">'
+          + '<div class="d-flex align-items-center justify-content-between gap-2">'
+          + '<div class="small" style="word-break:break-all;">'
+          + '<i class="bx bx-check-circle me-1"></i>발행됨 · 만료: ' + tokenExpires + '<br>'
+          + '<code class="small">' + subscribeUrl + '</code>'
+          + '</div>'
+          + '<button type="button" class="btn btn-sm btn-outline-success flex-shrink-0" id="btnCopyLink">'
+          + '<i class="bx bx-copy"></i>'
+          + '</button>'
+          + '</div>'
+          + '</div>';
+        document.getElementById('btnCopyLink').addEventListener('click', function () {
+          navigator.clipboard.writeText(subscribeUrl).then(function () {
+            Swal.fire({ icon: 'success', title: '복사 완료', text: '링크가 클립보드에 복사되었습니다.', timer: 1500, showConfirmButton: false });
+          });
+        });
+        btnIssueLabel.textContent = '재발행 (링크 변경)';
+        btnRevoke.classList.remove('d-none');
+      } else if (tokenExists && tokenExpired) {
+        statusArea.innerHTML =
+          '<div class="alert alert-secondary py-2 mb-0 small">'
+          + '<i class="bx bx-time me-1"></i>만료된 링크가 있습니다. 재발행하거나 취소할 수 있습니다.'
+          + '</div>';
+        btnIssueLabel.textContent = '재발행';
+        btnRevoke.classList.remove('d-none');
+      } else {
+        statusArea.innerHTML =
+          '<div class="alert alert-light py-2 mb-0 small text-muted">'
+          + '<i class="bx bx-info-circle me-1"></i>발행된 링크가 없습니다.'
+          + '</div>';
+        btnIssueLabel.textContent = '링크 발행';
+        btnRevoke.classList.add('d-none');
+      }
+
+      modalTokenInstance.show();
+    });
+  });
+
+  // 링크 발행 / 재발행
+  document.getElementById('btnIssueToken').addEventListener('click', function () {
+    const expiresAt = document.getElementById('tokenExpiresAt').value;
+    const errEl = document.getElementById('tokenIssueError');
+    errEl.classList.add('d-none');
+
+    if (!expiresAt) {
+      errEl.textContent = '만료일을 입력해주세요.';
+      errEl.classList.remove('d-none');
+      return;
+    }
+
+    const btn = this;
+    btn.disabled = true;
+
+    fetch('/subscriber/token/issue/' + currentTokenCustomerId + '/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': realCsrf, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ expires_at: expiresAt }).toString(),
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.ok) {
+        const subscribeUrl = data.url;
+        Swal.fire({
+          icon: 'success',
+          title: '링크 발행 완료',
+          html: '아래 링크를 고객사에 전달하세요.<br><br>'
+            + '<input class="form-control form-control-sm text-center" readonly value="' + subscribeUrl + '" id="newLinkInput">',
+          confirmButtonText: '링크 복사',
+          showCancelButton: true,
+          cancelButtonText: '닫기',
+          preConfirm: function () {
+            navigator.clipboard.writeText(subscribeUrl);
+            return false;
+          },
+          didOpen: function () {
+            document.getElementById('newLinkInput').select();
+          },
+        }).then(function () {
+          modalTokenInstance.hide();
+          location.reload();
+        });
+      } else {
+        errEl.textContent = data.error;
+        errEl.classList.remove('d-none');
+      }
+    })
+    .catch(function () {
+      errEl.textContent = '오류가 발생했습니다.';
+      errEl.classList.remove('d-none');
+    })
+    .finally(function () { btn.disabled = false; });
+  });
+
+  // 링크 취소
+  document.getElementById('btnRevokeToken').addEventListener('click', function () {
+    Swal.fire({
+      icon: 'warning',
+      title: '링크 취소',
+      text: '취소하면 고객사가 해당 링크로 접근할 수 없습니다. 계속하시겠습니까?',
+      showCancelButton: true,
+      confirmButtonText: '취소하기',
+      cancelButtonText: '닫기',
+      confirmButtonColor: '#d33',
+    }).then(function (result) {
+      if (!result.isConfirmed) return;
+      fetch('/subscriber/token/revoke/' + currentTokenCustomerId + '/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': realCsrf },
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          modalTokenInstance.hide();
+          location.reload();
+        } else {
+          Swal.fire('오류', data.error || '처리 중 오류가 발생했습니다.', 'error');
+        }
+      });
+    });
+  });
+
+
 
   const offcanvasEl = document.getElementById('offcanvasSubscription');
   const offcanvasBody = document.getElementById('offcanvasSubscriptionBody');

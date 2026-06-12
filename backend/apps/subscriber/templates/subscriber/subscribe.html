@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>패치노트 구독 설정</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { background: #f5f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .page-wrap { max-width: 640px; margin: 0 auto; padding: 40px 16px 60px; }
+    .page-brand { text-align: center; margin-bottom: 32px; }
+    .page-brand .brand-name { font-size: 1rem; font-weight: 600; color: #6c757d; letter-spacing: .03em; }
+    .page-title { font-size: 1.4rem; font-weight: 700; margin-bottom: 4px; }
+    .customer-name { font-size: 0.95rem; color: #6c757d; }
+    .section-card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 20px; overflow: hidden; }
+    .section-header { padding: 16px 20px 12px; border-bottom: 1px solid #f0f0f0; }
+    .section-header h6 { font-size: .875rem; font-weight: 700; margin: 0 0 2px; }
+    .section-header p { font-size: .78rem; color: #888; margin: 0; }
+    .sol-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #f5f5f5; }
+    .sol-row:last-child { border-bottom: none; }
+    .sol-name { font-size: .9rem; font-weight: 500; }
+    .email-row { display: flex; align-items: center; gap: 10px; padding: 10px 20px; border-bottom: 1px solid #f5f5f5; }
+    .email-row:last-child { border-bottom: none; }
+    .email-info { flex: 1; min-width: 0; }
+    .email-addr { font-size: .875rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .email-name { font-size: .75rem; color: #888; }
+    .add-form { padding: 14px 20px; border-top: 1px solid #f0f0f0; background: #fafafa; }
+    .empty-msg { text-align: center; padding: 20px; font-size: .82rem; color: #aaa; }
+    .form-switch .form-check-input { width: 2.2em; height: 1.2em; cursor: pointer; }
+    .form-switch .form-check-input:checked { background-color: #7367f0; border-color: #7367f0; }
+    .footer-note { text-align: center; font-size: .75rem; color: #bbb; margin-top: 12px; }
+    .expiry-badge { display: inline-flex; align-items: center; gap: 4px; font-size: .75rem; padding: 3px 10px; border-radius: 20px; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <div class="page-brand">
+    <div class="brand-name">Patch Notify</div>
+  </div>
+
+  <div class="text-center mb-4">
+    <h1 class="page-title">패치노트 구독 설정</h1>
+    <div class="customer-name">{{ customer.name }}</div>
+    {% if is_near_expiry %}
+    <div class="mt-2">
+      <span class="expiry-badge bg-warning bg-opacity-10 text-warning">
+        <i class="bi bi-clock"></i>이 링크는 {{ expires_at|date:"Y년 m월 d일" }}에 만료됩니다.
+      </span>
+    </div>
+    {% endif %}
+  </div>
+
+  {% csrf_token %}
+  <input type="hidden" id="csrfToken" value="{{ csrf_token }}">
+  <input type="hidden" id="tokenVal" value="{{ token }}">
+
+  <!-- 솔루션 Gmail 구독 -->
+  <div class="section-card">
+    <div class="section-header">
+      <h6><i class="bi bi-envelope-check me-1 text-danger"></i>Gmail 알림 구독</h6>
+      <p>패치노트 발행 시 이메일 알림을 받을 솔루션을 선택하세요.</p>
+    </div>
+    {% if solutions %}
+      {% for sol in solutions %}
+      <div class="sol-row">
+        <div class="sol-name">{{ sol.name }}</div>
+        <div class="form-check form-switch mb-0">
+          <input
+            class="form-check-input sol-toggle"
+            type="checkbox"
+            role="switch"
+            data-solution-id="{{ sol.id }}"
+            {% if sol.active %}checked{% endif %}
+          >
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-msg">구독 가능한 솔루션이 없습니다.</div>
+    {% endif %}
+  </div>
+
+  <!-- 수신 이메일 관리 -->
+  <div class="section-card">
+    <div class="section-header">
+      <h6><i class="bi bi-people me-1 text-primary"></i>수신 이메일 주소</h6>
+      <p>알림을 받을 이메일 주소를 관리합니다.</p>
+    </div>
+
+    <div id="emailList">
+      {% for e in emails %}
+      <div class="email-row" id="email-row-{{ e.id }}">
+        <i class="bi bi-envelope text-secondary" style="font-size:1rem;flex-shrink:0;"></i>
+        <div class="email-info">
+          <div class="email-addr">{{ e.email }}</div>
+          {% if e.name %}<div class="email-name">{{ e.name }}</div>{% endif %}
+        </div>
+        <button
+          class="btn btn-sm btn-outline-danger btn-remove-email"
+          data-email-id="{{ e.id }}"
+          title="삭제"
+          style="padding:3px 8px;"
+        >
+          <i class="bi bi-trash3" style="font-size:.8rem;"></i>
+        </button>
+      </div>
+      {% empty %}
+      <div class="empty-msg" id="emptyEmailMsg">등록된 이메일이 없습니다.</div>
+      {% endfor %}
+    </div>
+
+    <div class="add-form">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-sm">
+          <label class="form-label form-label-sm mb-1" style="font-size:.78rem;font-weight:600;">이메일 <span class="text-danger">*</span></label>
+          <input type="email" id="newEmail" class="form-control form-control-sm" placeholder="example@company.com">
+        </div>
+        <div class="col-12 col-sm">
+          <label class="form-label form-label-sm mb-1" style="font-size:.78rem;font-weight:600;">담당자명</label>
+          <input type="text" id="newName" class="form-control form-control-sm" placeholder="홍길동">
+        </div>
+        <div class="col-auto">
+          <button type="button" class="btn btn-sm btn-primary" id="btnAddEmail">
+            <i class="bi bi-plus-lg"></i> 추가
+          </button>
+        </div>
+      </div>
+      <div id="addEmailError" class="text-danger mt-1 d-none" style="font-size:.78rem;"></div>
+    </div>
+  </div>
+
+  <p class="footer-note">변경사항은 즉시 저장됩니다.</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+  const CSRF = document.getElementById('csrfToken').value;
+  const TOKEN = document.getElementById('tokenVal').value;
+  const BASE = '/subscriber/subscribe/' + TOKEN + '/';
+
+  function post(path, data) {
+    return fetch(BASE + path, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(data).toString(),
+    }).then(function (r) { return r.json(); });
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // 솔루션 구독 토글
+  document.querySelectorAll('.sol-toggle').forEach(function (el) {
+    el.addEventListener('change', function () {
+      const toggle = this;
+      const solId = toggle.dataset.solutionId;
+      const enabled = toggle.checked;
+      toggle.disabled = true;
+      post('toggle-solution/', { solution_id: solId, enabled: enabled ? 'true' : 'false' })
+        .then(function (d) {
+          if (!d.ok) { toggle.checked = !enabled; alert(d.error); }
+        })
+        .catch(function () { toggle.checked = !enabled; alert('오류가 발생했습니다.'); })
+        .finally(function () { toggle.disabled = false; });
+    });
+  });
+
+  // 이메일 삭제
+  document.getElementById('emailList').addEventListener('click', function (e) {
+    const btn = e.target.closest('.btn-remove-email');
+    if (!btn) return;
+    if (!confirm('이 이메일을 삭제하시겠습니까?')) return;
+    const emailId = btn.dataset.emailId;
+    btn.disabled = true;
+    post('remove-email/', { email_id: emailId })
+      .then(function (d) {
+        if (d.ok) {
+          const row = document.getElementById('email-row-' + emailId);
+          if (row) row.remove();
+          if (!document.querySelector('#emailList .email-row')) {
+            document.getElementById('emailList').insertAdjacentHTML(
+              'beforeend',
+              '<div class="empty-msg" id="emptyEmailMsg">등록된 이메일이 없습니다.</div>'
+            );
+          }
+        } else {
+          alert(d.error);
+          btn.disabled = false;
+        }
+      })
+      .catch(function () { alert('오류가 발생했습니다.'); btn.disabled = false; });
+  });
+
+  // 이메일 추가
+  document.getElementById('btnAddEmail').addEventListener('click', function () {
+    const email = document.getElementById('newEmail').value.trim();
+    const name = document.getElementById('newName').value.trim();
+    const errEl = document.getElementById('addEmailError');
+    errEl.classList.add('d-none');
+
+    if (!email) {
+      errEl.textContent = '이메일을 입력해주세요.';
+      errEl.classList.remove('d-none');
+      return;
+    }
+
+    const btn = this;
+    btn.disabled = true;
+    post('add-email/', { email: email, name: name })
+      .then(function (d) {
+        if (d.ok) {
+          const empty = document.getElementById('emptyEmailMsg');
+          if (empty) empty.remove();
+
+          const html =
+            '<div class="email-row" id="email-row-' + d.id + '">'
+            + '<i class="bi bi-envelope text-secondary" style="font-size:1rem;flex-shrink:0;"></i>'
+            + '<div class="email-info">'
+            + '<div class="email-addr">' + escHtml(d.email) + '</div>'
+            + (d.name ? '<div class="email-name">' + escHtml(d.name) + '</div>' : '')
+            + '</div>'
+            + '<button class="btn btn-sm btn-outline-danger btn-remove-email" data-email-id="' + d.id + '" title="삭제" style="padding:3px 8px;">'
+            + '<i class="bi bi-trash3" style="font-size:.8rem;"></i></button>'
+            + '</div>';
+          document.getElementById('emailList').insertAdjacentHTML('beforeend', html);
+
+          document.getElementById('newEmail').value = '';
+          document.getElementById('newName').value = '';
+        } else {
+          errEl.textContent = d.error;
+          errEl.classList.remove('d-none');
+        }
+      })
+      .catch(function () {
+        errEl.textContent = '오류가 발생했습니다.';
+        errEl.classList.remove('d-none');
+      })
+      .finally(function () { btn.disabled = false; });
+  });
+
+  // Enter 키로 이메일 추가
+  document.getElementById('newEmail').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') document.getElementById('btnAddEmail').click();
+  });
+  document.getElementById('newName').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') document.getElementById('btnAddEmail').click();
+  });
+}());
+</script>
+</body>
+</html>
