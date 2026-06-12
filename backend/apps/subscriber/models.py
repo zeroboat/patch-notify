@@ -1,4 +1,9 @@
+import uuid as _uuid
+
+from django.contrib.auth.models import User
 from django.db import models
+from django.utils import timezone
+
 from apps.base.models import BaseModel
 
 
@@ -41,3 +46,28 @@ class Subscription(BaseModel):
 
     def __str__(self):
         return f"{self.customer.name} · {self.product} · {self.get_channel_display()}"
+
+
+class CustomerSubscriptionToken(models.Model):
+    customer = models.OneToOneField(
+        'customer.Customer', on_delete=models.CASCADE,
+        related_name='subscription_token', verbose_name='고객사',
+    )
+    token = models.UUIDField(default=_uuid.uuid4, unique=True, editable=False)
+    expires_at = models.DateTimeField(verbose_name='만료일시')
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='+', verbose_name='발행자',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = '구독 링크'
+        verbose_name_plural = '구독 링크 목록'
+
+    def __str__(self):
+        return f"{self.customer.name} 구독 링크"
+
+    @property
+    def is_expired(self):
+        return timezone.now() > self.expires_at
