@@ -325,17 +325,36 @@ document.addEventListener('DOMContentLoaded', function () {
         Swal.fire({
           icon: 'success',
           title: '링크 발행 완료',
-          html: '아래 링크를 고객사에 전달하세요.<br><br>'
-            + '<input class="form-control form-control-sm text-center" readonly value="' + subscribeUrl + '" id="newLinkInput">',
-          confirmButtonText: '링크 복사',
-          showCancelButton: true,
-          cancelButtonText: '닫기',
-          preConfirm: function () {
-            navigator.clipboard.writeText(subscribeUrl);
-            return false;
-          },
+          html:
+            '아래 링크를 고객사에 전달하세요.'
+            + '<div class="input-group input-group-sm mt-3">'
+            + '<input class="form-control text-center" readonly value="' + subscribeUrl + '" id="newLinkInput">'
+            + '<button class="btn btn-outline-secondary" type="button" id="swallCopyBtn">'
+            + '<i class="bx bx-copy me-1"></i>복사</button>'
+            + '</div>'
+            + '<div id="swallCopyMsg" class="text-success small mt-2 d-none">'
+            + '<i class="bx bx-check"></i> 복사되었습니다. 3초 후 닫힙니다.</div>',
+          confirmButtonText: '닫기',
+          showCancelButton: false,
+          allowOutsideClick: true,
           didOpen: function () {
             document.getElementById('newLinkInput').select();
+            document.getElementById('swallCopyBtn').addEventListener('click', function () {
+              const copyBtn = this;
+              const doCopy = function () {
+                copyBtn.innerHTML = '<i class="bx bx-check me-1"></i>복사됨';
+                copyBtn.disabled = true;
+                document.getElementById('swallCopyMsg').classList.remove('d-none');
+                setTimeout(function () { Swal.close(); }, 3000);
+              };
+              navigator.clipboard.writeText(subscribeUrl)
+                .then(doCopy)
+                .catch(function () {
+                  document.getElementById('newLinkInput').select();
+                  document.execCommand('copy');
+                  doCopy();
+                });
+            });
           },
         }).then(function () {
           modalTokenInstance.hide();
