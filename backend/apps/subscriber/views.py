@@ -7,9 +7,9 @@ from django.views.decorators.http import require_POST, require_GET
 
 from web_project import TemplateLayout
 from apps.base.mixins import RoleRequiredMixin, role_required
-from apps.customer.models import Customer, CustomerEmail
+from apps.customer.models import Customer
 from apps.product.models import Product, Solution
-from .models import Subscription, CustomerSubscriptionToken
+from .models import Subscription, CustomerSubscriptionToken, SubscriptionEmail
 
 
 class SubscriberManagementView(RoleRequiredMixin, TemplateView):
@@ -106,10 +106,18 @@ def get_customer_subscriptions(request, customer_id):
             'products': products_data,
         })
 
+    sub_emails = list(
+        SubscriptionEmail.objects
+        .filter(customer=customer)
+        .order_by('id')
+        .values('id', 'email', 'name')
+    )
+
     return JsonResponse({
         'ok': True,
         'customer_name': customer.name,
         'solutions': solutions_data,
+        'subscription_emails': sub_emails,
     })
 
 
@@ -179,6 +187,42 @@ def save_customer_subscription(request):
                      f'{customer.name} / {label}',
                      {'email_active': email_active, 'slack_active': slack_active})
     return JsonResponse({'ok': True, 'message': f'{label} 구독 설정이 저장되었습니다.'})
+
+
+# ── 구독 이메일 관리 (관리자) ────────────────────────────────────────────────────
+
+@require_POST
+@role_required('se')
+def admin_add_subscription_email(request, customer_id):
+    try:
+        customer = Customer.objects.get(pk=customer_id)
+    except Customer.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': '고객사를 찾을 수 없습니다.'}, status=404)
+
+    email = request.POST.get('email', '').strip().lower()
+    name = request.POST.get('name', '').strip()
+
+    if not email:
+        return JsonResponse({'ok': False, 'error': '이메일을 입력해주세요.'})
+
+    obj, created = SubscriptionEmail.objects.get_or_create(
+        customer=customer, email=email,
+        defaults={'name': name or ''},
+    )
+    if not created:
+        return JsonResponse({'ok': False, 'error': '이미 등록된 이메일입니다.'})
+
+    return JsonResponse({'ok': True, 'id': obj.id, 'email': obj.email, 'name': obj.name or ''})
+
+
+@require_POST
+@role_required('se')
+def admin_remove_subscription_email(request, customer_id):
+    email_id = request.POST.get('email_id')
+    deleted, _ = SubscriptionEmail.objects.filter(pk=email_id, customer_id=customer_id).delete()
+    if not deleted:
+        return JsonResponse({'ok': False, 'error': '이메일을 찾을 수 없습니다.'})
+    return JsonResponse({'ok': True})
 
 
 # ── 구독 링크 발행 / 취소 (관리자) ──────────────────────────────────────────────
@@ -269,7 +313,7 @@ def subscribe_page(request, token):
         {'id': sol.id, 'name': sol.name, 'active': sol.id in active_sol_ids}
         for sol in solutions
     ]
-    emails = list(customer.emails.order_by('id'))
+    emails = list(customer.subscription_emails.order_by('id'))
     days_left = (tok.expires_at - timezone.now()).days
 
     return render(request, 'subscriber/subscribe.html', {
@@ -329,9 +373,9 @@ def subscribe_add_email(request, token):
     if not email:
         return JsonResponse({'ok': False, 'error': '이메일을 입력해주세요.'})
 
-    obj, created = CustomerEmail.objects.get_or_create(
+    obj, created = SubscriptionEmail.objects.get_or_create(
         customer=tok.customer, email=email,
-        defaults={'name': name or None},
+        defaults={'name': name or ''},
     )
     if not created:
         return JsonResponse({'ok': False, 'error': '이미 등록된 이메일입니다.'})
@@ -346,7 +390,7 @@ def subscribe_remove_email(request, token):
         return JsonResponse({'ok': False, 'error': '유효하지 않거나 만료된 링크입니다.'}, status=403)
 
     email_id = request.POST.get('email_id')
-    deleted, _ = CustomerEmail.objects.filter(pk=email_id, customer=tok.customer).delete()
+    deleted, _ = SubscriptionEmail.objects.filter(pk=email_id, customer=tok.customer).delete()
     if not deleted:
         return JsonResponse({'ok': False, 'error': '이메일을 찾을 수 없습니다.'})
     return JsonResponse({'ok': True})
