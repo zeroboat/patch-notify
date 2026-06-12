@@ -230,28 +230,6 @@ document.addEventListener('DOMContentLoaded', function () {
   csrfForm.innerHTML = '{% csrf_token %}';
   const realCsrf = csrfForm.querySelector('[name=csrfmiddlewaretoken]').value;
 
-  // HTTP 환경(내부망)에서도 동작하는 클립보드 복사 헬퍼
-  function copyToClipboard(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-      return navigator.clipboard.writeText(text);
-    }
-    return new Promise(function (resolve, reject) {
-      const el = document.createElement('textarea');
-      el.value = text;
-      el.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none;';
-      document.body.appendChild(el);
-      el.focus();
-      el.select();
-      try {
-        document.execCommand('copy') ? resolve() : reject();
-      } catch (e) {
-        reject(e);
-      } finally {
-        document.body.removeChild(el);
-      }
-    });
-  }
-
   // ── 구독 링크 관리 모달 ────────────────────────────
   let currentTokenCustomerId = null;
   const modalTokenEl = document.getElementById('modalToken');
@@ -294,7 +272,7 @@ document.addEventListener('DOMContentLoaded', function () {
           + '</div>'
           + '</div>';
         document.getElementById('btnCopyLink').addEventListener('click', function () {
-          copyToClipboard(subscribeUrl).then(function () {
+          navigator.clipboard.writeText(subscribeUrl).then(function () {
             Swal.fire({ icon: 'success', title: '복사 완료', text: '링크가 클립보드에 복사되었습니다.', timer: 1500, showConfirmButton: false });
           });
         });
@@ -343,35 +321,13 @@ document.addEventListener('DOMContentLoaded', function () {
     .then(function (r) { return r.json(); })
     .then(function (data) {
       if (data.ok) {
-        const subscribeUrl = data.url;
         Swal.fire({
           icon: 'success',
           title: '링크 발행 완료',
-          html:
-            '아래 링크를 고객사에 전달하세요.'
-            + '<div class="input-group input-group-sm mt-3">'
-            + '<input class="form-control text-center" readonly value="' + subscribeUrl + '" id="newLinkInput">'
-            + '<button class="btn btn-outline-secondary" type="button" id="swallCopyBtn">'
-            + '<i class="bx bx-copy me-1"></i>복사</button>'
-            + '</div>'
-            + '<div id="swallCopyMsg" class="text-success small mt-2 d-none">'
-            + '<i class="bx bx-check"></i> 복사되었습니다. 3초 후 닫힙니다.</div>',
+          text: '구독 링크 관리 모달에서 링크를 확인하고 복사할 수 있습니다.',
           confirmButtonText: '닫기',
-          showCancelButton: false,
-          allowOutsideClick: true,
-          didOpen: function () {
-            document.getElementById('newLinkInput').select();
-            document.getElementById('swallCopyBtn').addEventListener('click', function () {
-              const copyBtn = this;
-              const doCopy = function () {
-                copyBtn.innerHTML = '<i class="bx bx-check me-1"></i>복사됨';
-                copyBtn.disabled = true;
-                document.getElementById('swallCopyMsg').classList.remove('d-none');
-                setTimeout(function () { Swal.close(); }, 3000);
-              };
-              copyToClipboard(subscribeUrl).then(doCopy).catch(doCopy);
-            });
-          },
+          timer: 3000,
+          timerProgressBar: true,
         }).then(function () {
           modalTokenInstance.hide();
           location.reload();
