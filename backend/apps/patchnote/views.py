@@ -16,7 +16,7 @@ from django.utils.html import strip_tags
 
 from web_project import TemplateLayout
 from apps.base.mixins import role_required, get_user_role
-from apps.customer.models import CustomerEmail
+from apps.subscriber.models import SubscriptionEmail
 from apps.logs.models import DispatchLog
 from apps.product.models import Product
 from .models import PatchNote, Feature, Improvement, BugFix, Remark, Internal, PatchNoteFile
@@ -339,7 +339,7 @@ def _send_email_notifications(patch_note):
 
         for sub in subs:
             emails = list(
-                CustomerEmail.objects
+                SubscriptionEmail.objects
                 .filter(customer=sub.customer)
                 .values_list('email', flat=True)
             )

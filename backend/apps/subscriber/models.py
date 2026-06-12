@@ -48,6 +48,24 @@ class Subscription(BaseModel):
         return f"{self.customer.name} · {self.product} · {self.get_channel_display()}"
 
 
+class SubscriptionEmail(models.Model):
+    customer = models.ForeignKey(
+        'customer.Customer', on_delete=models.CASCADE,
+        related_name='subscription_emails', verbose_name='고객사',
+    )
+    email = models.EmailField(verbose_name='이메일')
+    name = models.CharField(max_length=100, blank=True, verbose_name='담당자명')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = '구독 이메일'
+        verbose_name_plural = '구독 이메일 목록'
+        unique_together = ['customer', 'email']
+
+    def __str__(self):
+        return f"{self.customer.name} - {self.email}"
+
+
 class CustomerSubscriptionToken(models.Model):
     customer = models.OneToOneField(
         'customer.Customer', on_delete=models.CASCADE,

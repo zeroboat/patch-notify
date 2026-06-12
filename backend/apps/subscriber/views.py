@@ -7,9 +7,9 @@ from django.views.decorators.http import require_POST, require_GET
 
 from web_project import TemplateLayout
 from apps.base.mixins import RoleRequiredMixin, role_required
-from apps.customer.models import Customer, CustomerEmail
+from apps.customer.models import Customer
 from apps.product.models import Product, Solution
-from .models import Subscription, CustomerSubscriptionToken
+from .models import Subscription, CustomerSubscriptionToken, SubscriptionEmail
 
 
 class SubscriberManagementView(RoleRequiredMixin, TemplateView):
@@ -269,7 +269,7 @@ def subscribe_page(request, token):
         {'id': sol.id, 'name': sol.name, 'active': sol.id in active_sol_ids}
         for sol in solutions
     ]
-    emails = list(customer.emails.order_by('id'))
+    emails = list(customer.subscription_emails.order_by('id'))
     days_left = (tok.expires_at - timezone.now()).days
 
     return render(request, 'subscriber/subscribe.html', {
@@ -329,9 +329,9 @@ def subscribe_add_email(request, token):
     if not email:
         return JsonResponse({'ok': False, 'error': '이메일을 입력해주세요.'})
 
-    obj, created = CustomerEmail.objects.get_or_create(
+    obj, created = SubscriptionEmail.objects.get_or_create(
         customer=tok.customer, email=email,
-        defaults={'name': name or None},
+        defaults={'name': name or ''},
     )
     if not created:
         return JsonResponse({'ok': False, 'error': '이미 등록된 이메일입니다.'})
@@ -346,7 +346,7 @@ def subscribe_remove_email(request, token):
         return JsonResponse({'ok': False, 'error': '유효하지 않거나 만료된 링크입니다.'}, status=403)
 
     email_id = request.POST.get('email_id')
-    deleted, _ = CustomerEmail.objects.filter(pk=email_id, customer=tok.customer).delete()
+    deleted, _ = SubscriptionEmail.objects.filter(pk=email_id, customer=tok.customer).delete()
     if not deleted:
         return JsonResponse({'ok': False, 'error': '이메일을 찾을 수 없습니다.'})
     return JsonResponse({'ok': True})
