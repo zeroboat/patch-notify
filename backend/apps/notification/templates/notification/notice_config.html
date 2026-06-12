@@ -1,0 +1,208 @@
+{% extends layout_path %}
+{% load static %}
+
+{% block title %}공문 템플릿 설정{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <div class="mb-4">
+    <h4 class="fw-bold mb-1">공문 템플릿 설정</h4>
+    <p class="text-muted mb-0 small">고객사에 발송되는 이메일 공문의 레이아웃을 설정합니다.</p>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- 설정 폼 -->
+    <div class="col-12 col-xl-5">
+      <form id="configForm" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <!-- 상단 로고 -->
+        <div class="card mb-4">
+          <div class="card-header"><h6 class="mb-0">상단 로고</h6></div>
+          <div class="card-body">
+            {% if cfg.upper_logo %}
+            <div class="mb-3 d-flex align-items-center gap-3">
+              <img src="{{ cfg.upper_logo.url }}" style="max-height:48px;max-width:160px;object-fit:contain;">
+              <div>
+                <div class="small text-muted mb-1">현재 등록된 이미지</div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="clear_upper_logo" value="1" id="clearUpperLogo">
+                  <label class="form-check-label small text-danger" for="clearUpperLogo">이미지 삭제</label>
+                </div>
+              </div>
+            </div>
+            {% endif %}
+            <div class="mb-3">
+              <label class="form-label small">이미지 파일 (PNG/JPG)</label>
+              <input type="file" name="upper_logo" class="form-control form-control-sm" accept="image/*" id="upperLogoFile">
+            </div>
+            <div>
+              <label class="form-label small">너비 (px)</label>
+              <input type="number" name="upper_logo_width" class="form-control form-control-sm" value="{{ cfg.upper_logo_width }}" min="20" max="600" id="upperLogoWidth">
+            </div>
+          </div>
+        </div>
+
+        <!-- 하단 로고 -->
+        <div class="card mb-4">
+          <div class="card-header"><h6 class="mb-0">하단 로고</h6></div>
+          <div class="card-body">
+            {% if cfg.lower_logo %}
+            <div class="mb-3 d-flex align-items-center gap-3">
+              <img src="{{ cfg.lower_logo.url }}" style="max-height:48px;max-width:160px;object-fit:contain;">
+              <div>
+                <div class="small text-muted mb-1">현재 등록된 이미지</div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="clear_lower_logo" value="1" id="clearLowerLogo">
+                  <label class="form-check-label small text-danger" for="clearLowerLogo">이미지 삭제</label>
+                </div>
+              </div>
+            </div>
+            {% endif %}
+            <div class="mb-3">
+              <label class="form-label small">이미지 파일 (PNG/JPG)</label>
+              <input type="file" name="lower_logo" class="form-control form-control-sm" accept="image/*" id="lowerLogoFile">
+            </div>
+            <div>
+              <label class="form-label small">너비 (px)</label>
+              <input type="number" name="lower_logo_width" class="form-control form-control-sm" value="{{ cfg.lower_logo_width }}" min="20" max="600" id="lowerLogoWidth">
+            </div>
+          </div>
+        </div>
+
+        <!-- 디자인 -->
+        <div class="card mb-4">
+          <div class="card-header"><h6 class="mb-0">디자인</h6></div>
+          <div class="card-body">
+            <label class="form-label small">헤더 색상</label>
+            <div class="d-flex align-items-center gap-2">
+              <input type="color" name="header_color" class="form-control form-control-color" value="{{ cfg.header_color }}" id="headerColor" style="width:48px;height:36px;">
+              <input type="text" id="headerColorHex" class="form-control form-control-sm" value="{{ cfg.header_color }}" style="width:100px;" maxlength="7">
+            </div>
+          </div>
+        </div>
+
+        <!-- 하단 문구 -->
+        <div class="card mb-4">
+          <div class="card-header"><h6 class="mb-0">하단 문구</h6></div>
+          <div class="card-body">
+            <textarea name="footer_text" class="form-control form-control-sm" rows="4" id="footerText">{{ cfg.footer_text }}</textarea>
+            <div class="form-text">줄바꿈이 그대로 적용됩니다.</div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100">저장</button>
+      </form>
+    </div>
+
+    <!-- 미리보기 -->
+    <div class="col-12 col-xl-7">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6 class="mb-0">미리보기</h6>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-secondary" id="refreshPreview">
+              <i class="bx bx-refresh me-1"></i>새로고침
+            </button>
+            <button class="btn btn-sm btn-outline-primary" id="expandPreview" data-bs-toggle="modal" data-bs-target="#previewModal">
+              <i class="bx bx-expand me-1"></i>크게 보기
+            </button>
+          </div>
+        </div>
+        <div class="card-body p-0" style="min-height:500px;">
+          <iframe id="previewFrame" style="width:100%;height:100%;min-height:600px;border:0;"></iframe>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 크게 보기 모달 -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title">공문 미리보기</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0" style="height:80vh;">
+        <iframe id="previewModalFrame" style="width:100%;height:100%;border:0;"></iframe>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const form = document.getElementById('configForm');
+  const colorPicker = document.getElementById('headerColor');
+  const colorHex = document.getElementById('headerColorHex');
+  const previewFrame = document.getElementById('previewFrame');
+
+  // 컬러 피커 ↔ hex 텍스트 동기화
+  colorPicker.addEventListener('input', () => { colorHex.value = colorPicker.value; });
+  colorHex.addEventListener('input', () => {
+    if (/^#[0-9a-fA-F]{6}$/.test(colorHex.value)) colorPicker.value = colorHex.value;
+  });
+
+  // 미리보기 새로고침
+  document.getElementById('refreshPreview').addEventListener('click', loadPreview);
+
+  function loadPreview() {
+    const fd = new FormData();
+    fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    fd.append('subject', '(공문 제목 미리보기)');
+    fd.append('body', '<p>공문 본문 내용이 이 위치에 표시됩니다.</p><p>이메일 레이아웃과 로고, 색상, 하단 문구를 확인하세요.</p>');
+    fetch("{% url 'notification:preview_email' %}", { method: 'POST', body: fd })
+      .then(r => r.text())
+      .then(html => {
+        previewFrame.srcdoc = html;
+      });
+  }
+
+  // 폼 저장
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const btn = form.querySelector('[type=submit]');
+    btn.disabled = true;
+    btn.textContent = '저장 중...';
+
+    // color hex를 hidden input으로 동기화
+    colorPicker.value = /^#[0-9a-fA-F]{6}$/.test(colorHex.value) ? colorHex.value : colorPicker.value;
+
+    fetch("{% url 'notification:notice_config_save' %}", {
+      method: 'POST',
+      body: new FormData(form),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          btn.textContent = '저장됨 ✓';
+          btn.classList.replace('btn-primary', 'btn-success');
+          loadPreview();
+          setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = '저장';
+            btn.classList.replace('btn-success', 'btn-primary');
+          }, 2000);
+        } else {
+          alert(data.error || '저장에 실패했습니다.');
+          btn.disabled = false;
+          btn.textContent = '저장';
+        }
+      });
+  });
+
+  // 크게 보기 — 현재 미리보기 내용을 모달 iframe에 복사
+  document.getElementById('previewModal').addEventListener('show.bs.modal', () => {
+    const src = previewFrame.srcdoc;
+    if (src) document.getElementById('previewModalFrame').srcdoc = src;
+  });
+
+  loadPreview();
+})();
+</script>
+{% endblock %}

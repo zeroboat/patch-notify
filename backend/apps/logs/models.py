@@ -95,6 +95,8 @@ class ActionLog(models.Model):
     UTILITY_CREATE    = 'utility_create'
     UTILITY_UPDATE    = 'utility_update'
     UTILITY_DELETE    = 'utility_delete'
+    NOTICE_SEND       = 'notice_send'
+    NOTICE_CONFIG_UPDATE = 'notice_config_update'
 
     ACTION_LABELS = {
         LOGIN_SUCCESS:      '로그인 성공',
@@ -120,6 +122,8 @@ class ActionLog(models.Model):
         UTILITY_CREATE:     '유틸리티 등록',
         UTILITY_UPDATE:     '유틸리티 수정',
         UTILITY_DELETE:     '유틸리티 삭제',
+        NOTICE_SEND:        '공문 발송',
+        NOTICE_CONFIG_UPDATE: '공문 템플릿 설정 변경',
     }
 
     actor = models.ForeignKey(
