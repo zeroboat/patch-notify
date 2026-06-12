@@ -247,9 +247,9 @@ document.addEventListener('DOMContentLoaded', function () {
       document.getElementById('tokenCustomerName').textContent = customerName;
       document.getElementById('tokenIssueError').classList.add('d-none');
 
-      // 만료일 기본값: 현재 + 90일
+      // 만료일 기본값: 현재 + 30일
       const defaultExpiry = new Date();
-      defaultExpiry.setDate(defaultExpiry.getDate() + 90);
+      defaultExpiry.setDate(defaultExpiry.getDate() + 30);
       document.getElementById('tokenExpiresAt').value = defaultExpiry.toISOString().slice(0, 16);
 
       const statusArea = document.getElementById('tokenStatusArea');
