@@ -113,6 +113,12 @@
         </li>
 
         {% if user_role == 'admin' or user_role == 'manager' %}
+        <li class="menu-item {% if '/notification/config' in request.path %}active{% endif %}">
+            <a href="{% url 'notification:notice_config' %}" class="menu-link">
+                <i class="menu-icon icon-base bx bx-palette"></i>
+                <div class="text-truncate">Notice Settings</div>
+            </a>
+        </li>
         <li class="menu-item {% if 'product/management' in request.path %}active open{% endif %}">
             <a href="{% url 'product:product_management' %}" class="menu-link">
                 <i class="menu-icon icon-base bx bx-cube-alt"></i>
