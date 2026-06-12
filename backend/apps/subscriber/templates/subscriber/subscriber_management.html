@@ -420,6 +420,23 @@ document.addEventListener('DOMContentLoaded', function () {
       + '</div>';
   }
 
+  // ── 구독 이메일 행 HTML 생성 헬퍼 ──────────────────
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function buildEmailRow(e) {
+    return '<div class="d-flex align-items-center gap-2 py-1 sub-email-row" id="sub-email-row-' + e.id + '">'
+      + '<i class="bx bx-envelope text-secondary" style="font-size:.95rem;flex-shrink:0;"></i>'
+      + '<div class="flex-grow-1 min-width-0" style="min-width:0;">'
+      + '<div class="small fw-medium text-truncate">' + escHtml(e.email) + '</div>'
+      + (e.name ? '<div style="font-size:.72rem;color:#888;">' + escHtml(e.name) + '</div>' : '')
+      + '</div>'
+      + '<button class="btn btn-sm btn-link text-danger p-0 btn-del-sub-email" data-email-id="' + e.id + '" title="삭제">'
+      + '<i class="bx bx-trash" style="font-size:.9rem;"></i></button>'
+      + '</div>';
+  }
+
   // ── MAX_ITEMS 선택지 ──────────────────
   const maxItemsOptions = [1, 2, 3, 5, 7, 10];
 
@@ -518,8 +535,86 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
 
+    // ── 구독 이메일 섹션 ──────────────────────────────
+    html += '<hr class="mx-3 mt-2 mb-0">';
+    html += '<div class="p-3" id="subEmailSection" data-customer-id="' + customerId + '">';
+    html += '<p class="fw-bold small text-muted text-uppercase mb-2">수신 이메일 주소</p>';
+    html += '<p class="text-muted" style="font-size:.78rem;">패치노트 Gmail 알림을 수신할 이메일 주소입니다.</p>';
+
+    html += '<div id="subEmailList">';
+    if (data.subscription_emails && data.subscription_emails.length) {
+      data.subscription_emails.forEach(function (e) {
+        html += buildEmailRow(e);
+      });
+    } else {
+      html += '<div class="text-muted small text-center py-2" id="subEmailEmpty">등록된 이메일이 없습니다.</div>';
+    }
+    html += '</div>';
+
+    html += '<div class="mt-2">';
+    html += '<div class="row g-2 align-items-end">';
+    html += '<div class="col"><input type="email" id="subEmailInput" class="form-control form-control-sm" placeholder="example@company.com"></div>';
+    html += '<div class="col"><input type="text" id="subNameInput" class="form-control form-control-sm" placeholder="담당자명"></div>';
+    html += '<div class="col-auto"><button type="button" class="btn btn-sm btn-primary" id="btnAddSubEmail"><i class="bx bx-plus"></i></button></div>';
+    html += '</div>';
+    html += '<div id="subEmailError" class="text-danger mt-1 d-none" style="font-size:.78rem;"></div>';
+    html += '</div>';
+    html += '</div>';
+
     html += '</div>';
     offcanvasBody.innerHTML = html;
+
+    // 구독 이메일 이벤트 바인딩
+    const section = offcanvasBody.querySelector('#subEmailSection');
+    const cid = section.dataset.customerId;
+
+    offcanvasBody.querySelector('#btnAddSubEmail').addEventListener('click', function () {
+      const emailVal = offcanvasBody.querySelector('#subEmailInput').value.trim();
+      const nameVal = offcanvasBody.querySelector('#subNameInput').value.trim();
+      const errEl = offcanvasBody.querySelector('#subEmailError');
+      errEl.classList.add('d-none');
+      if (!emailVal) { errEl.textContent = '이메일을 입력해주세요.'; errEl.classList.remove('d-none'); return; }
+      const btn = this;
+      btn.disabled = true;
+      fetch('/subscriber/subscription-emails/' + cid + '/add/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': realCsrf, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ email: emailVal, name: nameVal }).toString(),
+      }).then(r => r.json()).then(function (d) {
+        if (d.ok) {
+          const empty = offcanvasBody.querySelector('#subEmailEmpty');
+          if (empty) empty.remove();
+          offcanvasBody.querySelector('#subEmailList').insertAdjacentHTML('beforeend', buildEmailRow(d));
+          offcanvasBody.querySelector('#subEmailInput').value = '';
+          offcanvasBody.querySelector('#subNameInput').value = '';
+        } else {
+          errEl.textContent = d.error; errEl.classList.remove('d-none');
+        }
+      }).catch(function () { errEl.textContent = '오류가 발생했습니다.'; errEl.classList.remove('d-none'); })
+        .finally(function () { btn.disabled = false; });
+    });
+
+    offcanvasBody.querySelector('#subEmailList').addEventListener('click', function (e) {
+      const btn = e.target.closest('.btn-del-sub-email');
+      if (!btn) return;
+      if (!confirm('이 이메일을 삭제하시겠습니까?')) return;
+      const emailId = btn.dataset.emailId;
+      btn.disabled = true;
+      fetch('/subscriber/subscription-emails/' + cid + '/remove/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': realCsrf, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ email_id: emailId }).toString(),
+      }).then(r => r.json()).then(function (d) {
+        if (d.ok) {
+          const row = offcanvasBody.querySelector('#sub-email-row-' + emailId);
+          if (row) row.remove();
+          if (!offcanvasBody.querySelector('#subEmailList .sub-email-row')) {
+            offcanvasBody.querySelector('#subEmailList').insertAdjacentHTML('beforeend',
+              '<div class="text-muted small text-center py-2" id="subEmailEmpty">등록된 이메일이 없습니다.</div>');
+          }
+        } else { alert(d.error); btn.disabled = false; }
+      }).catch(function () { alert('오류가 발생했습니다.'); btn.disabled = false; });
+    });
 
     // 토글 이벤트 바인딩
     offcanvasBody.querySelectorAll('.channel-toggle').forEach(function (toggle) {
