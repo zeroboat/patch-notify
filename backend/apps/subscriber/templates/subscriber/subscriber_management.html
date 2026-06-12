@@ -74,7 +74,7 @@
           <tr>
             <th>고객사명</th>
             <th><i class="bx bx-envelope me-1 text-danger"></i>Gmail 구독</th>
-            <th><i class="bxl bxl-slack me-1 text-success"></i>Slack 구독</th>
+            <th><i class="bx bxl-slack me-1 text-success"></i>Slack 구독</th>
             <th class="text-center">총 구독</th>
             <th class="text-center">구독 링크</th>
             <th class="text-end">설정</th>
@@ -82,24 +82,38 @@
         </thead>
         <tbody>
           {% for row in customer_rows %}
-          <tr>
+          <tr data-email-count="{{ row.email_subs|length }}" data-slack-count="{{ row.slack_subs|length }}">
             <td class="fw-semibold align-middle">{{ row.name }}</td>
             <td class="align-middle">
               {% if row.email_subs %}
-                {% for sol_name in row.email_subs %}
-                <span class="badge bg-label-danger me-1">{{ sol_name }}</span>
-                {% endfor %}
+              <div class="dropdown">
+                <a href="#" class="dropdown-toggle text-decoration-none" data-bs-toggle="dropdown" aria-expanded="false">
+                  <span class="badge bg-label-danger">{{ row.email_subs|length }} / {{ row.solutions_count }}</span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-sm">
+                  {% for sol_name in row.email_subs %}
+                  <li><span class="dropdown-item-text small py-1">{{ sol_name }}</span></li>
+                  {% endfor %}
+                </ul>
+              </div>
               {% else %}
-                <span class="text-muted small">-</span>
+                <span class="text-muted small">0 / {{ row.solutions_count }}</span>
               {% endif %}
             </td>
             <td class="align-middle">
               {% if row.slack_subs %}
-                {% for sol_name in row.slack_subs %}
-                <span class="badge bg-label-success me-1">{{ sol_name }}</span>
-                {% endfor %}
+              <div class="dropdown">
+                <a href="#" class="dropdown-toggle text-decoration-none" data-bs-toggle="dropdown" aria-expanded="false">
+                  <span class="badge bg-label-success">{{ row.slack_subs|length }} / {{ row.solutions_count }}</span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-sm">
+                  {% for sol_name in row.slack_subs %}
+                  <li><span class="dropdown-item-text small py-1">{{ sol_name }}</span></li>
+                  {% endfor %}
+                </ul>
+              </div>
               {% else %}
-                <span class="text-muted small">-</span>
+                <span class="text-muted small">0 / {{ row.solutions_count }}</span>
               {% endif %}
             </td>
             <td class="text-center align-middle">
@@ -382,15 +396,29 @@ document.addEventListener('DOMContentLoaded', function () {
   const offcanvasInstance = new bootstrap.Offcanvas(offcanvasEl);
 
   // ── 요약 카드 업데이트 ─────────────────────────────
-  let emailTotal = 0, slackTotal = 0;
-  document.querySelectorAll('tbody tr').forEach(function (row) {
-    const emailBadges = row.querySelectorAll('td:nth-child(2) .badge');
-    const slackBadges = row.querySelectorAll('td:nth-child(3) .badge');
-    emailTotal += emailBadges.length;
-    slackTotal += slackBadges.length;
-  });
-  document.getElementById('summaryEmailCount').textContent = emailTotal;
-  document.getElementById('summarySlackCount').textContent = slackTotal;
+  function updateSummaryCards() {
+    let et = 0, st = 0;
+    document.querySelectorAll('tbody tr[data-email-count]').forEach(function (r) {
+      et += parseInt(r.dataset.emailCount || 0);
+      st += parseInt(r.dataset.slackCount || 0);
+    });
+    document.getElementById('summaryEmailCount').textContent = et;
+    document.getElementById('summarySlackCount').textContent = st;
+  }
+  updateSummaryCards();
+
+  // ── 구독 현황 셀 드롭다운 HTML 생성 헬퍼 ──────────
+  function buildSubCell(sols, totalSols, color) {
+    if (!sols.length) return '<span class="text-muted small">0 / ' + totalSols + '</span>';
+    const items = sols.map(function (n) {
+      return '<li><span class="dropdown-item-text small py-1">' + n + '</span></li>';
+    }).join('');
+    return '<div class="dropdown">'
+      + '<a href="#" class="dropdown-toggle text-decoration-none" data-bs-toggle="dropdown" aria-expanded="false">'
+      + '<span class="badge bg-label-' + color + '">' + sols.length + ' / ' + totalSols + '</span></a>'
+      + '<ul class="dropdown-menu dropdown-menu-sm">' + items + '</ul>'
+      + '</div>';
+  }
 
   // ── MAX_ITEMS 선택지 ──────────────────
   const maxItemsOptions = [1, 2, 3, 5, 7, 10];
@@ -574,41 +602,28 @@ document.addEventListener('DOMContentLoaded', function () {
       const row = document.querySelector('[data-customer-id="' + customerId + '"]').closest('tr');
       if (!row) return;
 
-      const emailCell = row.querySelector('td:nth-child(2)');
-      const slackCell = row.querySelector('td:nth-child(3)');
-      const totalCell = row.querySelector('td:nth-child(4)');
-
       const emailSols = new Set(), slackSols = new Set();
+      const totalSols = (data.solutions || []).length;
       (data.solutions || []).forEach(function (sol) {
         (sol.products || []).forEach(function (prod) {
           if (prod.email.active) emailSols.add(sol.name);
           if (prod.slack.active) slackSols.add(sol.name);
         });
       });
-      const emailSubs = [...emailSols];
-      const slackSubs = [...slackSols];
-      const total = emailSubs.length + slackSubs.length;
+      const emailArr = [...emailSols];
+      const slackArr = [...slackSols];
+      const total = emailArr.length + slackArr.length;
 
-      emailCell.innerHTML = emailSubs.length
-        ? emailSubs.map(n => '<span class="badge bg-label-danger me-1">' + n + '</span>').join('')
-        : '<span class="text-muted small">-</span>';
+      row.dataset.emailCount = emailArr.length;
+      row.dataset.slackCount = slackArr.length;
 
-      slackCell.innerHTML = slackSubs.length
-        ? slackSubs.map(n => '<span class="badge bg-label-success me-1">' + n + '</span>').join('')
-        : '<span class="text-muted small">-</span>';
-
-      totalCell.innerHTML = total > 0
+      row.querySelector('td:nth-child(2)').innerHTML = buildSubCell(emailArr, totalSols, 'danger');
+      row.querySelector('td:nth-child(3)').innerHTML = buildSubCell(slackArr, totalSols, 'success');
+      row.querySelector('td:nth-child(4)').innerHTML = total > 0
         ? '<span class="badge bg-primary rounded-pill">' + total + '</span>'
         : '<span class="text-muted small">0</span>';
 
-      // 요약 카드 재집계
-      let et = 0, st = 0;
-      document.querySelectorAll('tbody tr').forEach(function (r) {
-        et += r.querySelectorAll('td:nth-child(2) .badge').length;
-        st += r.querySelectorAll('td:nth-child(3) .badge').length;
-      });
-      document.getElementById('summaryEmailCount').textContent = et;
-      document.getElementById('summarySlackCount').textContent = st;
+      updateSummaryCards();
     })
     .catch(console.error);
   }

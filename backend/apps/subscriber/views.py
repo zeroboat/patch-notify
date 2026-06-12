@@ -56,6 +56,7 @@ class SubscriberManagementView(RoleRequiredMixin, TemplateView):
                 'name': c.name,
                 'email_subs': email_subs,
                 'slack_subs': slack_subs,
+                'solutions_count': c.solutions.count(),
                 'total': len(email_subs) + len(slack_subs),
                 'token': token_info,
             })
