@@ -230,6 +230,28 @@ document.addEventListener('DOMContentLoaded', function () {
   csrfForm.innerHTML = '{% csrf_token %}';
   const realCsrf = csrfForm.querySelector('[name=csrfmiddlewaretoken]').value;
 
+  // HTTP 환경(내부망)에서도 동작하는 클립보드 복사 헬퍼
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      const el = document.createElement('textarea');
+      el.value = text;
+      el.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none;';
+      document.body.appendChild(el);
+      el.focus();
+      el.select();
+      try {
+        document.execCommand('copy') ? resolve() : reject();
+      } catch (e) {
+        reject(e);
+      } finally {
+        document.body.removeChild(el);
+      }
+    });
+  }
+
   // ── 구독 링크 관리 모달 ────────────────────────────
   let currentTokenCustomerId = null;
   const modalTokenEl = document.getElementById('modalToken');
@@ -272,7 +294,7 @@ document.addEventListener('DOMContentLoaded', function () {
           + '</div>'
           + '</div>';
         document.getElementById('btnCopyLink').addEventListener('click', function () {
-          navigator.clipboard.writeText(subscribeUrl).then(function () {
+          copyToClipboard(subscribeUrl).then(function () {
             Swal.fire({ icon: 'success', title: '복사 완료', text: '링크가 클립보드에 복사되었습니다.', timer: 1500, showConfirmButton: false });
           });
         });
@@ -347,13 +369,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 document.getElementById('swallCopyMsg').classList.remove('d-none');
                 setTimeout(function () { Swal.close(); }, 3000);
               };
-              navigator.clipboard.writeText(subscribeUrl)
-                .then(doCopy)
-                .catch(function () {
-                  document.getElementById('newLinkInput').select();
-                  document.execCommand('copy');
-                  doCopy();
-                });
+              copyToClipboard(subscribeUrl).then(doCopy).catch(doCopy);
             });
           },
         }).then(function () {
