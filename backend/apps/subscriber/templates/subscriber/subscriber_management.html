@@ -260,21 +260,23 @@ document.addEventListener('DOMContentLoaded', function () {
       if (tokenExists && !tokenExpired) {
         const subscribeUrl = window.location.origin + '/subscriber/subscribe/' + tokenValue + '/';
         statusArea.innerHTML =
-          '<div class="alert alert-success py-2 mb-0">'
-          + '<div class="d-flex align-items-center justify-content-between gap-2">'
-          + '<div class="small" style="word-break:break-all;">'
-          + '<i class="bx bx-check-circle me-1"></i>발행됨 · 만료: ' + tokenExpires + '<br>'
-          + '<code class="small">' + subscribeUrl + '</code>'
-          + '</div>'
-          + '<button type="button" class="btn btn-sm btn-outline-success flex-shrink-0" id="btnCopyLink">'
-          + '<i class="bx bx-copy"></i>'
-          + '</button>'
-          + '</div>'
+          '<div class="mb-1 small"><i class="bx bx-check-circle me-1 text-success"></i>발행됨 · 만료: ' + tokenExpires + '</div>'
+          + '<div class="input-group input-group-sm">'
+          + '<input type="text" class="form-control font-monospace" id="linkUrlInput" readonly value="' + subscribeUrl + '">'
+          + '<button type="button" class="btn btn-outline-secondary" id="btnCopyLink">'
+          + '<i class="bx bx-copy"></i></button>'
           + '</div>';
+        document.getElementById('linkUrlInput').addEventListener('click', function () { this.select(); });
         document.getElementById('btnCopyLink').addEventListener('click', function () {
-          navigator.clipboard.writeText(subscribeUrl).then(function () {
+          const input = document.getElementById('linkUrlInput');
+          input.select();
+          input.setSelectionRange(0, 99999);
+          try {
+            document.execCommand('copy');
             Swal.fire({ icon: 'success', title: '복사 완료', text: '링크가 클립보드에 복사되었습니다.', timer: 1500, showConfirmButton: false });
-          });
+          } catch (e) {
+            Swal.fire({ icon: 'info', title: '직접 복사하세요', text: '위 입력창을 클릭 후 Ctrl+C를 누르세요.', timer: 2500, showConfirmButton: false });
+          }
         });
         btnIssueLabel.textContent = '재발행 (링크 변경)';
         btnRevoke.classList.remove('d-none');
