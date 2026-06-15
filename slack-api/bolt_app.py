@@ -3,7 +3,6 @@ slack_bolt App 인스턴스 + 이벤트 핸들러
 FastAPI 어댑터를 통해 /slack/events/ 에서 수신
 """
 import os
-import re
 from datetime import datetime, timezone
 from sqlalchemy import select, and_
 from slack_bolt import App
@@ -148,7 +147,7 @@ def handle_app_home_opened(event, client, body):
 
 # ── 설정 변경 버튼 → 솔루션 단위 구독 모달 ────────────────────────────────────
 
-@bolt_app.action(re.compile(r'^open_subscription_modal'))
+@bolt_app.action("open_subscription_modal")
 def handle_open_subscription_modal(ack, body, client):
     ack()
 
@@ -296,7 +295,7 @@ def handle_view_emails(ack, body, client):
 
 # ── 최근 패치노트 보기 → 제품 선택 모달 ──────────────────────────────────────
 
-@bolt_app.action(re.compile(r'^view_recent_patchnotes'))
+@bolt_app.action("view_recent_patchnotes")
 def handle_view_recent_patchnotes(ack, body, client):
     ack()
 

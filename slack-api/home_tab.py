@@ -155,58 +155,54 @@ def build_home_tab(db: Session, customer_id: int, customer_name: str) -> list:
     })
     blocks.append({"type": "divider"})
 
-    def _sol_status(sol):
+    for i, sol in enumerate(solutions):
         products = products_by_sol.get(sol.id, [])
         total = len(products)
-        if total == 0:
-            return "_제품 없음_"
-        email_active = sum(1 for p in products if (s := sub_map.get((p.id, 'email'))) and s.is_active)
-        slack_active = sum(1 for p in products if (s := sub_map.get((p.id, 'slack'))) and s.is_active)
-        email_text = f"✅ {email_active}/{total}개" if email_active else "❌ 비활성"
-        slack_text = f"✅ {slack_active}/{total}개" if slack_active else "❌ 비활성"
-        return f"📧 {email_text}   |   💬 {slack_text}"
 
-    sol_list = list(solutions)
-    for i in range(0, len(sol_list), 2):
+        email_active = sum(
+            1 for p in products
+            if (s := sub_map.get((p.id, 'email'))) and s.is_active
+        )
+        slack_active = sum(
+            1 for p in products
+            if (s := sub_map.get((p.id, 'slack'))) and s.is_active
+        )
+
+        if total == 0:
+            status_text = "_제품 없음_"
+        else:
+            email_text = f"✅ {email_active}/{total}개" if email_active else "❌ 비활성"
+            slack_text = f"✅ {slack_active}/{total}개" if slack_active else "❌ 비활성"
+            status_text = f"📧 {email_text}   |   💬 {slack_text}"
+
         if i > 0:
             blocks.append({"type": "divider"})
 
-        left = sol_list[i]
-        right = sol_list[i + 1] if i + 1 < len(sol_list) else None
-
-        if right:
-            blocks.append({
-                "type": "section",
-                "fields": [
-                    {"type": "mrkdwn", "text": f"*{left.name}*\n{_sol_status(left)}"},
-                    {"type": "mrkdwn", "text": f"*{right.name}*\n{_sol_status(right)}"},
-                ],
-            })
-            blocks.append({
-                "type": "actions",
-                "elements": [
-                    {"type": "button", "text": {"type": "plain_text", "text": "⚙️ 설정"}, "action_id": "open_subscription_modal",   "value": str(left.id)},
-                    {"type": "button", "text": {"type": "plain_text", "text": "📄 패치노트"}, "action_id": "view_recent_patchnotes", "value": str(left.id)},
-                    {"type": "button", "text": {"type": "plain_text", "text": "⚙️ 설정"}, "action_id": "open_subscription_modal_r",  "value": str(right.id)},
-                    {"type": "button", "text": {"type": "plain_text", "text": "📄 패치노트"}, "action_id": "view_recent_patchnotes_r","value": str(right.id)},
-                ],
-            })
-        else:
-            blocks.append({
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*{left.name}*"},
-            })
-            blocks.append({
-                "type": "context",
-                "elements": [{"type": "mrkdwn", "text": _sol_status(left)}],
-            })
-            blocks.append({
-                "type": "actions",
-                "elements": [
-                    {"type": "button", "text": {"type": "plain_text", "text": "⚙️ 설정 변경"}, "action_id": "open_subscription_modal",  "value": str(left.id)},
-                    {"type": "button", "text": {"type": "plain_text", "text": "📄 최근 패치노트"}, "action_id": "view_recent_patchnotes","value": str(left.id)},
-                ],
-            })
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*{sol.name}*"},
+        })
+        blocks.append({
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": status_text}],
+        })
+        blocks.append({
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "⚙️ 설정 변경"},
+                    "action_id": "open_subscription_modal",
+                    "value": str(sol.id),
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "📄 최근 패치노트"},
+                    "action_id": "view_recent_patchnotes",
+                    "value": str(sol.id),
+                },
+            ],
+        })
 
     return blocks
 
