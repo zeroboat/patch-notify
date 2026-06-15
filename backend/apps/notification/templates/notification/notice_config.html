@@ -183,7 +183,13 @@
 
     fetch(url, { method: 'POST', body: fd })
       .then(r => r.text())
-      .then(html => { previewFrame.srcdoc = html; });
+      .then(html => {
+        previewFrame.srcdoc = html;
+        previewFrame.onload = function () {
+          const h = previewFrame.contentDocument.body.scrollHeight;
+          previewFrame.style.height = h + 'px';
+        };
+      });
   }
 
   // 폼 저장
