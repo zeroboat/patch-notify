@@ -131,7 +131,7 @@
 
 <!-- 크게 보기 모달 -->
 <div class="modal fade" id="previewModal" tabindex="-1">
-  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+  <div class="modal-dialog modal-xl">
     <div class="modal-content">
       <div class="modal-header py-2">
         <h6 class="modal-title">공문 미리보기</h6>
@@ -183,13 +183,7 @@
 
     fetch(url, { method: 'POST', body: fd })
       .then(r => r.text())
-      .then(html => {
-        previewFrame.srcdoc = html;
-        previewFrame.onload = function () {
-          const h = previewFrame.contentDocument.body.scrollHeight;
-          previewFrame.style.height = h + 'px';
-        };
-      });
+      .then(html => { previewFrame.srcdoc = html; });
   }
 
   // 폼 저장
