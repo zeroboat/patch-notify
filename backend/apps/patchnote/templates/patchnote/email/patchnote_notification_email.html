@@ -12,20 +12,23 @@
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
 
-          <!-- 로고 -->
+          <!-- 상단 로고 -->
+          {% if upper_logo_src %}
           <tr>
-            <td style="padding:0 0 16px 0;" align="left">
-              <span style="font-size:20px;font-weight:500;color:#202124;letter-spacing:-0.2px;">Patch Notify</span>
+            <td style="padding:0 0 8px 0;" align="left">
+              <img src="{{ upper_logo_src }}" width="{{ upper_logo_width }}" style="display:block;border:0;">
             </td>
           </tr>
+          {% endif %}
 
           <!-- 메인 카드 -->
           <tr>
             <td style="background:#ffffff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.12);overflow:hidden;">
 
+              <!-- 상단 컬러 라인 -->
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td style="height:4px;background-color:#1a73e8;border-radius:8px 8px 0 0;"></td>
+                  <td style="height:4px;background-color:{{ header_color|default:'#1a73e8' }};border-radius:8px 8px 0 0;"></td>
                 </tr>
               </table>
 
@@ -51,10 +54,10 @@
                     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
                       <tr>
                         <td>
-                          <span style="font-size:15px;font-weight:600;color:#1a73e8;">v{{ nd.note.version }}</span>
+                          <span style="font-size:15px;font-weight:600;color:{{ header_color|default:'#1a73e8' }};">v{{ nd.note.version }}</span>
                           <span style="font-size:13px;color:#80868b;margin-left:8px;">{{ nd.note.release_date }}</span>
                           {% if nd.is_new %}
-                          <span style="display:inline-block;margin-left:8px;padding:2px 8px;background:#e8f0fe;color:#1a73e8;border-radius:4px;font-size:11px;font-weight:600;">NEW</span>
+                          <span style="display:inline-block;margin-left:8px;padding:2px 8px;background:#e8f0fe;color:{{ header_color|default:'#1a73e8' }};border-radius:4px;font-size:11px;font-weight:600;">NEW</span>
                           {% endif %}
                         </td>
                       </tr>
@@ -110,6 +113,12 @@
           <!-- 푸터 -->
           <tr>
             <td style="padding:20px 8px 8px 8px;" align="center">
+              {% if lower_logo_src %}
+              <img src="{{ lower_logo_src }}" width="{{ lower_logo_width }}" style="display:block;margin:0 auto 12px auto;border:0;">
+              {% endif %}
+              {% if footer_text %}
+              <p style="margin:0 0 8px 0;font-size:12px;color:#80868b;line-height:1.8;white-space:pre-line;">{{ footer_text }}</p>
+              {% endif %}
               <p style="margin:0;font-size:12px;color:#80868b;line-height:1.6;">
                 이 메일은 <strong style="color:#5f6368;">Patch Notify</strong> 시스템에서 자동 발송되었습니다.<br>
                 수신을 원하지 않으시면 담당자에게 구독 해제를 요청해 주세요.
