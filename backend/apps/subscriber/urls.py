@@ -9,6 +9,8 @@ from .views import (
     revoke_token,
     subscribe_page,
     subscribe_toggle_solution,
+    subscribe_toggle_utility,
+    subscribe_save_slack,
     subscribe_add_email,
     subscribe_remove_email,
 )
@@ -25,6 +27,8 @@ urlpatterns = [
     path('token/revoke/<int:customer_id>/', revoke_token, name='revoke_token'),
     path('subscribe/<uuid:token>/', subscribe_page, name='subscribe_page'),
     path('subscribe/<uuid:token>/toggle-solution/', subscribe_toggle_solution, name='subscribe_toggle_solution'),
+    path('subscribe/<uuid:token>/toggle-utility/', subscribe_toggle_utility, name='subscribe_toggle_utility'),
+    path('subscribe/<uuid:token>/save-slack/', subscribe_save_slack, name='subscribe_save_slack'),
     path('subscribe/<uuid:token>/add-email/', subscribe_add_email, name='subscribe_add_email'),
     path('subscribe/<uuid:token>/remove-email/', subscribe_remove_email, name='subscribe_remove_email'),
 ]

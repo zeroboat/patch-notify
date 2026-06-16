@@ -202,6 +202,36 @@ def preview_email(request):
 
 @require_POST
 @role_required()
+def preview_patchnote_email(request):
+    """패치노트 구독 이메일 미리보기 — 샘플 데이터로 렌더링"""
+    from types import SimpleNamespace
+
+    def _item(text):
+        return SimpleNamespace(content=f'<p style="margin:0 0 4px 0;">• {text}</p>')
+
+    sample_note = SimpleNamespace(
+        version='1.2.3',
+        release_date='2025-01-15',
+    )
+    notes_data = [{
+        'note': sample_note,
+        'is_new': True,
+        'features':     [_item('신규 API 지원'), _item('다크 모드 추가')],
+        'improvements': [_item('UI 반응 속도 개선'), _item('메모리 사용량 최적화')],
+        'bugfixes':     [_item('특정 환경에서 앱 크래시 수정')],
+        'remarks':      [],
+    }]
+
+    ctx = _build_template_context('', '', for_email=False)
+    ctx['product_label'] = 'AppSuit Android Library'
+    ctx['notes_data'] = notes_data
+
+    html = render_to_string('patchnote/email/patchnote_notification_email.html', ctx)
+    return HttpResponse(html)
+
+
+@require_POST
+@role_required()
 def get_recipients_preview(request):
     solution_ids = request.POST.getlist('solution_ids[]')
     if not solution_ids:

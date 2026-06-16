@@ -10,6 +10,13 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST, require_GET
 from django.views.generic import TemplateView
 
+import base64
+import os
+from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
@@ -214,7 +221,7 @@ def _send_internal_slack_notification(patch_note):
 
 
 def _send_slack_notifications(patch_note):
-    """발행 시 활성 Slack 구독자에게 최근 max_items건 패치노트 전송 (고객사용)"""
+    """발행 시 활성 Slack 구독자에게 해당 버전 패치노트 전송 (고객사용)"""
     try:
         from slack_sdk import WebClient
         from apps.slack_app.models import SlackWorkspace
@@ -317,30 +324,44 @@ def _send_email_notifications(patch_note):
             logger.warning('Gmail 설정 누락 — 이메일 발송 건너뜀')
             return
 
-        if not patch_note.product_id:
+        if not patch_note.product_id and not patch_note.utility_id:
             return
 
-        subs = (
-            Subscription.objects
-            .filter(
-                product=patch_note.product,
-                channel=Subscription.CHANNEL_EMAIL,
-                is_active=True,
+        if patch_note.utility_id:
+            from apps.subscriber.models import UtilitySubscription
+            util_subs = (
+                UtilitySubscription.objects
+                .filter(utility=patch_note.utility, is_active=True)
+                .select_related('customer')
             )
-            .select_related('customer')
-        )
+            if not util_subs.exists():
+                return
+            product_label = patch_note.utility.name
+            subject_str = f"[Patch Notify] {product_label} v{patch_note.version} 패치노트"
+            recipients = [(s.customer, None) for s in util_subs]
+            solution_ref = None
+        else:
+            subs = (
+                Subscription.objects
+                .filter(
+                    product=patch_note.product,
+                    channel=Subscription.CHANNEL_EMAIL,
+                    is_active=True,
+                )
+                .select_related('customer')
+            )
+            if not subs.exists():
+                return
+            solution_name = patch_note.subject.solution.name
+            product_label = f"{solution_name} {patch_note.subject_label}"
+            subject_str = f"[Patch Notify] {product_label} v{patch_note.version} 패치노트"
+            recipients = [(s.customer, s) for s in subs]
+            solution_ref = patch_note.subject.solution
 
-        if not subs.exists():
-            return
-
-        solution_name = patch_note.subject.solution.name
-        product_label = f"{solution_name} {patch_note.subject_label}"
-        subject_str = f"[Patch Notify] {product_label} v{patch_note.version} 패치노트"
-
-        for sub in subs:
+        for customer, sub in recipients:
             emails = list(
                 SubscriptionEmail.objects
-                .filter(customer=sub.customer)
+                .filter(customer=customer)
                 .values_list('email', flat=True)
             )
             if not emails:
@@ -348,10 +369,8 @@ def _send_email_notifications(patch_note):
 
             recent_notes = (
                 PatchNote.objects
-                .filter(product=patch_note.product, is_published=True)
+                .filter(id=patch_note.id)
                 .prefetch_related('features', 'improvements', 'bugfixes', 'remarks')
-                .order_by('-release_date', '-version')
-                [:sub.max_items]
             )
 
             notes_data = [
@@ -365,11 +384,33 @@ def _send_email_notifications(patch_note):
                 }
                 for n in recent_notes
             ]
+            from apps.notification.models import NoticeConfig
+            notice_cfg = NoticeConfig.get()
+
+            def _read_logo(logo_field):
+                if not logo_field:
+                    return None
+                try:
+                    path = os.path.join(settings.MEDIA_ROOT, str(logo_field))
+                    with open(path, 'rb') as f:
+                        return f.read()
+                except (FileNotFoundError, OSError):
+                    return None
+
+            upper_data = _read_logo(notice_cfg.upper_logo)
+            lower_data = _read_logo(notice_cfg.lower_logo)
+
             html_body = render_to_string(
                 'patchnote/email/patchnote_notification_email.html',
                 {
                     'product_label': product_label,
                     'notes_data': notes_data,
+                    'upper_logo_src': 'cid:upper_logo' if upper_data else '',
+                    'upper_logo_width': notice_cfg.upper_logo_width,
+                    'lower_logo_src': 'cid:lower_logo' if lower_data else '',
+                    'lower_logo_width': notice_cfg.lower_logo_width,
+                    'header_color': notice_cfg.header_color,
+                    'footer_text': notice_cfg.footer_text,
                 },
             )
             text_body = strip_tags(html_body)
@@ -385,30 +426,44 @@ def _send_email_notifications(patch_note):
                     username=cfg.gmail_user,
                     password=cfg.gmail_app_password,
                 )
-                msg = EmailMultiAlternatives(
-                    subject=subject_str,
-                    body=text_body,
-                    from_email=cfg.gmail_user,
-                    to=emails,
-                    connection=connection,
-                )
-                msg.attach_alternative(html_body, 'text/html')
-                msg.send(fail_silently=False)
+
+                msg_related = MIMEMultipart('related')
+                msg_related['Subject'] = subject_str
+                msg_related['From'] = cfg.gmail_user
+                msg_related['To'] = ', '.join(emails)
+
+                msg_alternative = MIMEMultipart('alternative')
+                msg_alternative.attach(MIMEText(text_body, 'plain', 'utf-8'))
+                msg_alternative.attach(MIMEText(html_body, 'html', 'utf-8'))
+                msg_related.attach(msg_alternative)
+
+                for cid, data in [('upper_logo', upper_data), ('lower_logo', lower_data)]:
+                    if data:
+                        img = MIMEImage(data)
+                        img.add_header('Content-ID', f'<{cid}>')
+                        img.add_header('Content-Disposition', 'inline')
+                        msg_related.attach(img)
+
+                import smtplib
+                with smtplib.SMTP('smtp.gmail.com', 587) as smtp:
+                    smtp.starttls()
+                    smtp.login(cfg.gmail_user, cfg.gmail_app_password)
+                    smtp.sendmail(cfg.gmail_user, emails, msg_related.as_string())
                 _log_dispatch(
                     channel=DispatchLog.CHANNEL_EMAIL,
-                    customer=sub.customer,
-                    solution=patch_note.subject.solution,
+                    customer=customer,
+                    solution=solution_ref,
                     recipient=', '.join(emails),
                     subject=subject_str,
                     status=DispatchLog.STATUS_SUCCESS,
                     sent_at=sent_at,
                 )
             except Exception as e:
-                logger.warning(f'이메일 발송 실패 (customer={sub.customer.name}): {e}')
+                logger.warning(f'이메일 발송 실패 (customer={customer.name}): {e}')
                 _log_dispatch(
                     channel=DispatchLog.CHANNEL_EMAIL,
-                    customer=sub.customer,
-                    solution=patch_note.subject.solution,
+                    customer=customer,
+                    solution=solution_ref,
                     recipient=', '.join(emails),
                     subject=subject_str,
                     status=DispatchLog.STATUS_FAILED,

@@ -100,8 +100,17 @@
     <!-- 미리보기 -->
     <div class="col-12 col-xl-7">
       <div class="card h-100">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <h6 class="mb-0">미리보기</h6>
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div class="btn-group btn-group-sm" role="group">
+            <input type="radio" class="btn-check" name="previewMode" id="modeNotice" value="notice" checked>
+            <label class="btn btn-outline-secondary" for="modeNotice">
+              <i class="bx bx-mail-send me-1"></i>공문
+            </label>
+            <input type="radio" class="btn-check" name="previewMode" id="modePatchnote" value="patchnote">
+            <label class="btn btn-outline-secondary" for="modePatchnote">
+              <i class="bx bx-code-block me-1"></i>패치노트
+            </label>
+          </div>
           <div class="d-flex gap-2">
             <button class="btn btn-sm btn-outline-secondary" id="refreshPreview">
               <i class="bx bx-refresh me-1"></i>새로고침
@@ -122,7 +131,7 @@
 
 <!-- 크게 보기 모달 -->
 <div class="modal fade" id="previewModal" tabindex="-1">
-  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+  <div class="modal-dialog modal-xl">
     <div class="modal-content">
       <div class="modal-header py-2">
         <h6 class="modal-title">공문 미리보기</h6>
@@ -150,17 +159,31 @@
 
   // 미리보기 새로고침
   document.getElementById('refreshPreview').addEventListener('click', loadPreview);
+  document.querySelectorAll('[name=previewMode]').forEach(function (el) {
+    el.addEventListener('change', loadPreview);
+  });
+
+  function currentMode() {
+    return document.querySelector('[name=previewMode]:checked').value;
+  }
 
   function loadPreview() {
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
     const fd = new FormData();
-    fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-    fd.append('subject', '(공문 제목 미리보기)');
-    fd.append('body', '<p>공문 본문 내용이 이 위치에 표시됩니다.</p><p>이메일 레이아웃과 로고, 색상, 하단 문구를 확인하세요.</p>');
-    fetch("{% url 'notification:preview_email' %}", { method: 'POST', body: fd })
+    fd.append('csrfmiddlewaretoken', csrf);
+
+    let url;
+    if (currentMode() === 'patchnote') {
+      url = "{% url 'notification:preview_patchnote_email' %}";
+    } else {
+      url = "{% url 'notification:preview_email' %}";
+      fd.append('subject', '(공문 제목 미리보기)');
+      fd.append('body', '<p>공문 본문 내용이 이 위치에 표시됩니다.</p><p>이메일 레이아웃과 로고, 색상, 하단 문구를 확인하세요.</p>');
+    }
+
+    fetch(url, { method: 'POST', body: fd })
       .then(r => r.text())
-      .then(html => {
-        previewFrame.srcdoc = html;
-      });
+      .then(html => { previewFrame.srcdoc = html; });
   }
 
   // 폼 저장
@@ -200,6 +223,8 @@
   document.getElementById('previewModal').addEventListener('show.bs.modal', () => {
     const src = previewFrame.srcdoc;
     if (src) document.getElementById('previewModalFrame').srcdoc = src;
+    document.querySelector('#previewModal .modal-title').textContent =
+      currentMode() === 'patchnote' ? '패치노트 이메일 미리보기' : '공문 미리보기';
   });
 
   loadPreview();

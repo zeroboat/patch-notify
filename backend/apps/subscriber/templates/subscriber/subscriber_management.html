@@ -82,7 +82,7 @@
         </thead>
         <tbody>
           {% for row in customer_rows %}
-          <tr data-email-count="{{ row.email_subs|length }}" data-slack-count="{{ row.slack_subs|length }}">
+          <tr data-email-count="{{ row.email_total }}" data-slack-count="{{ row.slack_total }}">
             <td class="fw-semibold align-middle">{{ row.name }}</td>
             <td class="align-middle">
               {% if row.email_subs %}
@@ -99,6 +99,18 @@
               {% else %}
                 <span class="text-muted small">0 / {{ row.solutions_count }}</span>
               {% endif %}
+              {% if row.utility_subs %}
+              <div class="dropdown mt-1">
+                <a href="#" class="dropdown-toggle text-decoration-none" data-bs-toggle="dropdown" aria-expanded="false">
+                  <span class="badge bg-label-danger" style="font-size:.7rem;">유틸 {{ row.utility_subs|length }}</span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-sm">
+                  {% for util_name in row.utility_subs %}
+                  <li><span class="dropdown-item-text small py-1">{{ util_name }}</span></li>
+                  {% endfor %}
+                </ul>
+              </div>
+              {% endif %}
             </td>
             <td class="align-middle">
               {% if row.slack_subs %}
@@ -114,6 +126,18 @@
               </div>
               {% else %}
                 <span class="text-muted small">0 / {{ row.solutions_count }}</span>
+              {% endif %}
+              {% if row.utility_slack_subs %}
+              <div class="dropdown mt-1">
+                <a href="#" class="dropdown-toggle text-decoration-none" data-bs-toggle="dropdown" aria-expanded="false">
+                  <span class="badge bg-label-success" style="font-size:.7rem;">유틸 {{ row.utility_slack_subs|length }}</span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-sm">
+                  {% for util_name in row.utility_slack_subs %}
+                  <li><span class="dropdown-item-text small py-1">{{ util_name }}</span></li>
+                  {% endfor %}
+                </ul>
+              </div>
               {% endif %}
             </td>
             <td class="text-center align-middle">
@@ -144,6 +168,7 @@
                 data-customer-name="{{ row.name }}"
                 data-token-exists="{{ row.token.exists|yesno:'true,false' }}"
                 data-token-value="{{ row.token.token|default:'' }}"
+                data-token-url="{{ row.token.url|default:'' }}"
                 data-token-expires="{{ row.token.expires_at|default:'' }}"
                 data-token-expired="{{ row.token.is_expired|yesno:'true,false' }}"
                 title="구독 링크 관리"
@@ -381,6 +406,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const customerName = this.dataset.customerName;
       const tokenExists = this.dataset.tokenExists === 'true';
       const tokenValue = this.dataset.tokenValue;
+      const tokenUrl = this.dataset.tokenUrl;
       const tokenExpires = this.dataset.tokenExpires;
       const tokenExpired = this.dataset.tokenExpired === 'true';
 
@@ -398,7 +424,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const btnIssueLabel = document.getElementById('btnIssueLabel');
 
       if (tokenExists && !tokenExpired) {
-        const subscribeUrl = window.location.origin + '/subscriber/subscribe/' + tokenValue + '/';
+        const subscribeUrl = tokenUrl || (window.location.origin + '/subscriber/subscribe/' + tokenValue + '/');
         statusArea.innerHTML =
           '<div class="mb-1 small"><i class="bx bx-check-circle me-1 text-success"></i>발행됨 · 만료: ' + tokenExpires + '</div>'
           + '<div class="input-group input-group-sm">'
@@ -620,10 +646,6 @@ document.addEventListener('DOMContentLoaded', function () {
         html += '</div>';
         html += '</div>';
         html += '<div class="channel-settings ps-4 ' + (emailActive ? '' : 'd-none') + '" data-channel="email">';
-        html += '<div class="row g-2 align-items-center">';
-        html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">최대 건수</label></div>';
-        html += '<div class="col-auto">' + buildSelect('email_max_items', maxItemsOptions, prod.email.max_items) + '</div>';
-        html += '</div>';
         html += '</div>';
         html += '</div>';
 
@@ -643,10 +665,6 @@ document.addEventListener('DOMContentLoaded', function () {
         html += '<div class="mb-2">';
         html += '<input type="text" class="form-control form-control-sm" name="slack_channel"';
         html += ' placeholder="#channel-name" value="' + (prod.slack.slack_channel || '') + '">';
-        html += '</div>';
-        html += '<div class="row g-2 align-items-center">';
-        html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">최대 건수</label></div>';
-        html += '<div class="col-auto">' + buildSelect('slack_max_items', maxItemsOptions, prod.slack.max_items) + '</div>';
         html += '</div>';
         html += '</div>';
         html += '</div>';
@@ -701,9 +719,7 @@ document.addEventListener('DOMContentLoaded', function () {
       customer_id: customerId,
       product_id: productId,
       email_active: emailToggle.checked ? 'true' : 'false',
-      email_max_items: emailSettings.querySelector('[name="email_max_items"]').value,
       slack_active: slackToggle.checked ? 'true' : 'false',
-      slack_max_items: slackSettings.querySelector('[name="slack_max_items"]').value,
       slack_channel: slackSettings.querySelector('[name="slack_channel"]').value,
     });
 
@@ -755,13 +771,23 @@ document.addEventListener('DOMContentLoaded', function () {
       });
       const emailArr = [...emailSols];
       const slackArr = [...slackSols];
-      const total = emailArr.length + slackArr.length;
+      const utilEmailArr = data.utility_email_subs || [];
+      const utilSlackArr = data.utility_slack_subs || [];
 
-      row.dataset.emailCount = emailArr.length;
-      row.dataset.slackCount = slackArr.length;
+      const emailTotal = emailArr.length + utilEmailArr.length;
+      const slackTotal = slackArr.length + utilSlackArr.length;
+      const total = emailTotal + slackTotal;
 
-      row.querySelector('td:nth-child(2)').innerHTML = buildSubCell(emailArr, totalSols, 'danger');
-      row.querySelector('td:nth-child(3)').innerHTML = buildSubCell(slackArr, totalSols, 'success');
+      row.dataset.emailCount = emailTotal;
+      row.dataset.slackCount = slackTotal;
+
+      function buildUtilBadge(arr, color) {
+        if (!arr.length) return '';
+        return '<span class="badge bg-label-' + color + '" style="font-size:.7rem;" title="' + arr.join(', ') + '">유틸 ' + arr.length + '</span>';
+      }
+
+      row.querySelector('td:nth-child(2)').innerHTML = buildSubCell(emailArr, totalSols, 'danger') + buildUtilBadge(utilEmailArr, 'danger');
+      row.querySelector('td:nth-child(3)').innerHTML = buildSubCell(slackArr, totalSols, 'success') + buildUtilBadge(utilSlackArr, 'success');
       row.querySelector('td:nth-child(4)').innerHTML = total > 0
         ? '<span class="badge bg-primary rounded-pill">' + total + '</span>'
         : '<span class="text-muted small">0</span>';

@@ -31,6 +31,24 @@
     .form-switch .form-check-input:checked { background-color: #7367f0; border-color: #7367f0; }
     .footer-note { text-align: center; font-size: .75rem; color: #bbb; margin-top: 12px; }
     .expiry-badge { display: inline-flex; align-items: center; gap: 4px; font-size: .75rem; padding: 3px 10px; border-radius: 20px; margin-bottom: 10px; }
+    /* 채널 탭 */
+    .channel-tabs { margin-bottom: 20px; border-bottom: 2px solid #e9ecef; }
+    .channel-tabs .nav-link { border: none; border-bottom: 2px solid transparent; margin-bottom: -2px; padding: 10px 18px; font-size: .9rem; font-weight: 500; color: #6c757d; background: none; }
+    .channel-tabs .nav-link.active { color: #7367f0; border-bottom-color: #7367f0; }
+    /* Slack 탭 */
+    .slack-sol-card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 20px; overflow: hidden; }
+    .slack-sol-header { padding: 14px 20px 10px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; gap: 8px; }
+    .slack-sol-header .sol-title { font-size: .9rem; font-weight: 700; flex: 1; }
+    .slack-channel-wrap { padding: 14px 20px; border-bottom: 1px solid #f0f0f0; }
+    .slack-channel-wrap label { font-size: .78rem; font-weight: 600; margin-bottom: 4px; display: block; }
+    .slack-products-wrap { padding: 12px 20px; }
+    .slack-products-wrap label { font-size: .78rem; font-weight: 600; margin-bottom: 8px; display: block; }
+    .slack-prod-list { display: flex; flex-direction: column; gap: 8px; }
+    .slack-prod-item { display: flex; align-items: center; gap: 8px; font-size: .875rem; }
+    .slack-save-row { padding: 12px 20px; border-top: 1px solid #f0f0f0; background: #fafafa; display: flex; align-items: center; gap: 10px; }
+    .save-status { font-size: .78rem; }
+    .save-status.ok { color: #28a745; }
+    .save-status.err { color: #dc3545; }
   </style>
 </head>
 <body>
@@ -52,84 +70,212 @@
     {% endif %}
   </div>
 
-  {% csrf_token %}
   <input type="hidden" id="csrfToken" value="{{ csrf_token }}">
   <input type="hidden" id="tokenVal" value="{{ token }}">
 
-  <!-- 솔루션 Gmail 구독 -->
-  <div class="section-card">
-    <div class="section-header">
-      <h6><i class="bi bi-envelope-check me-1 text-danger"></i>Gmail 알림 구독</h6>
-      <p>패치노트 발행 시 이메일 알림을 받을 솔루션을 선택하세요.</p>
+  {% if has_slack %}
+  <!-- 채널 탭 네비게이션 -->
+  <ul class="nav channel-tabs">
+    <li class="nav-item">
+      <button class="nav-link active" data-tab="gmail">
+        <i class="bi bi-envelope me-1"></i>Gmail
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-tab="slack">
+        <i class="bi bi-slack me-1"></i>Slack
+      </button>
+    </li>
+  </ul>
+  {% endif %}
+
+  <!-- Gmail 탭 콘텐츠 -->
+  <div id="tab-gmail">
+
+    <!-- 솔루션 Gmail 구독 -->
+    <div class="section-card">
+      <div class="section-header">
+        <h6><i class="bi bi-envelope-check me-1 text-danger"></i>Gmail 알림 구독</h6>
+        <p>패치노트 발행 시 이메일 알림을 받을 솔루션을 선택하세요.</p>
+      </div>
+      {% if solutions %}
+        {% for sol in solutions %}
+        <div class="sol-row">
+          <div class="sol-name">{{ sol.name }}</div>
+          <div class="form-check form-switch mb-0">
+            <input
+              class="form-check-input sol-toggle"
+              type="checkbox"
+              role="switch"
+              data-solution-id="{{ sol.id }}"
+              {% if sol.active %}checked{% endif %}
+            >
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-msg">구독 가능한 솔루션이 없습니다.</div>
+      {% endif %}
     </div>
-    {% if solutions %}
-      {% for sol in solutions %}
+
+    <!-- 유틸리티 Gmail 구독 -->
+    {% if utilities %}
+    <div class="section-card">
+      <div class="section-header">
+        <h6><i class="bi bi-tools me-1 text-success"></i>유틸리티 알림 구독</h6>
+        <p>패치노트 발행 시 이메일 알림을 받을 유틸리티를 선택하세요.</p>
+      </div>
+      {% for u in utilities %}
       <div class="sol-row">
-        <div class="sol-name">{{ sol.name }}</div>
+        <div>
+          <div class="sol-name">{{ u.name }}</div>
+          <div class="email-name">{{ u.platform }}</div>
+        </div>
         <div class="form-check form-switch mb-0">
           <input
-            class="form-check-input sol-toggle"
+            class="form-check-input util-toggle"
             type="checkbox"
             role="switch"
-            data-solution-id="{{ sol.id }}"
-            {% if sol.active %}checked{% endif %}
+            data-utility-id="{{ u.id }}"
+            {% if u.active %}checked{% endif %}
           >
         </div>
       </div>
       {% endfor %}
-    {% else %}
-      <div class="empty-msg">구독 가능한 솔루션이 없습니다.</div>
+    </div>
     {% endif %}
-  </div>
 
-  <!-- 수신 이메일 관리 -->
-  <div class="section-card">
-    <div class="section-header">
-      <h6><i class="bi bi-people me-1 text-primary"></i>수신 이메일 주소</h6>
-      <p>알림을 받을 이메일 주소를 관리합니다.</p>
-    </div>
-
-    <div id="emailList">
-      {% for e in emails %}
-      <div class="email-row" id="email-row-{{ e.id }}">
-        <i class="bi bi-envelope text-secondary" style="font-size:1rem;flex-shrink:0;"></i>
-        <div class="email-info">
-          <div class="email-addr">{{ e.email }}</div>
-          {% if e.name %}<div class="email-name">{{ e.name }}</div>{% endif %}
-        </div>
-        <button
-          class="btn btn-sm btn-outline-danger btn-remove-email"
-          data-email-id="{{ e.id }}"
-          title="삭제"
-          style="padding:3px 8px;"
-        >
-          <i class="bi bi-trash3" style="font-size:.8rem;"></i>
-        </button>
+    <!-- 수신 이메일 관리 -->
+    <div class="section-card">
+      <div class="section-header">
+        <h6><i class="bi bi-people me-1 text-primary"></i>수신 이메일 주소</h6>
+        <p>알림을 받을 이메일 주소를 관리합니다.</p>
       </div>
-      {% empty %}
-      <div class="empty-msg" id="emptyEmailMsg">등록된 이메일이 없습니다.</div>
-      {% endfor %}
-    </div>
 
-    <div class="add-form">
-      <div class="row g-2 align-items-end">
-        <div class="col-12 col-sm">
-          <label class="form-label form-label-sm mb-1" style="font-size:.78rem;font-weight:600;">이메일 <span class="text-danger">*</span></label>
-          <input type="email" id="newEmail" class="form-control form-control-sm" placeholder="example@company.com">
-        </div>
-        <div class="col-12 col-sm">
-          <label class="form-label form-label-sm mb-1" style="font-size:.78rem;font-weight:600;">담당자명</label>
-          <input type="text" id="newName" class="form-control form-control-sm" placeholder="홍길동">
-        </div>
-        <div class="col-auto">
-          <button type="button" class="btn btn-sm btn-primary" id="btnAddEmail">
-            <i class="bi bi-plus-lg"></i> 추가
+      <div id="emailList">
+        {% for e in emails %}
+        <div class="email-row" id="email-row-{{ e.id }}">
+          <i class="bi bi-envelope text-secondary" style="font-size:1rem;flex-shrink:0;"></i>
+          <div class="email-info">
+            <div class="email-addr">{{ e.email }}</div>
+            {% if e.name %}<div class="email-name">{{ e.name }}</div>{% endif %}
+          </div>
+          <button
+            class="btn btn-sm btn-outline-danger btn-remove-email"
+            data-email-id="{{ e.id }}"
+            title="삭제"
+            style="padding:3px 8px;"
+          >
+            <i class="bi bi-trash3" style="font-size:.8rem;"></i>
           </button>
         </div>
+        {% empty %}
+        <div class="empty-msg" id="emptyEmailMsg">등록된 이메일이 없습니다.</div>
+        {% endfor %}
       </div>
-      <div id="addEmailError" class="text-danger mt-1 d-none" style="font-size:.78rem;"></div>
+
+      <div class="add-form">
+        <div class="row g-2 align-items-end">
+          <div class="col-12 col-sm">
+            <label class="form-label form-label-sm mb-1" style="font-size:.78rem;font-weight:600;">이메일 <span class="text-danger">*</span></label>
+            <input type="email" id="newEmail" class="form-control form-control-sm" placeholder="example@company.com">
+          </div>
+          <div class="col-12 col-sm">
+            <label class="form-label form-label-sm mb-1" style="font-size:.78rem;font-weight:600;">담당자명</label>
+            <input type="text" id="newName" class="form-control form-control-sm" placeholder="홍길동">
+          </div>
+          <div class="col-auto">
+            <button type="button" class="btn btn-sm btn-primary" id="btnAddEmail">
+              <i class="bi bi-plus-lg"></i> 추가
+            </button>
+          </div>
+        </div>
+        <div id="addEmailError" class="text-danger mt-1 d-none" style="font-size:.78rem;"></div>
+      </div>
     </div>
-  </div>
+
+  </div><!-- /tab-gmail -->
+
+  {% if has_slack %}
+  <!-- Slack 탭 콘텐츠 -->
+  <div id="tab-slack" style="display:none;">
+    <p style="font-size:.82rem;color:#888;margin-bottom:16px;">
+      <i class="bi bi-info-circle me-1"></i>
+      Slack 채널 ID(예: <code>C01234ABCDE</code>)를 입력하고 알림을 받을 제품을 선택하세요.
+      채널 ID는 Slack에서 채널명을 우클릭 → '채널 세부 정보 보기'에서 확인할 수 있습니다.
+    </p>
+
+    {% if slack_solutions %}
+      {% for sol in slack_solutions %}
+      <div class="slack-sol-card" data-solution-id="{{ sol.id }}">
+        <div class="slack-sol-header">
+          <i class="bi bi-grid-3x3-gap text-secondary"></i>
+          <span class="sol-title">{{ sol.name }}</span>
+        </div>
+        <div class="slack-channel-wrap">
+          <label>Slack 채널 ID</label>
+          <input type="text" class="form-control form-control-sm slack-channel-input"
+            placeholder="예: C01234ABCDE"
+            value="{{ sol.channel }}"
+            style="font-family:monospace;max-width:300px;">
+        </div>
+        {% if sol.products %}
+        <div class="slack-products-wrap">
+          <label>알림 받을 제품</label>
+          <div class="slack-prod-list">
+            {% for prod in sol.products %}
+            <label class="slack-prod-item">
+              <input type="checkbox" class="form-check-input slack-prod-check"
+                data-product-id="{{ prod.id }}"
+                {% if prod.active %}checked{% endif %}
+                style="width:1em;height:1em;margin:0;flex-shrink:0;">
+              <span>{{ prod.label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+        <div class="slack-save-row">
+          <button class="btn btn-sm btn-primary btn-slack-save">저장</button>
+          <span class="save-status"></span>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="section-card">
+        <div class="empty-msg">구독 가능한 솔루션이 없습니다.</div>
+      </div>
+    {% endif %}
+
+    {% if slack_utilities %}
+    <p style="font-size:.78rem;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.04em;margin:24px 0 10px;">유틸리티</p>
+    {% for u in slack_utilities %}
+    <div class="slack-sol-card slack-util-card" data-utility-id="{{ u.id }}">
+      <div class="slack-sol-header">
+        <i class="bi bi-tools text-secondary"></i>
+        <span class="sol-title">{{ u.name }}</span>
+        <span style="font-size:.75rem;color:#aaa;">{{ u.platform }}</span>
+        <div class="form-check form-switch mb-0 ms-auto">
+          <input class="form-check-input slack-util-active" type="checkbox" role="switch"
+            {% if u.active %}checked{% endif %}>
+        </div>
+      </div>
+      <div class="slack-channel-wrap">
+        <label>Slack 채널 ID</label>
+        <input type="text" class="form-control form-control-sm slack-util-channel"
+          placeholder="예: C01234ABCDE"
+          value="{{ u.channel }}"
+          style="font-family:monospace;max-width:300px;">
+      </div>
+      <div class="slack-save-row">
+        <button class="btn btn-sm btn-primary btn-slack-util-save">저장</button>
+        <span class="save-status"></span>
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+  </div><!-- /tab-slack -->
+  {% endif %}
 
   <p class="footer-note">변경사항은 즉시 저장됩니다.</p>
 </div>
@@ -139,7 +285,7 @@
 (function () {
   const CSRF = document.getElementById('csrfToken').value;
   const TOKEN = document.getElementById('tokenVal').value;
-  const BASE = '/subscriber/subscribe/' + TOKEN + '/';
+  const BASE = window.location.pathname.replace(/\/?$/, '/');
 
   function post(path, data) {
     return fetch(BASE + path, {
@@ -155,12 +301,24 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  // 탭 전환
+  document.querySelectorAll('.channel-tabs .nav-link').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.channel-tabs .nav-link').forEach(function (b) { b.classList.remove('active'); });
+      this.classList.add('active');
+      var tab = this.dataset.tab;
+      document.getElementById('tab-gmail').style.display = (tab === 'gmail') ? '' : 'none';
+      var slackTab = document.getElementById('tab-slack');
+      if (slackTab) slackTab.style.display = (tab === 'slack') ? '' : 'none';
+    });
+  });
+
   // 솔루션 구독 토글
   document.querySelectorAll('.sol-toggle').forEach(function (el) {
     el.addEventListener('change', function () {
-      const toggle = this;
-      const solId = toggle.dataset.solutionId;
-      const enabled = toggle.checked;
+      var toggle = this;
+      var solId = toggle.dataset.solutionId;
+      var enabled = toggle.checked;
       toggle.disabled = true;
       post('toggle-solution/', { solution_id: solId, enabled: enabled ? 'true' : 'false' })
         .then(function (d) {
@@ -173,15 +331,15 @@
 
   // 이메일 삭제
   document.getElementById('emailList').addEventListener('click', function (e) {
-    const btn = e.target.closest('.btn-remove-email');
+    var btn = e.target.closest('.btn-remove-email');
     if (!btn) return;
     if (!confirm('이 이메일을 삭제하시겠습니까?')) return;
-    const emailId = btn.dataset.emailId;
+    var emailId = btn.dataset.emailId;
     btn.disabled = true;
     post('remove-email/', { email_id: emailId })
       .then(function (d) {
         if (d.ok) {
-          const row = document.getElementById('email-row-' + emailId);
+          var row = document.getElementById('email-row-' + emailId);
           if (row) row.remove();
           if (!document.querySelector('#emailList .email-row')) {
             document.getElementById('emailList').insertAdjacentHTML(
@@ -199,9 +357,9 @@
 
   // 이메일 추가
   document.getElementById('btnAddEmail').addEventListener('click', function () {
-    const email = document.getElementById('newEmail').value.trim();
-    const name = document.getElementById('newName').value.trim();
-    const errEl = document.getElementById('addEmailError');
+    var email = document.getElementById('newEmail').value.trim();
+    var name = document.getElementById('newName').value.trim();
+    var errEl = document.getElementById('addEmailError');
     errEl.classList.add('d-none');
 
     if (!email) {
@@ -210,15 +368,15 @@
       return;
     }
 
-    const btn = this;
+    var btn = this;
     btn.disabled = true;
     post('add-email/', { email: email, name: name })
       .then(function (d) {
         if (d.ok) {
-          const empty = document.getElementById('emptyEmailMsg');
+          var empty = document.getElementById('emptyEmailMsg');
           if (empty) empty.remove();
 
-          const html =
+          var html =
             '<div class="email-row" id="email-row-' + d.id + '">'
             + '<i class="bi bi-envelope text-secondary" style="font-size:1rem;flex-shrink:0;"></i>'
             + '<div class="email-info">'
@@ -242,6 +400,107 @@
         errEl.classList.remove('d-none');
       })
       .finally(function () { btn.disabled = false; });
+  });
+
+  // 유틸리티 구독 토글
+  document.querySelectorAll('.util-toggle').forEach(function (el) {
+    el.addEventListener('change', function () {
+      var toggle = this;
+      var utilId = toggle.dataset.utilityId;
+      var enabled = toggle.checked;
+      toggle.disabled = true;
+      post('toggle-utility/', { utility_id: utilId, enabled: enabled ? 'true' : 'false' })
+        .then(function (d) {
+          if (!d.ok) { toggle.checked = !enabled; alert(d.error); }
+        })
+        .catch(function () { toggle.checked = !enabled; alert('오류가 발생했습니다.'); })
+        .finally(function () { toggle.disabled = false; });
+    });
+  });
+
+  // Slack 솔루션별 저장
+  document.querySelectorAll('.slack-sol-card').forEach(function (card) {
+    var saveBtn = card.querySelector('.btn-slack-save');
+    if (!saveBtn) return;
+    saveBtn.addEventListener('click', function () {
+      var solId = card.dataset.solutionId;
+      var channel = (card.querySelector('.slack-channel-input').value || '').trim();
+      var productIds = [];
+      card.querySelectorAll('.slack-prod-check:checked').forEach(function (cb) {
+        productIds.push(cb.dataset.productId);
+      });
+      var statusEl = card.querySelector('.save-status');
+      statusEl.textContent = '';
+      statusEl.className = 'save-status';
+      saveBtn.disabled = true;
+
+      var params = new URLSearchParams();
+      params.append('solution_id', solId);
+      params.append('channel', channel);
+      productIds.forEach(function (id) { params.append('product_ids[]', id); });
+
+      fetch(BASE + 'save-slack/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.ok) {
+            statusEl.textContent = '저장되었습니다.';
+            statusEl.className = 'save-status ok';
+          } else {
+            statusEl.textContent = d.error || '저장에 실패했습니다.';
+            statusEl.className = 'save-status err';
+          }
+        })
+        .catch(function () {
+          statusEl.textContent = '오류가 발생했습니다.';
+          statusEl.className = 'save-status err';
+        })
+        .finally(function () { saveBtn.disabled = false; });
+    });
+  });
+
+  // Slack 유틸리티별 저장
+  document.querySelectorAll('.slack-util-card').forEach(function (card) {
+    var saveBtn = card.querySelector('.btn-slack-util-save');
+    if (!saveBtn) return;
+    saveBtn.addEventListener('click', function () {
+      var utilId = card.dataset.utilityId;
+      var channel = (card.querySelector('.slack-util-channel').value || '').trim();
+      var isActive = card.querySelector('.slack-util-active').checked;
+      var statusEl = card.querySelector('.save-status');
+      statusEl.textContent = '';
+      statusEl.className = 'save-status';
+      saveBtn.disabled = true;
+
+      var params = new URLSearchParams();
+      params.append('utility_id', utilId);
+      params.append('channel', channel);
+      params.append('is_active', isActive ? 'true' : 'false');
+
+      fetch(BASE + 'save-slack/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.ok) {
+            statusEl.textContent = '저장되었습니다.';
+            statusEl.className = 'save-status ok';
+          } else {
+            statusEl.textContent = d.error || '저장에 실패했습니다.';
+            statusEl.className = 'save-status err';
+          }
+        })
+        .catch(function () {
+          statusEl.textContent = '오류가 발생했습니다.';
+          statusEl.className = 'save-status err';
+        })
+        .finally(function () { saveBtn.disabled = false; });
+    });
   });
 
   // Enter 키로 이메일 추가
