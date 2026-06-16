@@ -3,7 +3,7 @@ SQLAlchemy Table 정의 — Django가 관리하는 테이블을 그대로 사용
 마이그레이션은 Django 쪽에서만 수행하며 여기서는 읽기/쓰기만 담당.
 """
 from sqlalchemy import (
-    Table, Column, Integer, String, Boolean, DateTime, MetaData, ForeignKey
+    Table, Column, Integer, String, Boolean, DateTime, MetaData, ForeignKey, Text
 )
 
 metadata = MetaData()
@@ -28,7 +28,6 @@ subscription = Table(
     Column('product_id', Integer, ForeignKey('product_product.id')),
     Column('channel', String),                                   # email / slack
     Column('is_active', Boolean),
-    Column('max_items', Integer),
     Column('slack_channel', String, nullable=True),
     Column('created_at', DateTime(timezone=True)),
     Column('updated_at', DateTime(timezone=True)),
@@ -53,7 +52,8 @@ product = Table(
 patchnote = Table(
     'patchnote_patchnote', metadata,
     Column('id', Integer, primary_key=True),
-    Column('product_id', Integer, ForeignKey('product_product.id')),
+    Column('product_id', Integer, ForeignKey('product_product.id'), nullable=True),
+    Column('utility_id', Integer, ForeignKey('product_utility.id'), nullable=True),
     Column('version', String),
     Column('release_date', String),
     Column('is_published', Boolean, default=False),
@@ -102,7 +102,7 @@ customer = Table(
 )
 
 customer_email = Table(
-    'customer_customeremail', metadata,
+    'subscriber_subscriptionemail', metadata,
     Column('id', Integer, primary_key=True),
     Column('customer_id', Integer, ForeignKey('customer_customer.id')),
     Column('email', String),
@@ -115,4 +115,38 @@ customer_solutions = Table(
     Column('id', Integer, primary_key=True),
     Column('customer_id', Integer, ForeignKey('customer_customer.id')),
     Column('solution_id', Integer, ForeignKey('product_solution.id')),
+)
+
+utility = Table(
+    'product_utility', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('name', String),
+    Column('platform', String),
+    Column('order', Integer),
+)
+
+utility_subscription = Table(
+    'subscriber_utilitysubscription', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('customer_id', Integer, ForeignKey('customer_customer.id')),
+    Column('utility_id', Integer, ForeignKey('product_utility.id')),
+    Column('is_active', Boolean),
+    Column('slack_channel', String, nullable=True),
+    Column('created_at', DateTime(timezone=True)),
+)
+
+customer_subscription_token = Table(
+    'subscriber_customersubscriptiontoken', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('customer_id', Integer, ForeignKey('customer_customer.id')),
+    Column('token', Text),
+    Column('url', String, nullable=True),
+    Column('expires_at', DateTime(timezone=True)),
+)
+
+site_config = Table(
+    'config_siteconfig', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('subscribe_base_url', String),
+    Column('patchnote_url', String, nullable=True),
 )

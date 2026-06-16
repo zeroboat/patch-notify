@@ -221,7 +221,7 @@ def _send_internal_slack_notification(patch_note):
 
 
 def _send_slack_notifications(patch_note):
-    """발행 시 활성 Slack 구독자에게 최근 max_items건 패치노트 전송 (고객사용)"""
+    """발행 시 활성 Slack 구독자에게 해당 버전 패치노트 전송 (고객사용)"""
     try:
         from slack_sdk import WebClient
         from apps.slack_app.models import SlackWorkspace
@@ -324,30 +324,44 @@ def _send_email_notifications(patch_note):
             logger.warning('Gmail 설정 누락 — 이메일 발송 건너뜀')
             return
 
-        if not patch_note.product_id:
+        if not patch_note.product_id and not patch_note.utility_id:
             return
 
-        subs = (
-            Subscription.objects
-            .filter(
-                product=patch_note.product,
-                channel=Subscription.CHANNEL_EMAIL,
-                is_active=True,
+        if patch_note.utility_id:
+            from apps.subscriber.models import UtilitySubscription
+            util_subs = (
+                UtilitySubscription.objects
+                .filter(utility=patch_note.utility, is_active=True)
+                .select_related('customer')
             )
-            .select_related('customer')
-        )
+            if not util_subs.exists():
+                return
+            product_label = patch_note.utility.name
+            subject_str = f"[Patch Notify] {product_label} v{patch_note.version} 패치노트"
+            recipients = [(s.customer, None) for s in util_subs]
+            solution_ref = None
+        else:
+            subs = (
+                Subscription.objects
+                .filter(
+                    product=patch_note.product,
+                    channel=Subscription.CHANNEL_EMAIL,
+                    is_active=True,
+                )
+                .select_related('customer')
+            )
+            if not subs.exists():
+                return
+            solution_name = patch_note.subject.solution.name
+            product_label = f"{solution_name} {patch_note.subject_label}"
+            subject_str = f"[Patch Notify] {product_label} v{patch_note.version} 패치노트"
+            recipients = [(s.customer, s) for s in subs]
+            solution_ref = patch_note.subject.solution
 
-        if not subs.exists():
-            return
-
-        solution_name = patch_note.subject.solution.name
-        product_label = f"{solution_name} {patch_note.subject_label}"
-        subject_str = f"[Patch Notify] {product_label} v{patch_note.version} 패치노트"
-
-        for sub in subs:
+        for customer, sub in recipients:
             emails = list(
                 SubscriptionEmail.objects
-                .filter(customer=sub.customer)
+                .filter(customer=customer)
                 .values_list('email', flat=True)
             )
             if not emails:
@@ -355,10 +369,8 @@ def _send_email_notifications(patch_note):
 
             recent_notes = (
                 PatchNote.objects
-                .filter(product=patch_note.product, is_published=True)
+                .filter(id=patch_note.id)
                 .prefetch_related('features', 'improvements', 'bugfixes', 'remarks')
-                .order_by('-release_date', '-version')
-                [:sub.max_items]
             )
 
             notes_data = [
@@ -439,19 +451,19 @@ def _send_email_notifications(patch_note):
                     smtp.sendmail(cfg.gmail_user, emails, msg_related.as_string())
                 _log_dispatch(
                     channel=DispatchLog.CHANNEL_EMAIL,
-                    customer=sub.customer,
-                    solution=patch_note.subject.solution,
+                    customer=customer,
+                    solution=solution_ref,
                     recipient=', '.join(emails),
                     subject=subject_str,
                     status=DispatchLog.STATUS_SUCCESS,
                     sent_at=sent_at,
                 )
             except Exception as e:
-                logger.warning(f'이메일 발송 실패 (customer={sub.customer.name}): {e}')
+                logger.warning(f'이메일 발송 실패 (customer={customer.name}): {e}')
                 _log_dispatch(
                     channel=DispatchLog.CHANNEL_EMAIL,
-                    customer=sub.customer,
-                    solution=patch_note.subject.solution,
+                    customer=customer,
+                    solution=solution_ref,
                     recipient=', '.join(emails),
                     subject=subject_str,
                     status=DispatchLog.STATUS_FAILED,

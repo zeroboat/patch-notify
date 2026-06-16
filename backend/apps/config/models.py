@@ -29,6 +29,18 @@ class SiteConfig(models.Model):
         max_length=200, default='/patch-notify/media', verbose_name='Nextcloud 업로드 경로'
     )
 
+    # 패치노트 전체 조회 URL (Slack 홈탭 링크용)
+    patchnote_url = models.CharField(
+        max_length=300, blank=True, verbose_name='패치노트 조회 URL',
+        help_text='Slack 홈탭에 표시할 전체 패치노트 조회 페이지 URL',
+    )
+
+    # 구독 페이지 URL (외부 발송 링크 + Slack 버튼용)
+    subscribe_base_url = models.CharField(
+        max_length=300, blank=True, verbose_name='구독 페이지 URL',
+        help_text='토큰 UUID 바로 앞까지의 URL. 예: https://yourdomain.com/subscriber/subscribe/  →  최종 URL: {입력값}{token}/',
+    )
+
     # 사내 Slack 알림 (발행 시 즉시, Internal 항목 포함)
     internal_slack_enabled = models.BooleanField(default=False, verbose_name='사내 Slack 알림 활성화')
 
