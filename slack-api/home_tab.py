@@ -12,6 +12,8 @@ def html_to_mrkdwn(html: str) -> str:
     # bold / code 먼저 변환
     html = re.sub(r'<(strong|b)[^>]*>(.+?)</(strong|b)>', r'*\2*', html, flags=re.DOTALL)
     html = re.sub(r'<code[^>]*>(.+?)</code>', r'`\1`', html, flags=re.DOTALL)
+    # Slack mrkdwn은 닫는 * 바로 뒤에 비공백 문자가 오면 bold로 인식하지 않음 → 공백 삽입
+    html = re.sub(r'(\*[^*]+\*)(\S)', r'\1 \2', html)
 
     result = []
     ul_depth = 0
