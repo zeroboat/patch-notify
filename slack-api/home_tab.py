@@ -24,10 +24,8 @@ def html_to_mrkdwn(html: str) -> str:
             if tag in ('ul', 'ol'):
                 ul_depth = max(0, ul_depth + (-1 if closing else 1))
             elif tag == 'li' and not closing:
-                _bullets = ['•', '◦', '▸', '▹']
-                bullet = _bullets[min(ul_depth - 1, len(_bullets) - 1)]
                 indent = '    ' * (ul_depth - 1)
-                result.append(f'\n{indent}{bullet} ')
+                result.append(f'\n{indent}- ')
             elif tag == 'br':
                 result.append('\n')
             elif tag in ('p', 'div') and closing:

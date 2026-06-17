@@ -37,7 +37,7 @@ def _html_to_plain(html: str) -> str:
     """HTML → 줄바꿈 보존 plain text (Slack mrkdwn용, <ul> 깊이 기반 들여쓰기)"""
     if not html:
         return ''
-    # bold / code 먼저 변환
+    # bold / code 변환 (코드블록 내 plain text용 — mrkdwn 렌더링 없음)
     html = re.sub(r'<(strong|b)[^>]*>(.+?)</(strong|b)>', r'*\2*', html, flags=re.DOTALL)
     html = re.sub(r'<code[^>]*>(.+?)</code>', r'`\1`', html, flags=re.DOTALL)
 
@@ -67,7 +67,7 @@ def _html_to_plain(html: str) -> str:
 
 
 def _html_to_slack_mrkdwn(html: str) -> str:
-    """HTML → Slack mrkdwn。<a> 태그를 <url|text> 형식으로 보존한 뒤 _html_to_plain 적용."""
+    """HTML → Slack mrkdwn (remarks/internal용 — bold·bullet 렌더링 적용)."""
     if not html:
         return ''
     links: dict[str, str] = {}
@@ -79,10 +79,38 @@ def _html_to_slack_mrkdwn(html: str) -> str:
         return key
 
     html = re.sub(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', _replace_link, html, flags=re.DOTALL)
-    text = _html_to_plain(html)
+
+    # bold 양쪽 공백 삽입 — 한국어 인접 문자에서도 Slack word boundary 보장
+    html = re.sub(r'<(strong|b)[^>]*>(.+?)</(strong|b)>', r' *\2* ', html, flags=re.DOTALL)
+    html = re.sub(r'<code[^>]*>(.+?)</code>', r'`\1`', html, flags=re.DOTALL)
+
+    result = []
+    ul_depth = 0
+    for token in re.split(r'(</?[a-zA-Z][^>]*>)', html):
+        if not token:
+            continue
+        m = re.match(r'^<(/?)(\w+)', token)
+        if m:
+            closing, tag = m.group(1), m.group(2).lower()
+            if tag in ('ul', 'ol'):
+                ul_depth = max(0, ul_depth + (-1 if closing else 1))
+            elif tag == 'li' and not closing:
+                indent = '    ' * (ul_depth - 1)
+                result.append(f'\n{indent}- ')
+            elif tag == 'br':
+                result.append('\n')
+            elif tag in ('p', 'div') and closing:
+                result.append('\n')
+        else:
+            token = token.replace('&nbsp;', ' ').replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+            result.append(token)
+
+    text = re.sub(r'\n{3,}', '\n\n', ''.join(result))
+    text = re.sub(r'(?<=\S)[ \t]{2,}', ' ', text)
+
     for key, val in links.items():
         text = text.replace(key, val)
-    return text
+    return text.lstrip('\n').rstrip()
 
 
 def _build_patchnote_slack_blocks(patch_note) -> list:
