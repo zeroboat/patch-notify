@@ -9,11 +9,9 @@ def html_to_mrkdwn(html: str) -> str:
     """HTML → Slack mrkdwn 변환 (<ul> 깊이 기반 들여쓰기)"""
     if not html:
         return ''
-    # bold / code 먼저 변환
-    html = re.sub(r'<(strong|b)[^>]*>(.+?)</(strong|b)>', r'*\2*', html, flags=re.DOTALL)
+    # bold / code 먼저 변환 — bold 양쪽에 공백을 넣어 Slack word boundary 보장
+    html = re.sub(r'<(strong|b)[^>]*>(.+?)</(strong|b)>', r' *\2* ', html, flags=re.DOTALL)
     html = re.sub(r'<code[^>]*>(.+?)</code>', r'`\1`', html, flags=re.DOTALL)
-    # Slack mrkdwn은 닫는 * 바로 뒤에 비공백 문자가 오면 bold로 인식하지 않음 → 공백 삽입
-    html = re.sub(r'(\*[^*]+\*)(\S)', r'\1 \2', html)
 
     result = []
     ul_depth = 0
@@ -26,7 +24,10 @@ def html_to_mrkdwn(html: str) -> str:
             if tag in ('ul', 'ol'):
                 ul_depth = max(0, ul_depth + (-1 if closing else 1))
             elif tag == 'li' and not closing:
-                result.append(f'\n{"  " * ul_depth}- ')
+                _bullets = ['•', '◦', '▸', '▹']
+                bullet = _bullets[min(ul_depth - 1, len(_bullets) - 1)]
+                indent = '    ' * (ul_depth - 1)
+                result.append(f'\n{indent}{bullet} ')
             elif tag == 'br':
                 result.append('\n')
             elif tag in ('p', 'div') and closing:
@@ -36,6 +37,7 @@ def html_to_mrkdwn(html: str) -> str:
             result.append(token)
 
     text = re.sub(r'\n{3,}', '\n\n', ''.join(result))
+    text = re.sub(r'(?<=\S)[ \t]{2,}', ' ', text)  # bold 공백 삽입으로 생긴 연속 공백 정리 (줄 앞 들여쓰기 유지)
     return text.lstrip('\n').rstrip()
 
 
