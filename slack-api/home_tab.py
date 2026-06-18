@@ -639,6 +639,152 @@ def _items_text(rows) -> str:
     return '\n'.join(html_to_mrkdwn(r.content) for r in rows)
 
 
+def _html_to_rich_text_elements(html: str) -> list:
+    """HTML → Slack rich_text block elements (bullet/ordered list, bold, code, link 지원)"""
+    if not html:
+        return []
+
+    _links = {}
+
+    def _strip_tags(s):
+        return re.sub(r'<[^>]+>', '', s)
+
+    def _sub_link(m):
+        k = f'\x00L{len(_links)}\x00'
+        t = _strip_tags(m.group(2)).strip() or m.group(1)
+        _links[k] = (m.group(1), t)
+        return k
+
+    html = re.sub(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', _sub_link, html, flags=re.DOTALL)
+
+    def _sub_md_link(m):
+        k = f'\x00L{len(_links)}\x00'
+        _links[k] = (m.group(2), m.group(1))
+        return k
+
+    html = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', _sub_md_link, html)
+
+    result = []
+    list_styles = []
+    li_stack = []
+    li_starts = []
+    pending = []
+    top_inlines = []
+    bold = 0
+    code = 0
+
+    def _dest():
+        return li_stack[-1] if li_stack else top_inlines
+
+    def _add_inline(text):
+        if not text:
+            return
+        elem = {'type': 'text', 'text': text}
+        s = {}
+        if bold: s['bold'] = True
+        if code: s['code'] = True
+        if s: elem['style'] = s
+        _dest().append(elem)
+
+    def _add_text(raw):
+        raw = raw.replace('&nbsp;', ' ').replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+        for p in re.split(r'(\x00L\d+\x00)', raw):
+            if not p:
+                continue
+            if p in _links:
+                url, text = _links[p]
+                elem = {'type': 'link', 'url': url, 'text': text}
+                if bold:
+                    elem['style'] = {'bold': True}
+                _dest().append(elem)
+            else:
+                p = p.strip('\n\r\t')
+                if p:
+                    _add_inline(p)
+
+    def _flush_top():
+        clean = [e for e in top_inlines if e]
+        if clean:
+            result.append({'type': 'rich_text_section', 'elements': clean})
+        top_inlines.clear()
+
+    def _flush_pending():
+        if not pending:
+            return
+        i = 0
+        while i < len(pending):
+            depth, style, elems = pending[i]
+            items = [elems]
+            j = i + 1
+            while j < len(pending) and pending[j][0] == depth and pending[j][1] == style:
+                items.append(pending[j][2])
+                j += 1
+            result.append({
+                'type': 'rich_text_list',
+                'style': style,
+                'indent': depth,
+                'elements': [{'type': 'rich_text_section', 'elements': e} for e in items],
+            })
+            i = j
+        pending.clear()
+
+    for token in re.split(r'(</?[a-zA-Z][^>]*>)', html):
+        if not token:
+            continue
+        m = re.match(r'^<(/?)(\w+)', token)
+        if not m:
+            _add_text(token)
+            continue
+        closing = m.group(1) == '/'
+        tag = m.group(2).lower()
+
+        if tag == 'ul' and not closing:
+            if not list_styles:
+                _flush_top()
+            list_styles.append('bullet')
+        elif tag == 'ol' and not closing:
+            if not list_styles:
+                _flush_top()
+            list_styles.append('ordered')
+        elif tag in ('ul', 'ol') and closing:
+            if list_styles:
+                list_styles.pop()
+            if not list_styles:
+                _flush_pending()
+        elif tag == 'li' and not closing:
+            li_stack.append([])
+            li_starts.append(len(pending))
+        elif tag == 'li' and closing:
+            if li_stack:
+                inlines = li_stack.pop()
+                start = li_starts.pop() if li_starts else len(pending)
+                if list_styles:
+                    clean = [e for e in inlines if e]
+                    if clean:
+                        pending.insert(start, (len(list_styles) - 1, list_styles[-1], clean))
+        elif tag in ('strong', 'b') and not closing:
+            bold += 1
+        elif tag in ('strong', 'b') and closing:
+            bold = max(0, bold - 1)
+        elif tag == 'code' and not closing:
+            code += 1
+        elif tag == 'code' and closing:
+            code = max(0, code - 1)
+        elif tag == 'br':
+            _dest().append({'type': 'text', 'text': '\n'})
+
+    _flush_pending()
+    _flush_top()
+    return result
+
+
+def _items_rich_text_elements(rows) -> list:
+    elements = []
+    for r in rows:
+        elements.extend(_html_to_rich_text_elements(r.content))
+    return elements
+
+
 def build_patchnote_blocks(db: Session, product_id: int, solution_name: str) -> list:
     """제품의 최근 3개 패치노트를 메시지 블록으로 반환"""
     product_row = db.execute(
@@ -680,19 +826,21 @@ def build_patchnote_blocks(db: Session, product_id: int, solution_name: str) -> 
             "text": {"type": "mrkdwn", "text": f"*Version: {note.version}*  ·  {note.release_date}"},
         })
 
-        sections = [
-            ("기능 추가", features),
-            ("기능 개선", improves),
-            ("버그 수정", bugfixes),
-        ]
-        if remarks:
-            sections.append(("Remarks", remarks))
+        body = (
+            f"[Patch Note]\n"
+            f"기능 추가\n{_items_text(features)}\n\n"
+            f"기능 개선\n{_items_text(improves)}\n\n"
+            f"버그 수정\n{_items_text(bugfixes)}"
+        )
+        if len(body) > 2990:
+            body = body[:2987] + "…"
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"```{body}```"}})
 
-        for section_title, rows in sections:
-            text = f"*{section_title}*\n{_items_text(rows)}"
-            if len(text) > 2990:
-                text = text[:2987] + "…"
-            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": text}})
+        if remarks:
+            rt_elements = _items_rich_text_elements(remarks)
+            if rt_elements:
+                blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "*Remarks*"}})
+                blocks.append({"type": "rich_text", "elements": rt_elements})
 
         blocks.append({"type": "divider"})
 
@@ -729,19 +877,21 @@ def build_utility_patchnote_blocks(db: Session, utility_id: int, utility_name: s
             "text": {"type": "mrkdwn", "text": f"*Version: {note.version}*  ·  {note.release_date}"},
         })
 
-        sections = [
-            ("기능 추가", features),
-            ("기능 개선", improves),
-            ("버그 수정", bugfixes),
-        ]
-        if remarks:
-            sections.append(("Remarks", remarks))
+        body = (
+            f"[Patch Note]\n"
+            f"기능 추가\n{_items_text(features)}\n\n"
+            f"기능 개선\n{_items_text(improves)}\n\n"
+            f"버그 수정\n{_items_text(bugfixes)}"
+        )
+        if len(body) > 2990:
+            body = body[:2987] + "…"
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"```{body}```"}})
 
-        for section_title, rows in sections:
-            text = f"*{section_title}*\n{_items_text(rows)}"
-            if len(text) > 2990:
-                text = text[:2987] + "…"
-            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": text}})
+        if remarks:
+            rt_elements = _items_rich_text_elements(remarks)
+            if rt_elements:
+                blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "*Remarks*"}})
+                blocks.append({"type": "rich_text", "elements": rt_elements})
 
         blocks.append({"type": "divider"})
 
