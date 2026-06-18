@@ -37,7 +37,7 @@ def _html_to_plain(html: str) -> str:
     """HTML → 줄바꿈 보존 plain text (Slack mrkdwn용, <ul> 깊이 기반 들여쓰기)"""
     if not html:
         return ''
-    # bold / code 먼저 변환
+    # bold / code 변환 (코드블록 내 plain text용 — mrkdwn 렌더링 없음)
     html = re.sub(r'<(strong|b)[^>]*>(.+?)</(strong|b)>', r'*\2*', html, flags=re.DOTALL)
     html = re.sub(r'<code[^>]*>(.+?)</code>', r'`\1`', html, flags=re.DOTALL)
 
@@ -67,7 +67,7 @@ def _html_to_plain(html: str) -> str:
 
 
 def _html_to_slack_mrkdwn(html: str) -> str:
-    """HTML → Slack mrkdwn。<a> 태그를 <url|text> 형식으로 보존한 뒤 _html_to_plain 적용."""
+    """HTML → Slack mrkdwn (remarks/internal용 — bold·bullet 렌더링 적용)."""
     if not html:
         return ''
     links: dict[str, str] = {}
@@ -79,10 +79,174 @@ def _html_to_slack_mrkdwn(html: str) -> str:
         return key
 
     html = re.sub(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', _replace_link, html, flags=re.DOTALL)
-    text = _html_to_plain(html)
+
+    # bold 양쪽 공백 삽입 — 한국어 인접 문자에서도 Slack word boundary 보장
+    html = re.sub(r'<(strong|b)[^>]*>(.+?)</(strong|b)>', r' *\2* ', html, flags=re.DOTALL)
+    html = re.sub(r'<code[^>]*>(.+?)</code>', r'`\1`', html, flags=re.DOTALL)
+
+    result = []
+    ul_depth = 0
+    for token in re.split(r'(</?[a-zA-Z][^>]*>)', html):
+        if not token:
+            continue
+        m = re.match(r'^<(/?)(\w+)', token)
+        if m:
+            closing, tag = m.group(1), m.group(2).lower()
+            if tag in ('ul', 'ol'):
+                ul_depth = max(0, ul_depth + (-1 if closing else 1))
+            elif tag == 'li' and not closing:
+                indent = '    ' * (ul_depth - 1)
+                result.append(f'\n{indent}- ')
+            elif tag == 'br':
+                result.append('\n')
+            elif tag in ('p', 'div') and closing:
+                result.append('\n')
+        else:
+            token = token.replace('&nbsp;', ' ').replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+            result.append(token)
+
+    text = re.sub(r'\n{3,}', '\n\n', ''.join(result))
+    text = re.sub(r'(?<=\S)[ \t]{2,}', ' ', text)
+
     for key, val in links.items():
         text = text.replace(key, val)
-    return text
+    return text.lstrip('\n').rstrip()
+
+
+def _html_to_rich_text_elements(html: str) -> list:
+    """HTML → Slack rich_text block elements (bullet/ordered list, bold, code, link 지원)"""
+    if not html:
+        return []
+
+    _links = {}
+
+    def _sub_link(m):
+        k = f'\x00L{len(_links)}\x00'
+        t = strip_tags(m.group(2)).strip() or m.group(1)
+        _links[k] = (m.group(1), t)
+        return k
+
+    html = re.sub(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', _sub_link, html, flags=re.DOTALL)
+
+    def _sub_md_link(m):
+        k = f'\x00L{len(_links)}\x00'
+        _links[k] = (m.group(2), m.group(1))
+        return k
+
+    html = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', _sub_md_link, html)
+
+    result = []
+    list_styles = []   # 현재 열린 <ul>/<ol> 스타일 스택
+    li_stack = []      # 각 <li>의 inline elements 스택
+    li_starts = []     # pending 삽입 위치 스택 (중첩 정렬용)
+    pending = []       # [(depth, style, [inline_elems])]
+    top_inlines = []   # 리스트 밖 텍스트
+    bold = 0
+    code = 0
+
+    def _dest():
+        return li_stack[-1] if li_stack else top_inlines
+
+    def _add_inline(text):
+        if not text:
+            return
+        elem = {'type': 'text', 'text': text}
+        s = {}
+        if bold: s['bold'] = True
+        if code: s['code'] = True
+        if s: elem['style'] = s
+        _dest().append(elem)
+
+    def _add_text(raw):
+        raw = raw.replace('&nbsp;', ' ').replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+        for p in re.split(r'(\x00L\d+\x00)', raw):
+            if not p:
+                continue
+            if p in _links:
+                url, text = _links[p]
+                elem = {'type': 'link', 'url': url, 'text': text}
+                if bold:
+                    elem['style'] = {'bold': True}
+                _dest().append(elem)
+            else:
+                p = p.strip('\n\r\t')
+                if p:
+                    _add_inline(p)
+
+    def _flush_top():
+        clean = [e for e in top_inlines if e]
+        if clean:
+            result.append({'type': 'rich_text_section', 'elements': clean})
+        top_inlines.clear()
+
+    def _flush_pending():
+        if not pending:
+            return
+        i = 0
+        while i < len(pending):
+            depth, style, elems = pending[i]
+            items = [elems]
+            j = i + 1
+            while j < len(pending) and pending[j][0] == depth and pending[j][1] == style:
+                items.append(pending[j][2])
+                j += 1
+            result.append({
+                'type': 'rich_text_list',
+                'style': style,
+                'indent': depth,
+                'elements': [{'type': 'rich_text_section', 'elements': e} for e in items],
+            })
+            i = j
+        pending.clear()
+
+    for token in re.split(r'(</?[a-zA-Z][^>]*>)', html):
+        if not token:
+            continue
+        m = re.match(r'^<(/?)(\w+)', token)
+        if not m:
+            _add_text(token)
+            continue
+        closing = m.group(1) == '/'
+        tag = m.group(2).lower()
+
+        if tag == 'ul' and not closing:
+            if not list_styles:
+                _flush_top()
+            list_styles.append('bullet')
+        elif tag == 'ol' and not closing:
+            if not list_styles:
+                _flush_top()
+            list_styles.append('ordered')
+        elif tag in ('ul', 'ol') and closing:
+            if list_styles:
+                list_styles.pop()
+            if not list_styles:
+                _flush_pending()
+        elif tag == 'li' and not closing:
+            li_stack.append([])
+            li_starts.append(len(pending))
+        elif tag == 'li' and closing:
+            if li_stack:
+                inlines = li_stack.pop()
+                start = li_starts.pop() if li_starts else len(pending)
+                if list_styles:
+                    clean = [e for e in inlines if e]
+                    if clean:
+                        pending.insert(start, (len(list_styles) - 1, list_styles[-1], clean))
+        elif tag in ('strong', 'b') and not closing:
+            bold += 1
+        elif tag in ('strong', 'b') and closing:
+            bold = max(0, bold - 1)
+        elif tag == 'code' and not closing:
+            code += 1
+        elif tag == 'code' and closing:
+            code = max(0, code - 1)
+        elif tag == 'br':
+            _dest().append({'type': 'text', 'text': '\n'})
+
+    _flush_pending()
+    _flush_top()
+    return result
 
 
 def _build_patchnote_slack_blocks(patch_note) -> list:
@@ -117,15 +281,15 @@ def _build_patchnote_slack_blocks(patch_note) -> list:
 
     remarks_obj = patch_note.remarks.filter(parent__isnull=True).order_by('order', 'id').first()
     if remarks_obj and remarks_obj.content:
-        remarks_text = _html_to_slack_mrkdwn(remarks_obj.content)
-        if remarks_text:
+        rt_elements = _html_to_rich_text_elements(remarks_obj.content)
+        if rt_elements:
             blocks.append({
                 "type": "section",
                 "text": {"type": "mrkdwn", "text": "*Remarks*"},
             })
             blocks.append({
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": remarks_text},
+                "type": "rich_text",
+                "elements": rt_elements,
             })
 
     blocks.append({"type": "divider"})
@@ -133,12 +297,12 @@ def _build_patchnote_slack_blocks(patch_note) -> list:
 
 
 def _build_internal_slack_blocks(patch_note) -> list:
-    """Internal 섹션 블록 — codeblock 없이 mrkdwn으로 렌더링, 링크 클릭 가능."""
+    """Internal 섹션 블록 — rich_text 블록으로 렌더링, bullet/bold/link 지원."""
     internal_obj = patch_note.internals.filter(parent__isnull=True).order_by('order', 'id').first()
     if not internal_obj or not internal_obj.content:
         return []
-    internal_text = _html_to_slack_mrkdwn(internal_obj.content)
-    if not internal_text:
+    rt_elements = _html_to_rich_text_elements(internal_obj.content)
+    if not rt_elements:
         return []
     return [
         {
@@ -146,8 +310,8 @@ def _build_internal_slack_blocks(patch_note) -> list:
             "text": {"type": "mrkdwn", "text": "*Internal · 사내 공유 전용*"},
         },
         {
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": internal_text},
+            "type": "rich_text",
+            "elements": rt_elements,
         },
         {"type": "divider"},
     ]
