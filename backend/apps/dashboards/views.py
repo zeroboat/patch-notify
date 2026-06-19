@@ -30,12 +30,12 @@ class DashboardsView(LoginRequiredMixin, TemplateView):
             .order_by('order', 'id')
         )
 
-        # 제품·유틸리티별 최신 패치노트 1건씩 (최대 5개)
+        # 제품·유틸리티별 최신 패치노트 1건씩 (전체)
         candidate_qs = (
             PatchNote.objects
             .select_related('product__solution', 'utility')
             .prefetch_related('features', 'improvements', 'bugfixes', 'remarks')
-            .order_by('-release_date', '-id')[:100]
+            .order_by('-release_date', '-id')
         )
         seen, recent_patches = set(), []
         for patch in candidate_qs:
@@ -54,8 +54,6 @@ class DashboardsView(LoginRequiredMixin, TemplateView):
                 categories.append('특이사항')
             patch.categories = categories
             recent_patches.append(patch)
-            if len(recent_patches) >= 5:
-                break
 
         # 이메일 미등록 고객사
         no_email_customers = (
@@ -66,6 +64,15 @@ class DashboardsView(LoginRequiredMixin, TemplateView):
             .order_by('name')
         )
 
+        # 미발행 패치노트
+        unpublished_patches = (
+            PatchNote.objects
+            .filter(is_published=False)
+            .select_related('product__solution', 'utility')
+            .order_by('-updated_at', '-id')
+        )
+        unpublished_count = unpublished_patches.count()
+
         context.update({
             'total_customers': total_customers,
             'total_solutions': total_solutions,
@@ -74,6 +81,8 @@ class DashboardsView(LoginRequiredMixin, TemplateView):
             'solutions_with_customers': solutions_with_customers,
             'recent_patches': recent_patches,
             'no_email_customers': no_email_customers,
+            'unpublished_patches': unpublished_patches,
+            'unpublished_count': unpublished_count,
             'current_month': now.strftime('%Y년 %m월'),
         })
         return context
