@@ -29,6 +29,10 @@ class SiteConfigAdmin(admin.ModelAdmin):
             'fields': ('external_send_delay_minutes',),
             'description': '발행 후 고객사 발송까지 지연 시간을 분 단위로 설정합니다. 0이면 즉시 발송됩니다.',
         }),
+        ('구독 페이지', {
+            'fields': ('subscribe_base_url', 'patchnote_url'),
+            'description': '고객사 구독 링크 및 Slack Home Tab 🌐 버튼에 사용할 URL을 입력하세요. 토큰 UUID 앞까지 입력 (예: https://yourdomain.com/subscriber/subscribe/). 미설정 시 서버 내부 주소로 대체되며 Slack 버튼은 숨겨집니다.',
+        }),
     )
 
     def has_add_permission(self, request):

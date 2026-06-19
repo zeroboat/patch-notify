@@ -18,7 +18,7 @@
   <div class="row g-4 mb-4">
 
     <!-- 전체 고객사 -->
-    <div class="col-6 col-xl-3">
+    <div class="col-6 col-xl">
       <div class="card h-100">
         <div class="card-body d-flex align-items-center gap-3">
           <div class="avatar avatar-md flex-shrink-0">
@@ -38,7 +38,7 @@
     </div>
 
     <!-- 전체 솔루션 -->
-    <div class="col-6 col-xl-3">
+    <div class="col-6 col-xl">
       <div class="card h-100">
         <div class="card-body d-flex align-items-center gap-3">
           <div class="avatar avatar-md flex-shrink-0">
@@ -58,7 +58,7 @@
     </div>
 
     <!-- 이번 달 패치노트 -->
-    <div class="col-6 col-xl-3">
+    <div class="col-6 col-xl">
       <div class="card h-100">
         <div class="card-body d-flex align-items-center gap-3">
           <div class="avatar avatar-md flex-shrink-0">
@@ -77,9 +77,36 @@
       </div>
     </div>
 
+    <!-- 미발행 패치노트 -->
+    <div class="col-6 col-xl">
+      <a href="#unpublished-patches" class="text-decoration-none" style="{% if unpublished_count == 0 %}pointer-events:none;{% endif %}">
+      <div class="card h-100 {% if unpublished_count > 0 %}border border-warning{% endif %}" style="{% if unpublished_count > 0 %}cursor:pointer;{% endif %}">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="avatar avatar-md flex-shrink-0">
+            <span class="avatar-initial rounded {% if unpublished_count > 0 %}bg-label-warning{% else %}bg-label-secondary{% endif %}">
+              <i class="bx bx-time fs-4"></i>
+            </span>
+          </div>
+          <div>
+            <p class="mb-0 small text-muted">미발행 패치노트</p>
+            <h4 class="mb-0 fw-bold {% if unpublished_count > 0 %}text-warning{% endif %}">{{ unpublished_count }}</h4>
+          </div>
+        </div>
+        <div class="card-footer pt-0 pb-3 px-4">
+          {% if unpublished_count > 0 %}
+          <span class="small text-warning"><i class="bx bx-error-circle me-1"></i>발행 대기 중 →</span>
+          {% else %}
+          <span class="small text-muted">모든 패치노트 발행 완료</span>
+          {% endif %}
+        </div>
+      </div>
+      </a>
+    </div>
+
     <!-- 이메일 미등록 고객사 -->
-    <div class="col-6 col-xl-3">
-      <div class="card h-100 {% if no_email_count > 0 %}border border-warning{% endif %}">
+    <div class="col-6 col-xl">
+      <a href="#no-email-customers" class="text-decoration-none" style="{% if no_email_count == 0 %}pointer-events:none;{% endif %}">
+      <div class="card h-100 {% if no_email_count > 0 %}border border-warning{% endif %}" style="{% if no_email_count > 0 %}cursor:pointer;{% endif %}">
         <div class="card-body d-flex align-items-center gap-3">
           <div class="avatar avatar-md flex-shrink-0">
             <span class="avatar-initial rounded {% if no_email_count > 0 %}bg-label-warning{% else %}bg-label-secondary{% endif %}">
@@ -93,12 +120,13 @@
         </div>
         <div class="card-footer pt-0 pb-3 px-4">
           {% if no_email_count > 0 %}
-          <span class="small text-warning"><i class="bx bx-error-circle me-1"></i>공문 발송 누락 주의</span>
+          <span class="small text-warning"><i class="bx bx-error-circle me-1"></i>공문 발송 누락 주의 →</span>
           {% else %}
           <span class="small text-muted">모든 고객사 이메일 등록됨</span>
           {% endif %}
         </div>
       </div>
+      </a>
     </div>
 
   </div>
@@ -152,7 +180,7 @@
         <div class="card-header d-flex justify-content-between align-items-center">
           <h5 class="mb-0">최근 패치노트</h5>
         </div>
-        <div class="card-body p-0">
+        <div class="card-body p-0" style="max-height:480px; overflow-y:auto;">
           {% if recent_patches %}
           <ul class="list-group list-group-flush">
             {% for patch in recent_patches %}
@@ -175,6 +203,11 @@
                   </div>
                   <div class="fw-semibold mb-1">v{{ patch.version }}</div>
                   <div class="d-flex gap-1 flex-wrap">
+                    {% if patch.is_published %}
+                      <span class="badge bg-label-success" style="font-size:0.7rem;">발행</span>
+                    {% else %}
+                      <span class="badge bg-label-warning" style="font-size:0.7rem;">미발행</span>
+                    {% endif %}
                     {% for cat in patch.categories %}
                       {% if cat == '기능 추가' %}
                         <span class="badge bg-label-success" style="font-size:0.7rem;">🚀 기능 추가</span>
@@ -207,7 +240,7 @@
 
   <!-- ── 이메일 미등록 고객사 ───────────────────────────── -->
   {% if no_email_customers %}
-  <div class="row">
+  <div class="row" id="no-email-customers">
     <div class="col-12">
       <div class="card border border-warning">
         <div class="card-header d-flex align-items-center gap-2">
@@ -232,6 +265,49 @@
               </div>
               <a href="{% url 'customer:customer_management' %}" class="btn btn-sm btn-outline-warning">
                 <i class="bx bx-envelope-plus me-1"></i>이메일 등록
+              </a>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── 미발행 패치노트 ───────────────────────────────── -->
+  {% if unpublished_patches %}
+  <div class="row mt-4" id="unpublished-patches">
+    <div class="col-12">
+      <div class="card border border-warning">
+        <div class="card-header d-flex align-items-center gap-2">
+          <i class="bx bx-time text-warning fs-5"></i>
+          <h5 class="mb-0">미발행 패치노트</h5>
+          <span class="badge bg-warning ms-1">{{ unpublished_count }}</span>
+          <span class="text-muted small ms-2">— 아직 발행되지 않은 패치노트 목록입니다.</span>
+        </div>
+        <div class="card-body p-0">
+          <ul class="list-group list-group-flush">
+            {% for patch in unpublished_patches %}
+            <li class="list-group-item px-4 py-3 d-flex justify-content-between align-items-center">
+              <div class="d-flex align-items-center gap-3">
+                {% if patch.product %}
+                <i class="bx {{ patch.product.solution.icon|default:'bx-layer' }} text-primary"></i>
+                <div>
+                  <div class="fw-medium">{{ patch.product.solution.name }} · {{ patch.product.get_platform_display }} {{ patch.product.get_category_display }}</div>
+                  <div class="small text-muted">v{{ patch.version }} <span class="ms-2">릴리즈일: {{ patch.release_date|date:"Y.m.d" }}</span></div>
+                </div>
+                {% else %}
+                <i class="bx bx-wrench text-warning"></i>
+                <div>
+                  <div class="fw-medium">{{ patch.utility.name }} · {{ patch.utility.get_platform_display }}</div>
+                  <div class="small text-muted">v{{ patch.version }} <span class="ms-2">릴리즈일: {{ patch.release_date|date:"Y.m.d" }}</span></div>
+                </div>
+                {% endif %}
+              </div>
+              <a href="{% if patch.product %}{% url 'patchnote:product_patch_detail' patch.product.id %}{% else %}{% url 'patchnote:utility_patch_detail' patch.utility.id %}{% endif %}"
+                 class="btn btn-sm btn-outline-warning">
+                <i class="bx bx-pencil me-1"></i>발행하기
               </a>
             </li>
             {% endfor %}

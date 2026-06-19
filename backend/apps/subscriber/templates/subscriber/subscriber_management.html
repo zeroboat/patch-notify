@@ -82,7 +82,7 @@
         </thead>
         <tbody>
           {% for row in customer_rows %}
-          <tr data-email-count="{{ row.email_subs|length }}" data-slack-count="{{ row.slack_subs|length }}">
+          <tr data-email-count="{{ row.email_total }}" data-slack-count="{{ row.slack_total }}">
             <td class="fw-semibold align-middle">{{ row.name }}</td>
             <td class="align-middle">
               {% if row.email_subs %}
@@ -99,6 +99,18 @@
               {% else %}
                 <span class="text-muted small">0 / {{ row.solutions_count }}</span>
               {% endif %}
+              {% if row.utility_subs %}
+              <div class="dropdown mt-1">
+                <a href="#" class="dropdown-toggle text-decoration-none" data-bs-toggle="dropdown" aria-expanded="false">
+                  <span class="badge bg-label-danger" style="font-size:.7rem;">유틸 {{ row.utility_subs|length }}</span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-sm">
+                  {% for util_name in row.utility_subs %}
+                  <li><span class="dropdown-item-text small py-1">{{ util_name }}</span></li>
+                  {% endfor %}
+                </ul>
+              </div>
+              {% endif %}
             </td>
             <td class="align-middle">
               {% if row.slack_subs %}
@@ -114,6 +126,18 @@
               </div>
               {% else %}
                 <span class="text-muted small">0 / {{ row.solutions_count }}</span>
+              {% endif %}
+              {% if row.utility_slack_subs %}
+              <div class="dropdown mt-1">
+                <a href="#" class="dropdown-toggle text-decoration-none" data-bs-toggle="dropdown" aria-expanded="false">
+                  <span class="badge bg-label-success" style="font-size:.7rem;">유틸 {{ row.utility_slack_subs|length }}</span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-sm">
+                  {% for util_name in row.utility_slack_subs %}
+                  <li><span class="dropdown-item-text small py-1">{{ util_name }}</span></li>
+                  {% endfor %}
+                </ul>
+              </div>
               {% endif %}
             </td>
             <td class="text-center align-middle">
@@ -144,11 +168,21 @@
                 data-customer-name="{{ row.name }}"
                 data-token-exists="{{ row.token.exists|yesno:'true,false' }}"
                 data-token-value="{{ row.token.token|default:'' }}"
+                data-token-url="{{ row.token.url|default:'' }}"
                 data-token-expires="{{ row.token.expires_at|default:'' }}"
                 data-token-expired="{{ row.token.is_expired|yesno:'true,false' }}"
                 title="구독 링크 관리"
               >
                 <i class="bx bx-link-alt"></i>
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-danger me-1 btn-open-emails"
+                data-customer-id="{{ row.id }}"
+                data-customer-name="{{ row.name }}"
+                title="수신 이메일 관리"
+              >
+                <i class="bx bx-envelope"></i>
               </button>
               <button
                 type="button"
@@ -207,6 +241,39 @@
   </div>
 </div>
 
+<!-- ── 수신 이메일 관리 모달 ──────────────────────────── -->
+<div class="modal fade" id="modalEmails" tabindex="-1" aria-labelledby="modalEmailsLabel">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalEmailsLabel">수신 이메일 관리</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body px-3 py-3">
+        <p class="text-muted small mb-3" id="emailsCustomerName"></p>
+        <div id="modalEmailList" class="mb-3" style="min-height:40px;">
+          <div class="text-center py-3"><div class="spinner-border spinner-border-sm text-muted"></div></div>
+        </div>
+        <hr class="my-2">
+        <div class="row g-2 align-items-end">
+          <div class="col">
+            <input type="email" id="modalEmailInput" class="form-control form-control-sm" placeholder="example@company.com">
+          </div>
+          <div class="col">
+            <input type="text" id="modalNameInput" class="form-control form-control-sm" placeholder="담당자명">
+          </div>
+          <div class="col-auto">
+            <button type="button" class="btn btn-sm btn-primary" id="btnModalAddEmail">
+              <i class="bx bx-plus"></i> 추가
+            </button>
+          </div>
+        </div>
+        <div id="modalEmailError" class="text-danger mt-1 d-none" style="font-size:.78rem;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── 구독 설정 오프캔버스 ──────────────────────────── -->
 <div
   class="offcanvas offcanvas-end"
@@ -249,12 +316,97 @@ document.addEventListener('DOMContentLoaded', function () {
   const modalTokenEl = document.getElementById('modalToken');
   const modalTokenInstance = new bootstrap.Modal(modalTokenEl);
 
+  // ── 수신 이메일 관리 모달 ─────────────────────────────
+  let emailsCustomerId = null;
+  const modalEmailsEl = document.getElementById('modalEmails');
+  const modalEmailsInstance = new bootstrap.Modal(modalEmailsEl);
+
+  document.querySelectorAll('.btn-open-emails').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      emailsCustomerId = this.dataset.customerId;
+      document.getElementById('emailsCustomerName').textContent = this.dataset.customerName;
+      document.getElementById('modalEmailInput').value = '';
+      document.getElementById('modalNameInput').value = '';
+      document.getElementById('modalEmailError').classList.add('d-none');
+      document.getElementById('modalEmailList').innerHTML =
+        '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-muted"></div></div>';
+      modalEmailsInstance.show();
+
+      fetch("{% url 'subscriber:get_subscriptions' customer_id=0 %}".replace('0', emailsCustomerId))
+        .then(r => r.json())
+        .then(function (data) {
+          const list = document.getElementById('modalEmailList');
+          if (!data.ok) { list.innerHTML = '<div class="text-danger small">' + data.error + '</div>'; return; }
+          const emails = data.subscription_emails || [];
+          list.innerHTML = emails.length
+            ? emails.map(buildEmailRow).join('')
+            : '<div class="text-muted small text-center py-2" id="modalEmailEmpty">등록된 이메일이 없습니다.</div>';
+        })
+        .catch(function () {
+          document.getElementById('modalEmailList').innerHTML = '<div class="text-danger small">불러오지 못했습니다.</div>';
+        });
+    });
+  });
+
+  document.getElementById('btnModalAddEmail').addEventListener('click', function () {
+    const emailVal = document.getElementById('modalEmailInput').value.trim();
+    const nameVal = document.getElementById('modalNameInput').value.trim();
+    const errEl = document.getElementById('modalEmailError');
+    errEl.classList.add('d-none');
+    if (!emailVal) { errEl.textContent = '이메일을 입력해주세요.'; errEl.classList.remove('d-none'); return; }
+    const btn = this;
+    btn.disabled = true;
+    fetch('/subscriber/subscription-emails/' + emailsCustomerId + '/add/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': realCsrf, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ email: emailVal, name: nameVal }).toString(),
+    }).then(r => r.json()).then(function (d) {
+      if (d.ok) {
+        const empty = document.getElementById('modalEmailEmpty');
+        if (empty) empty.remove();
+        document.getElementById('modalEmailList').insertAdjacentHTML('beforeend', buildEmailRow(d));
+        document.getElementById('modalEmailInput').value = '';
+        document.getElementById('modalNameInput').value = '';
+      } else {
+        errEl.textContent = d.error; errEl.classList.remove('d-none');
+      }
+    }).catch(function () { errEl.textContent = '오류가 발생했습니다.'; errEl.classList.remove('d-none'); })
+      .finally(function () { btn.disabled = false; });
+  });
+
+  document.getElementById('modalEmailInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') document.getElementById('btnModalAddEmail').click();
+  });
+
+  document.getElementById('modalEmailList').addEventListener('click', function (e) {
+    const btn = e.target.closest('.btn-del-sub-email');
+    if (!btn) return;
+    if (!confirm('이 이메일을 삭제하시겠습니까?')) return;
+    const emailId = btn.dataset.emailId;
+    btn.disabled = true;
+    fetch('/subscriber/subscription-emails/' + emailsCustomerId + '/remove/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': realCsrf, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ email_id: emailId }).toString(),
+    }).then(r => r.json()).then(function (d) {
+      if (d.ok) {
+        const row = document.getElementById('sub-email-row-' + emailId);
+        if (row) row.remove();
+        if (!document.querySelector('#modalEmailList .sub-email-row')) {
+          document.getElementById('modalEmailList').insertAdjacentHTML('beforeend',
+            '<div class="text-muted small text-center py-2" id="modalEmailEmpty">등록된 이메일이 없습니다.</div>');
+        }
+      } else { alert(d.error); btn.disabled = false; }
+    }).catch(function () { alert('오류가 발생했습니다.'); btn.disabled = false; });
+  });
+
   document.querySelectorAll('.btn-open-token').forEach(function (btn) {
     btn.addEventListener('click', function () {
       currentTokenCustomerId = this.dataset.customerId;
       const customerName = this.dataset.customerName;
       const tokenExists = this.dataset.tokenExists === 'true';
       const tokenValue = this.dataset.tokenValue;
+      const tokenUrl = this.dataset.tokenUrl;
       const tokenExpires = this.dataset.tokenExpires;
       const tokenExpired = this.dataset.tokenExpired === 'true';
 
@@ -272,7 +424,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const btnIssueLabel = document.getElementById('btnIssueLabel');
 
       if (tokenExists && !tokenExpired) {
-        const subscribeUrl = window.location.origin + '/subscriber/subscribe/' + tokenValue + '/';
+        const subscribeUrl = tokenUrl || (window.location.origin + '/subscriber/subscribe/' + tokenValue + '/');
         statusArea.innerHTML =
           '<div class="mb-1 small"><i class="bx bx-check-circle me-1 text-success"></i>발행됨 · 만료: ' + tokenExpires + '</div>'
           + '<div class="input-group input-group-sm">'
@@ -420,6 +572,23 @@ document.addEventListener('DOMContentLoaded', function () {
       + '</div>';
   }
 
+  // ── 구독 이메일 행 HTML 생성 헬퍼 ──────────────────
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function buildEmailRow(e) {
+    return '<div class="d-flex align-items-center gap-2 py-1 sub-email-row" id="sub-email-row-' + e.id + '">'
+      + '<i class="bx bx-envelope text-secondary" style="font-size:.95rem;flex-shrink:0;"></i>'
+      + '<div class="flex-grow-1 min-width-0" style="min-width:0;">'
+      + '<div class="small fw-medium text-truncate">' + escHtml(e.email) + '</div>'
+      + (e.name ? '<div style="font-size:.72rem;color:#888;">' + escHtml(e.name) + '</div>' : '')
+      + '</div>'
+      + '<button class="btn btn-sm btn-link text-danger p-0 btn-del-sub-email" data-email-id="' + e.id + '" title="삭제">'
+      + '<i class="bx bx-trash" style="font-size:.9rem;"></i></button>'
+      + '</div>';
+  }
+
   // ── MAX_ITEMS 선택지 ──────────────────
   const maxItemsOptions = [1, 2, 3, 5, 7, 10];
 
@@ -477,10 +646,6 @@ document.addEventListener('DOMContentLoaded', function () {
         html += '</div>';
         html += '</div>';
         html += '<div class="channel-settings ps-4 ' + (emailActive ? '' : 'd-none') + '" data-channel="email">';
-        html += '<div class="row g-2 align-items-center">';
-        html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">최대 건수</label></div>';
-        html += '<div class="col-auto">' + buildSelect('email_max_items', maxItemsOptions, prod.email.max_items) + '</div>';
-        html += '</div>';
         html += '</div>';
         html += '</div>';
 
@@ -500,10 +665,6 @@ document.addEventListener('DOMContentLoaded', function () {
         html += '<div class="mb-2">';
         html += '<input type="text" class="form-control form-control-sm" name="slack_channel"';
         html += ' placeholder="#channel-name" value="' + (prod.slack.slack_channel || '') + '">';
-        html += '</div>';
-        html += '<div class="row g-2 align-items-center">';
-        html += '<div class="col-auto"><label class="col-form-label col-form-label-sm text-muted">최대 건수</label></div>';
-        html += '<div class="col-auto">' + buildSelect('slack_max_items', maxItemsOptions, prod.slack.max_items) + '</div>';
         html += '</div>';
         html += '</div>';
         html += '</div>';
@@ -558,9 +719,7 @@ document.addEventListener('DOMContentLoaded', function () {
       customer_id: customerId,
       product_id: productId,
       email_active: emailToggle.checked ? 'true' : 'false',
-      email_max_items: emailSettings.querySelector('[name="email_max_items"]').value,
       slack_active: slackToggle.checked ? 'true' : 'false',
-      slack_max_items: slackSettings.querySelector('[name="slack_max_items"]').value,
       slack_channel: slackSettings.querySelector('[name="slack_channel"]').value,
     });
 
@@ -612,13 +771,23 @@ document.addEventListener('DOMContentLoaded', function () {
       });
       const emailArr = [...emailSols];
       const slackArr = [...slackSols];
-      const total = emailArr.length + slackArr.length;
+      const utilEmailArr = data.utility_email_subs || [];
+      const utilSlackArr = data.utility_slack_subs || [];
 
-      row.dataset.emailCount = emailArr.length;
-      row.dataset.slackCount = slackArr.length;
+      const emailTotal = emailArr.length + utilEmailArr.length;
+      const slackTotal = slackArr.length + utilSlackArr.length;
+      const total = emailTotal + slackTotal;
 
-      row.querySelector('td:nth-child(2)').innerHTML = buildSubCell(emailArr, totalSols, 'danger');
-      row.querySelector('td:nth-child(3)').innerHTML = buildSubCell(slackArr, totalSols, 'success');
+      row.dataset.emailCount = emailTotal;
+      row.dataset.slackCount = slackTotal;
+
+      function buildUtilBadge(arr, color) {
+        if (!arr.length) return '';
+        return '<span class="badge bg-label-' + color + '" style="font-size:.7rem;" title="' + arr.join(', ') + '">유틸 ' + arr.length + '</span>';
+      }
+
+      row.querySelector('td:nth-child(2)').innerHTML = buildSubCell(emailArr, totalSols, 'danger') + buildUtilBadge(utilEmailArr, 'danger');
+      row.querySelector('td:nth-child(3)').innerHTML = buildSubCell(slackArr, totalSols, 'success') + buildUtilBadge(utilSlackArr, 'success');
       row.querySelector('td:nth-child(4)').innerHTML = total > 0
         ? '<span class="badge bg-primary rounded-pill">' + total + '</span>'
         : '<span class="text-muted small">0</span>';

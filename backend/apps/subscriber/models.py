@@ -29,7 +29,6 @@ class Subscription(BaseModel):
     )
     channel = models.CharField(max_length=10, choices=CHANNEL_CHOICES, verbose_name="채널")
     is_active = models.BooleanField(default=True, verbose_name="활성화")
-    max_items = models.PositiveIntegerField(default=5, verbose_name="최대 건수")
     slack_channel = models.CharField(
         max_length=200,
         blank=True,
@@ -48,12 +47,59 @@ class Subscription(BaseModel):
         return f"{self.customer.name} · {self.product} · {self.get_channel_display()}"
 
 
+class SubscriptionEmail(models.Model):
+    customer = models.ForeignKey(
+        'customer.Customer', on_delete=models.CASCADE,
+        related_name='subscription_emails', verbose_name='고객사',
+    )
+    email = models.EmailField(verbose_name='이메일')
+    name = models.CharField(max_length=100, blank=True, verbose_name='담당자명')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = '구독 이메일'
+        verbose_name_plural = '구독 이메일 목록'
+        unique_together = ['customer', 'email']
+
+    def __str__(self):
+        return f"{self.customer.name} - {self.email}"
+
+
+class UtilitySubscription(models.Model):
+    customer = models.ForeignKey(
+        'customer.Customer', on_delete=models.CASCADE,
+        related_name='utility_subscriptions', verbose_name='고객사',
+    )
+    utility = models.ForeignKey(
+        'product.Utility', on_delete=models.CASCADE,
+        related_name='subscriptions', verbose_name='유틸리티',
+    )
+    is_active = models.BooleanField(default=True, verbose_name='활성화')
+    slack_channel = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        verbose_name="Slack 채널",
+        help_text="Slack 채널 ID",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = '유틸리티 구독'
+        verbose_name_plural = '유틸리티 구독 목록'
+        unique_together = ['customer', 'utility']
+
+    def __str__(self):
+        return f"{self.customer.name} - {self.utility.name}"
+
+
 class CustomerSubscriptionToken(models.Model):
     customer = models.OneToOneField(
         'customer.Customer', on_delete=models.CASCADE,
         related_name='subscription_token', verbose_name='고객사',
     )
     token = models.UUIDField(default=_uuid.uuid4, unique=True, editable=False)
+    url = models.CharField(max_length=500, blank=True, verbose_name='구독 페이지 URL')
     expires_at = models.DateTimeField(verbose_name='만료일시')
     created_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True,
