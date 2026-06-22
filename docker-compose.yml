@@ -33,6 +33,7 @@ services:
       - notion_md_data:/app/notion_md
       - patchnote_files:/app/media/patchnotes
       - feedback_files:/app/media/feedback
+      - notice_logo_files:/app/media/notice_logos
     depends_on:
       db:
         condition: service_healthy
@@ -72,3 +73,4 @@ volumes:
   notion_md_data:
   patchnote_files:
   feedback_files:
+  notice_logo_files:
