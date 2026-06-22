@@ -23,7 +23,8 @@ from django.utils.html import strip_tags
 
 from web_project import TemplateLayout
 from apps.base.mixins import RoleRequiredMixin, role_required
-from apps.product.models import Solution
+from apps.product.models import Solution, Product, Utility
+from apps.patchnote.models import PatchNote
 from apps.customer.models import Customer, CustomerEmail
 from apps.logs.models import DispatchLog
 from .models import OfficialNotice, NoticeConfig
@@ -160,6 +161,9 @@ class NoticeConfigView(RoleRequiredMixin, TemplateView):
         cfg.lower_logo_width = int(request.POST.get('lower_logo_width') or cfg.lower_logo_width)
         cfg.header_color = request.POST.get('header_color', cfg.header_color).strip() or cfg.header_color
         cfg.footer_text = request.POST.get('footer_text', cfg.footer_text)
+        patchnote_title_format = request.POST.get('patchnote_title_format', '').strip()
+        if patchnote_title_format:
+            cfg.patchnote_title_format = patchnote_title_format
 
         if 'upper_logo' in request.FILES:
             if cfg.upper_logo:
@@ -203,31 +207,125 @@ def preview_email(request):
 @require_POST
 @role_required()
 def preview_patchnote_email(request):
-    """패치노트 구독 이메일 미리보기 — 샘플 데이터로 렌더링"""
-    from types import SimpleNamespace
+    """패치노트 구독 이메일 미리보기 — patchnote_id 있으면 실제 데이터, 없으면 샘플"""
+    patchnote_id = request.POST.get('patchnote_id', '').strip()
 
-    def _item(text):
-        return SimpleNamespace(content=f'<p style="margin:0 0 4px 0;">• {text}</p>')
+    if patchnote_id:
+        note = get_object_or_404(
+            PatchNote.objects.select_related('product__solution', 'utility')
+            .prefetch_related('features', 'improvements', 'bugfixes', 'remarks'),
+            pk=patchnote_id,
+        )
+        if note.product:
+            product_label = str(note.product)
+        else:
+            product_label = note.utility.name
+        notes_data = [{
+            'note': note,
+            'is_new': True,
+            'features':     list(note.features.filter(parent__isnull=True).order_by('order', 'id')),
+            'improvements': list(note.improvements.filter(parent__isnull=True).order_by('order', 'id')),
+            'bugfixes':     list(note.bugfixes.filter(parent__isnull=True).order_by('order', 'id')),
+            'remarks':      list(note.remarks.filter(parent__isnull=True).order_by('order', 'id')),
+        }]
+    else:
+        first_note = (
+            PatchNote.objects
+            .select_related('product__solution', 'utility')
+            .prefetch_related('features', 'improvements', 'bugfixes', 'remarks')
+            .order_by('-release_date', '-id')
+            .first()
+        )
+        if first_note:
+            product_label = str(first_note.product) if first_note.product else first_note.utility.name
+            notes_data = [{
+                'note': first_note,
+                'is_new': True,
+                'features':     list(first_note.features.filter(parent__isnull=True).order_by('order', 'id')),
+                'improvements': list(first_note.improvements.filter(parent__isnull=True).order_by('order', 'id')),
+                'bugfixes':     list(first_note.bugfixes.filter(parent__isnull=True).order_by('order', 'id')),
+                'remarks':      list(first_note.remarks.filter(parent__isnull=True).order_by('order', 'id')),
+            }]
+        else:
+            from types import SimpleNamespace
 
-    sample_note = SimpleNamespace(
-        version='1.2.3',
-        release_date='2025-01-15',
-    )
-    notes_data = [{
-        'note': sample_note,
-        'is_new': True,
-        'features':     [_item('신규 API 지원'), _item('다크 모드 추가')],
-        'improvements': [_item('UI 반응 속도 개선'), _item('메모리 사용량 최적화')],
-        'bugfixes':     [_item('특정 환경에서 앱 크래시 수정')],
-        'remarks':      [],
-    }]
+            def _item(text):
+                return SimpleNamespace(content=f'<p style="margin:0 0 4px 0;">• {text}</p>')
 
+            product_label = '제품명 Platform Category'
+            notes_data = [{
+                'note': SimpleNamespace(version='1.0.0', release_date='-'),
+                'is_new': True,
+                'features':     [_item('신규 기능 추가')],
+                'improvements': [_item('성능 개선')],
+                'bugfixes':     [_item('버그 수정')],
+                'remarks':      [],
+            }]
+
+    cfg = NoticeConfig.get()
+    fmt = cfg.patchnote_title_format or '{product} Release 안내'
     ctx = _build_template_context('', '', for_email=False)
-    ctx['product_label'] = 'AppSuit Android Library'
+    ctx['product_label'] = fmt.replace('{product}', product_label)
     ctx['notes_data'] = notes_data
 
     html = render_to_string('patchnote/email/patchnote_notification_email.html', ctx)
     return HttpResponse(html)
+
+
+@require_GET
+@role_required()
+def get_products_for_preview(request):
+    """미리보기용 제품+유틸리티 목록"""
+    products = (
+        Product.objects
+        .select_related('solution')
+        .filter(patch_notes__isnull=False)
+        .distinct()
+        .order_by('solution__order', 'solution__id', 'order', 'id')
+    )
+    data = [{'id': f'p_{p.id}', 'label': str(p)} for p in products]
+
+    utilities = (
+        Utility.objects
+        .filter(patch_notes__isnull=False)
+        .distinct()
+        .order_by('name')
+    )
+    data += [{'id': f'u_{u.id}', 'label': u.name} for u in utilities]
+
+    return JsonResponse({'products': data})
+
+
+@require_GET
+@role_required()
+def get_versions_for_preview(request):
+    """특정 제품/유틸리티의 패치노트 버전 목록"""
+    product_key = request.GET.get('product_key', '')
+    if product_key.startswith('p_'):
+        notes = (
+            PatchNote.objects
+            .filter(product_id=product_key[2:])
+            .order_by('-release_date', '-id')
+            .values('id', 'version', 'release_date', 'is_published')
+        )
+    elif product_key.startswith('u_'):
+        notes = (
+            PatchNote.objects
+            .filter(utility_id=product_key[2:])
+            .order_by('-release_date', '-id')
+            .values('id', 'version', 'release_date', 'is_published')
+        )
+    else:
+        return JsonResponse({'versions': []})
+
+    data = [
+        {
+            'id': n['id'],
+            'label': f"v{n['version']} ({n['release_date']}) {'✓' if n['is_published'] else '미발행'}",
+        }
+        for n in notes
+    ]
+    return JsonResponse({'versions': data})
 
 
 @require_POST

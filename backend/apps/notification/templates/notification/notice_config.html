@@ -84,6 +84,15 @@
           </div>
         </div>
 
+        <!-- 패치노트 제목 형식 -->
+        <div class="card mb-4">
+          <div class="card-header"><h6 class="mb-0">패치노트 이메일 제목 형식</h6></div>
+          <div class="card-body">
+            <input type="text" name="patchnote_title_format" class="form-control form-control-sm" id="patchnoteTitleFormat" value="{{ cfg.patchnote_title_format }}">
+            <div class="form-text"><code>{product}</code> 자리에 제품명이 자동으로 삽입됩니다. 예: <code>{product} Release 안내</code></div>
+          </div>
+        </div>
+
         <!-- 하단 문구 -->
         <div class="card mb-4">
           <div class="card-header"><h6 class="mb-0">하단 문구</h6></div>
@@ -120,8 +129,23 @@
             </button>
           </div>
         </div>
+        <!-- 패치노트 제품/버전 선택 -->
+        <div id="patchnoteSelector" class="px-3 pt-3 pb-2 border-bottom d-none">
+          <div class="row g-2">
+            <div class="col-7">
+              <select id="previewProduct" class="form-select form-select-sm">
+                <option value="">— 제품 선택 (샘플 데이터) —</option>
+              </select>
+            </div>
+            <div class="col-5">
+              <select id="previewVersion" class="form-select form-select-sm" disabled>
+                <option value="">— 버전 선택 —</option>
+              </select>
+            </div>
+          </div>
+        </div>
         <div class="card-body p-0" style="min-height:500px;">
-          <iframe id="previewFrame" style="width:100%;height:100%;min-height:600px;border:0;"></iframe>
+          <iframe id="previewFrame" style="width:100%;height:100%;min-height:560px;border:0;"></iframe>
         </div>
       </div>
     </div>
@@ -150,6 +174,9 @@
   const colorPicker = document.getElementById('headerColor');
   const colorHex = document.getElementById('headerColorHex');
   const previewFrame = document.getElementById('previewFrame');
+  const patchnoteSelector = document.getElementById('patchnoteSelector');
+  const previewProduct = document.getElementById('previewProduct');
+  const previewVersion = document.getElementById('previewVersion');
 
   // 컬러 피커 ↔ hex 텍스트 동기화
   colorPicker.addEventListener('input', () => { colorHex.value = colorPicker.value; });
@@ -157,14 +184,62 @@
     if (/^#[0-9a-fA-F]{6}$/.test(colorHex.value)) colorPicker.value = colorHex.value;
   });
 
-  // 미리보기 새로고침
-  document.getElementById('refreshPreview').addEventListener('click', loadPreview);
+  // 미리보기 모드 전환
   document.querySelectorAll('[name=previewMode]').forEach(function (el) {
-    el.addEventListener('change', loadPreview);
+    el.addEventListener('change', function () {
+      const isPatchnote = currentMode() === 'patchnote';
+      patchnoteSelector.classList.toggle('d-none', !isPatchnote);
+      if (isPatchnote && previewProduct.options.length === 1) {
+        loadProductList();
+      }
+      loadPreview();
+    });
   });
+
+  // 제품 선택 → 버전 목록 로드
+  previewProduct.addEventListener('change', function () {
+    const key = this.value;
+    previewVersion.innerHTML = '<option value="">— 버전 선택 —</option>';
+    previewVersion.disabled = !key;
+    if (!key) { loadPreview(); return; }
+
+    fetch("{% url 'notification:preview_versions' %}?product_key=" + encodeURIComponent(key))
+      .then(r => r.json())
+      .then(data => {
+        data.versions.forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v.id;
+          opt.textContent = v.label;
+          previewVersion.appendChild(opt);
+        });
+        if (data.versions.length > 0) {
+          previewVersion.value = data.versions[0].id;
+        }
+        loadPreview();
+      });
+  });
+
+  // 버전 선택 → 미리보기 갱신
+  previewVersion.addEventListener('change', loadPreview);
+
+  // 새로고침 버튼
+  document.getElementById('refreshPreview').addEventListener('click', loadPreview);
 
   function currentMode() {
     return document.querySelector('[name=previewMode]:checked').value;
+  }
+
+  function loadProductList() {
+    fetch("{% url 'notification:preview_products' %}")
+      .then(r => r.json())
+      .then(data => {
+        data.products.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          opt.textContent = p.label;
+          previewProduct.appendChild(opt);
+        });
+      });
   }
 
   function loadPreview() {
@@ -175,6 +250,8 @@
     let url;
     if (currentMode() === 'patchnote') {
       url = "{% url 'notification:preview_patchnote_email' %}";
+      const noteId = previewVersion.value;
+      if (noteId) fd.append('patchnote_id', noteId);
     } else {
       url = "{% url 'notification:preview_email' %}";
       fd.append('subject', '(공문 제목 미리보기)');
@@ -193,7 +270,6 @@
     btn.disabled = true;
     btn.textContent = '저장 중...';
 
-    // color hex를 hidden input으로 동기화
     colorPicker.value = /^#[0-9a-fA-F]{6}$/.test(colorHex.value) ? colorHex.value : colorPicker.value;
 
     fetch("{% url 'notification:notice_config_save' %}", {
@@ -219,7 +295,7 @@
       });
   });
 
-  // 크게 보기 — 현재 미리보기 내용을 모달 iframe에 복사
+  // 크게 보기
   document.getElementById('previewModal').addEventListener('show.bs.modal', () => {
     const src = previewFrame.srcdoc;
     if (src) document.getElementById('previewModalFrame').srcdoc = src;

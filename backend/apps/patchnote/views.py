@@ -33,6 +33,13 @@ from .translation import start_translation
 logger = logging.getLogger(__name__)
 
 
+def _format_patchnote_title(product_label: str) -> str:
+    """NoticeConfig.patchnote_title_format의 {product} 자리에 product_label 치환."""
+    from apps.notification.models import NoticeConfig
+    fmt = NoticeConfig.get().patchnote_title_format or '{product} Release 안내'
+    return fmt.replace('{product}', product_label)
+
+
 def _html_to_plain(html: str) -> str:
     """HTML → 줄바꿈 보존 plain text (Slack mrkdwn용, <ul> 깊이 기반 들여쓰기)"""
     if not html:
@@ -355,7 +362,8 @@ def _send_internal_slack_notification(patch_note):
             return
 
         solution_name = patch_note.subject.solution.name
-        product_label = f"{solution_name} {patch_note.subject_label}"
+        _auto_label = f"{solution_name} {patch_note.subject_label}"
+        product_label = _format_patchnote_title(_auto_label)
 
         # internals 접근을 위해 prefetch된 인스턴스를 별도로 조회
         note = (
@@ -410,7 +418,8 @@ def _send_slack_notifications(patch_note):
             return
 
         solution_name = patch_note.subject.solution.name
-        product_label = f"{solution_name} {patch_note.subject_label}"
+        _auto_label = f"{solution_name} {patch_note.subject_label}"
+        product_label = _format_patchnote_title(_auto_label)
 
         fallback_text = f"{product_label} v{patch_note.version} 패치노트가 발행되었습니다."
         blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} Release 안내]"}}]
@@ -500,7 +509,7 @@ def _send_email_notifications(patch_note):
             )
             if not util_subs.exists():
                 return
-            product_label = patch_note.utility.name
+            product_label = _format_patchnote_title(patch_note.utility.name)
             subject_str = f"[Patch Notify] {product_label} v{patch_note.version} 패치노트"
             recipients = [(s.customer, None) for s in util_subs]
             solution_ref = None
@@ -517,7 +526,8 @@ def _send_email_notifications(patch_note):
             if not subs.exists():
                 return
             solution_name = patch_note.subject.solution.name
-            product_label = f"{solution_name} {patch_note.subject_label}"
+            _auto_label = f"{solution_name} {patch_note.subject_label}"
+            product_label = _format_patchnote_title(_auto_label)
             subject_str = f"[Patch Notify] {product_label} v{patch_note.version} 패치노트"
             recipients = [(s.customer, s) for s in subs]
             solution_ref = patch_note.subject.solution

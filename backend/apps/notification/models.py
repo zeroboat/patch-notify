@@ -10,6 +10,8 @@ _DEFAULT_FOOTER_TEXT = (
     '문의사항이 있으시면 담당자에게 연락해 주세요.'
 )
 
+_DEFAULT_PATCHNOTE_TITLE_FORMAT = '{product} Release 안내'
+
 
 class NoticeConfig(models.Model):
     """공문 이메일 템플릿 설정 싱글톤"""
@@ -20,6 +22,11 @@ class NoticeConfig(models.Model):
     lower_logo_width = models.PositiveIntegerField(default=200, verbose_name='하단 로고 너비 (px)')
     header_color = models.CharField(max_length=20, default='#501A9B', verbose_name='헤더 색상')
     footer_text = models.TextField(default=_DEFAULT_FOOTER_TEXT, verbose_name='하단 문구')
+    patchnote_title_format = models.CharField(
+        max_length=200,
+        default=_DEFAULT_PATCHNOTE_TITLE_FORMAT,
+        verbose_name='패치노트 이메일 제목 형식',
+    )
 
     class Meta:
         verbose_name = '공문 템플릿 설정'
