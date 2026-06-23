@@ -210,16 +210,15 @@ def preview_patchnote_email(request):
     """패치노트 구독 이메일 미리보기 — patchnote_id 있으면 실제 데이터, 없으면 샘플"""
     patchnote_id = request.POST.get('patchnote_id', '').strip()
 
+    preview_version = ''
     if patchnote_id:
         note = get_object_or_404(
             PatchNote.objects.select_related('product__solution', 'utility')
             .prefetch_related('features', 'improvements', 'bugfixes', 'remarks'),
             pk=patchnote_id,
         )
-        if note.product:
-            product_label = str(note.product)
-        else:
-            product_label = note.utility.name
+        product_label = str(note.product) if note.product else note.utility.name
+        preview_version = note.version
         notes_data = [{
             'note': note,
             'is_new': True,
@@ -238,6 +237,7 @@ def preview_patchnote_email(request):
         )
         if first_note:
             product_label = str(first_note.product) if first_note.product else first_note.utility.name
+            preview_version = first_note.version
             notes_data = [{
                 'note': first_note,
                 'is_new': True,
@@ -253,6 +253,7 @@ def preview_patchnote_email(request):
                 return SimpleNamespace(content=f'<p style="margin:0 0 4px 0;">• {text}</p>')
 
             product_label = '제품명 Platform Category'
+            preview_version = '1.0.0'
             notes_data = [{
                 'note': SimpleNamespace(version='1.0.0', release_date='-'),
                 'is_new': True,
@@ -265,7 +266,7 @@ def preview_patchnote_email(request):
     cfg = NoticeConfig.get()
     fmt = cfg.patchnote_title_format or '{product} Release 안내'
     ctx = _build_template_context('', '', for_email=False)
-    ctx['product_label'] = fmt.replace('{product}', product_label)
+    ctx['product_label'] = fmt.replace('{product}', product_label).replace('{version}', preview_version)
     ctx['notes_data'] = notes_data
 
     html = render_to_string('patchnote/email/patchnote_notification_email.html', ctx)

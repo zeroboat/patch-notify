@@ -33,11 +33,11 @@ from .translation import start_translation
 logger = logging.getLogger(__name__)
 
 
-def _format_patchnote_title(product_label: str) -> str:
-    """NoticeConfig.patchnote_title_format의 {product} 자리에 product_label 치환."""
+def _format_patchnote_title(product_label: str, version: str = '') -> str:
+    """NoticeConfig.patchnote_title_format의 {product}, {version} 자리에 치환."""
     from apps.notification.models import NoticeConfig
     fmt = NoticeConfig.get().patchnote_title_format or '{product} Release 안내'
-    return fmt.replace('{product}', product_label)
+    return fmt.replace('{product}', product_label).replace('{version}', version)
 
 
 def _html_to_plain(html: str) -> str:
@@ -363,7 +363,7 @@ def _send_internal_slack_notification(patch_note):
 
         solution_name = patch_note.subject.solution.name
         _auto_label = f"{solution_name} {patch_note.subject_label}"
-        product_label = _format_patchnote_title(_auto_label)
+        product_label = _format_patchnote_title(_auto_label, patch_note.version)
 
         # internals 접근을 위해 prefetch된 인스턴스를 별도로 조회
         note = (
@@ -372,7 +372,7 @@ def _send_internal_slack_notification(patch_note):
             .get(id=patch_note.id)
         )
 
-        blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} Release 안내]"}}]
+        blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[{product_label}]"}}]
         blocks.extend(_build_patchnote_slack_blocks(note))
         blocks.extend(_build_internal_slack_blocks(note))
 
@@ -419,10 +419,10 @@ def _send_slack_notifications(patch_note):
 
         solution_name = patch_note.subject.solution.name
         _auto_label = f"{solution_name} {patch_note.subject_label}"
-        product_label = _format_patchnote_title(_auto_label)
+        product_label = _format_patchnote_title(_auto_label, patch_note.version)
 
         fallback_text = f"{product_label} v{patch_note.version} 패치노트가 발행되었습니다."
-        blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[{product_label} Release 안내]"}}]
+        blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"[{product_label}]"}}]
         blocks.extend(_build_patchnote_slack_blocks(patch_note))
 
         for sub in subs:
@@ -509,8 +509,8 @@ def _send_email_notifications(patch_note):
             )
             if not util_subs.exists():
                 return
-            product_label = _format_patchnote_title(patch_note.utility.name)
-            subject_str = f"[Patch Notify] {product_label} v{patch_note.version} 패치노트"
+            product_label = _format_patchnote_title(patch_note.utility.name, patch_note.version)
+            subject_str = f"[Patch Notify] {product_label}"
             recipients = [(s.customer, None) for s in util_subs]
             solution_ref = None
         else:
@@ -527,8 +527,8 @@ def _send_email_notifications(patch_note):
                 return
             solution_name = patch_note.subject.solution.name
             _auto_label = f"{solution_name} {patch_note.subject_label}"
-            product_label = _format_patchnote_title(_auto_label)
-            subject_str = f"[Patch Notify] {product_label} v{patch_note.version} 패치노트"
+            product_label = _format_patchnote_title(_auto_label, patch_note.version)
+            subject_str = f"[Patch Notify] {product_label}"
             recipients = [(s.customer, s) for s in subs]
             solution_ref = patch_note.subject.solution
 
