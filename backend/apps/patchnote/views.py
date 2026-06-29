@@ -490,6 +490,7 @@ def _send_email_notifications(patch_note):
     """발행 시 활성 이메일 구독자에게 패치노트 발송 (고객사용)"""
     try:
         from apps.config.models import SiteConfig
+        from apps.notification.models import NoticeConfig
         from apps.subscriber.models import Subscription
 
         cfg = SiteConfig.get()
@@ -510,7 +511,7 @@ def _send_email_notifications(patch_note):
             if not util_subs.exists():
                 return
             product_label = _format_patchnote_title(patch_note.utility.name, patch_note.version)
-            subject_str = f"[Patch Notify] {product_label}"
+            subject_str = f"[{NoticeConfig.get().email_subject_prefix}] {product_label}"
             recipients = [(s.customer, None) for s in util_subs]
             solution_ref = None
         else:
@@ -528,18 +529,27 @@ def _send_email_notifications(patch_note):
             solution_name = patch_note.subject.solution.name
             _auto_label = f"{solution_name} {patch_note.subject_label}"
             product_label = _format_patchnote_title(_auto_label, patch_note.version)
-            subject_str = f"[Patch Notify] {product_label}"
+            subject_str = f"[{NoticeConfig.get().email_subject_prefix}] {product_label}"
             recipients = [(s.customer, s) for s in subs]
             solution_ref = patch_note.subject.solution
 
+        from django.contrib.sites.models import Site
+        from django.urls import reverse
+        try:
+            _site = Site.objects.get_current()
+            _base_url = f"https://{_site.domain}"
+        except Exception:
+            _base_url = ''
+
         for customer, sub in recipients:
-            emails = list(
+            email_objs = list(
                 SubscriptionEmail.objects
-                .filter(customer=customer)
-                .values_list('email', flat=True)
+                .filter(customer=customer, is_active=True)
+                .values('email', 'unsubscribe_token')
             )
-            if not emails:
+            if not email_objs:
                 continue
+            emails = [e['email'] for e in email_objs]
 
             recent_notes = (
                 PatchNote.objects
@@ -558,7 +568,6 @@ def _send_email_notifications(patch_note):
                 }
                 for n in recent_notes
             ]
-            from apps.notification.models import NoticeConfig
             notice_cfg = NoticeConfig.get()
 
             def _read_logo(logo_field):
@@ -574,76 +583,71 @@ def _send_email_notifications(patch_note):
             upper_data = _read_logo(notice_cfg.upper_logo)
             lower_data = _read_logo(notice_cfg.lower_logo)
 
-            html_body = render_to_string(
-                'patchnote/email/patchnote_notification_email.html',
-                {
-                    'product_label': product_label,
-                    'notes_data': notes_data,
-                    'upper_logo_src': 'cid:upper_logo' if upper_data else '',
-                    'upper_logo_width': notice_cfg.upper_logo_width,
-                    'lower_logo_src': 'cid:lower_logo' if lower_data else '',
-                    'lower_logo_width': notice_cfg.lower_logo_width,
-                    'header_color': notice_cfg.header_color,
-                    'footer_text': notice_cfg.footer_text,
-                },
-            )
-            text_body = strip_tags(html_body)
-
             sent_at = timezone.now()
-            try:
-                from django.core.mail import get_connection
-                connection = get_connection(
-                    backend='django.core.mail.backends.smtp.EmailBackend',
-                    host='smtp.gmail.com',
-                    port=587,
-                    use_tls=True,
-                    username=cfg.gmail_user,
-                    password=cfg.gmail_app_password,
+            for email_info in email_objs:
+                _unsubscribe_path = reverse('subscriber:unsubscribe', args=[email_info['unsubscribe_token']])
+                _unsubscribe_url = f"{_base_url}{_unsubscribe_path}"
+
+                html_body = render_to_string(
+                    'patchnote/email/patchnote_notification_email.html',
+                    {
+                        'product_label': product_label,
+                        'notes_data': notes_data,
+                        'upper_logo_src': 'cid:upper_logo' if upper_data else '',
+                        'upper_logo_width': notice_cfg.upper_logo_width,
+                        'lower_logo_src': 'cid:lower_logo' if lower_data else '',
+                        'lower_logo_width': notice_cfg.lower_logo_width,
+                        'header_color': notice_cfg.header_color,
+                        'footer_text': notice_cfg.footer_text,
+                        'unsubscribe_url': _unsubscribe_url,
+                    },
                 )
+                text_body = strip_tags(html_body)
 
                 msg_related = MIMEMultipart('related')
-                msg_related['Subject'] = subject_str
-                msg_related['From'] = cfg.gmail_user
-                msg_related['To'] = ', '.join(emails)
-
                 msg_alternative = MIMEMultipart('alternative')
                 msg_alternative.attach(MIMEText(text_body, 'plain', 'utf-8'))
                 msg_alternative.attach(MIMEText(html_body, 'html', 'utf-8'))
                 msg_related.attach(msg_alternative)
-
                 for cid, data in [('upper_logo', upper_data), ('lower_logo', lower_data)]:
                     if data:
                         img = MIMEImage(data)
                         img.add_header('Content-ID', f'<{cid}>')
                         img.add_header('Content-Disposition', 'inline')
                         msg_related.attach(img)
+                msg = MIMEMultipart('mixed')
+                msg['Subject'] = subject_str
+                msg['From'] = cfg.gmail_user
+                msg['To'] = email_info['email']
+                msg.attach(msg_related)
 
-                import smtplib
-                with smtplib.SMTP('smtp.gmail.com', 587) as smtp:
-                    smtp.starttls()
-                    smtp.login(cfg.gmail_user, cfg.gmail_app_password)
-                    smtp.sendmail(cfg.gmail_user, emails, msg_related.as_string())
-                _log_dispatch(
-                    channel=DispatchLog.CHANNEL_EMAIL,
-                    customer=customer,
-                    solution=solution_ref,
-                    recipient=', '.join(emails),
-                    subject=subject_str,
-                    status=DispatchLog.STATUS_SUCCESS,
-                    sent_at=sent_at,
-                )
-            except Exception as e:
-                logger.warning(f'이메일 발송 실패 (customer={customer.name}): {e}')
-                _log_dispatch(
-                    channel=DispatchLog.CHANNEL_EMAIL,
-                    customer=customer,
-                    solution=solution_ref,
-                    recipient=', '.join(emails),
-                    subject=subject_str,
-                    status=DispatchLog.STATUS_FAILED,
-                    error_message=str(e)[:1000],
-                    sent_at=sent_at,
-                )
+                try:
+                    import smtplib
+                    with smtplib.SMTP('smtp.gmail.com', 587) as smtp:
+                        smtp.starttls()
+                        smtp.login(cfg.gmail_user, cfg.gmail_app_password)
+                        smtp.sendmail(cfg.gmail_user, [email_info['email']], msg.as_string())
+                    _log_dispatch(
+                        channel=DispatchLog.CHANNEL_EMAIL,
+                        customer=customer,
+                        solution=solution_ref,
+                        recipient=email_info['email'],
+                        subject=subject_str,
+                        status=DispatchLog.STATUS_SUCCESS,
+                        sent_at=sent_at,
+                    )
+                except Exception as e:
+                    logger.warning(f'이메일 발송 실패 ({email_info["email"]}): {e}')
+                    _log_dispatch(
+                        channel=DispatchLog.CHANNEL_EMAIL,
+                        customer=customer,
+                        solution=solution_ref,
+                        recipient=email_info['email'],
+                        subject=subject_str,
+                        status=DispatchLog.STATUS_FAILED,
+                        error_message=str(e)[:1000],
+                        sent_at=sent_at,
+                    )
     except Exception as e:
         logger.warning(f'이메일 발송 처리 실패: {e}')
 
