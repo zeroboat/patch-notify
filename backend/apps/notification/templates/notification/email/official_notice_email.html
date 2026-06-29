@@ -60,7 +60,12 @@
               {% if lower_logo_src %}
               <img src="{{ lower_logo_src }}" width="{{ lower_logo_width }}" style="display:block;margin:0 auto 12px auto;border:0;">
               {% endif %}
-              <p style="margin:0;font-size:12px;color:#80868b;line-height:1.8;white-space:pre-line;">{{ footer_text }}</p>
+              <p style="margin:0 0 16px 0;font-size:12px;color:#80868b;line-height:1.8;white-space:pre-line;">{{ footer_text }}</p>
+              {% if unsubscribe_url %}
+              <p style="margin:0;">
+                <a href="{{ unsubscribe_url }}" style="font-size:11px;color:#9aa0a6;text-decoration:none;border:1px solid #dadce0;border-radius:4px;padding:4px 12px;display:inline-block;">수신 거부</a>
+              </p>
+              {% endif %}
             </td>
           </tr>
 

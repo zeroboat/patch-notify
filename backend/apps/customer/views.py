@@ -2,7 +2,7 @@ import csv
 import io
 import logging
 
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render, get_object_or_404
 from django.views.generic import TemplateView
 from django.contrib import messages
 from django.http import JsonResponse
@@ -236,3 +236,17 @@ def _find_col_ci(headers_lower: dict, candidates: list) -> str | None:
         if c.lower() in headers_lower:
             return headers_lower[c.lower()]
     return None
+
+
+def unsubscribe_notice(request, token):
+    """공문 수신 거부 — 토큰에 해당하는 CustomerEmail 한 개만 비활성화"""
+    from .models import CustomerEmail
+    email_obj = get_object_or_404(CustomerEmail, unsubscribe_token=token)
+    already_done = not email_obj.is_active
+    if not already_done:
+        email_obj.is_active = False
+        email_obj.save(update_fields=['is_active'])
+    return render(request, 'customer/unsubscribe_notice.html', {
+        'email': email_obj.email,
+        'already_done': already_done,
+    })

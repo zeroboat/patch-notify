@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views.generic import TemplateView
@@ -576,3 +576,17 @@ def subscribe_toggle_utility(request, token):
         obj.save(update_fields=['is_active'])
 
     return JsonResponse({'ok': True})
+
+
+def unsubscribe(request, token):
+    """수신 거부 — 토큰에 해당하는 이메일 한 개만 비활성화"""
+    from .models import SubscriptionEmail
+    email_obj = get_object_or_404(SubscriptionEmail, unsubscribe_token=token)
+    already_done = not email_obj.is_active
+    if not already_done:
+        email_obj.is_active = False
+        email_obj.save(update_fields=['is_active'])
+    return render(request, 'subscriber/unsubscribe.html', {
+        'email': email_obj.email,
+        'already_done': already_done,
+    })

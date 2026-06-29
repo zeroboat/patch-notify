@@ -1,3 +1,4 @@
+import uuid as _uuid
 from django.db import models
 from apps.base.models import BaseModel
 
@@ -19,6 +20,8 @@ class CustomerEmail(BaseModel):
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='emails', verbose_name="고객사")
     email = models.EmailField(verbose_name="이메일")
     name = models.CharField(max_length=100, verbose_name="담당자명", null=True, blank=True)
+    is_active = models.BooleanField(default=True, verbose_name="수신 활성화")
+    unsubscribe_token = models.UUIDField(default=_uuid.uuid4, unique=True, editable=False, verbose_name="수신 거부 토큰")
 
     class Meta:
         verbose_name = "고객사 이메일"

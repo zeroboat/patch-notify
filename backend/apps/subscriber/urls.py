@@ -13,6 +13,7 @@ from .views import (
     subscribe_save_slack,
     subscribe_add_email,
     subscribe_remove_email,
+    unsubscribe,
 )
 
 app_name = 'subscriber'
@@ -31,4 +32,5 @@ urlpatterns = [
     path('subscribe/<uuid:token>/save-slack/', subscribe_save_slack, name='subscribe_save_slack'),
     path('subscribe/<uuid:token>/add-email/', subscribe_add_email, name='subscribe_add_email'),
     path('subscribe/<uuid:token>/remove-email/', subscribe_remove_email, name='subscribe_remove_email'),
+    path('unsubscribe/<uuid:token>/', unsubscribe, name='unsubscribe'),
 ]

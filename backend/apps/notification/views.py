@@ -80,13 +80,14 @@ def _build_template_context(subject, body_html, *, for_email=False):
 
 # ── 이메일 발송 ────────────────────────────────────────────────────────────────
 
-def _send_official_email(to_emails, subject, body_html):
+def _send_official_email(to_emails, subject, body_html, unsubscribe_url=''):
     """Gmail SMTP로 공문 이메일 발송. (성공 여부, 에러 메시지) 반환"""
     try:
         from apps.config.models import SiteConfig
         site = SiteConfig.get()
 
         ctx = _build_template_context(subject, body_html, for_email=True)
+        ctx['unsubscribe_url'] = unsubscribe_url
         html_body = render_to_string('notification/email/official_notice_email.html', ctx)
         text_body = strip_tags(body_html)
 
@@ -161,6 +162,9 @@ class NoticeConfigView(RoleRequiredMixin, TemplateView):
         cfg.lower_logo_width = int(request.POST.get('lower_logo_width') or cfg.lower_logo_width)
         cfg.header_color = request.POST.get('header_color', cfg.header_color).strip() or cfg.header_color
         cfg.footer_text = request.POST.get('footer_text', cfg.footer_text)
+        email_subject_prefix = request.POST.get('email_subject_prefix', '').strip()
+        if email_subject_prefix:
+            cfg.email_subject_prefix = email_subject_prefix
         patchnote_title_format = request.POST.get('patchnote_title_format', '').strip()
         if patchnote_title_format:
             cfg.patchnote_title_format = patchnote_title_format
@@ -197,10 +201,9 @@ class NoticeConfigView(RoleRequiredMixin, TemplateView):
 def preview_email(request):
     subject = request.POST.get('subject', '(제목 없음)').strip() or '(제목 없음)'
     body = request.POST.get('body', '').strip()
-    html = render_to_string(
-        'notification/email/official_notice_email.html',
-        _build_template_context(subject, body, for_email=False),
-    )
+    ctx = _build_template_context(subject, body, for_email=False)
+    ctx['unsubscribe_url'] = '#'
+    html = render_to_string('notification/email/official_notice_email.html', ctx)
     return HttpResponse(html)
 
 
@@ -268,6 +271,7 @@ def preview_patchnote_email(request):
     ctx = _build_template_context('', '', for_email=False)
     ctx['product_label'] = fmt.replace('{product}', product_label).replace('{version}', preview_version)
     ctx['notes_data'] = notes_data
+    ctx['unsubscribe_url'] = '#'
 
     html = render_to_string('patchnote/email/patchnote_notification_email.html', ctx)
     return HttpResponse(html)
@@ -362,13 +366,21 @@ def send_notice(request):
     if not body:
         return JsonResponse({'ok': False, 'error': '본문을 입력해주세요.'})
 
+    from django.contrib.sites.models import Site
+    from django.urls import reverse
+    try:
+        _site = Site.objects.get_current()
+        _base_url = f"https://{_site.domain}"
+    except Exception:
+        _base_url = ''
+
     if send_mode == 'solution':
         solution_ids = request.POST.getlist('solution_ids[]')
         if not solution_ids:
             return JsonResponse({'ok': False, 'error': '솔루션을 선택해주세요.'})
         email_qs = (
             CustomerEmail.objects
-            .filter(customer__solutions__id__in=solution_ids)
+            .filter(customer__solutions__id__in=solution_ids, is_active=True)
             .select_related('customer')
             .distinct()
             .order_by('customer__name', 'email')
@@ -377,27 +389,31 @@ def send_notice(request):
         for e in email_qs:
             cid = e.customer_id
             if cid not in customer_map:
-                customer_map[cid] = {'customer': e.customer, 'customer_name': e.customer.name, 'emails': []}
-            customer_map[cid]['emails'].append(e.email)
+                customer_map[cid] = {'customer': e.customer, 'customer_name': e.customer.name, 'email_objs': []}
+            customer_map[cid]['email_objs'].append(e)
         groups = list(customer_map.values())
     else:
         raw = request.POST.get('recipients_direct', '')
         email_list = [e.strip() for e in raw.replace(',', ';').split(';') if e.strip()]
         if not email_list:
             return JsonResponse({'ok': False, 'error': '수신 이메일을 입력해주세요.'})
-        groups = [{'customer': None, 'customer_name': '', 'emails': email_list}]
+        groups = [{'customer': None, 'customer_name': '', 'email_objs': None, 'emails_direct': email_list}]
 
     if not groups:
         return JsonResponse({'ok': False, 'error': '수신자가 없습니다.'})
 
     now = timezone.now()
-    total_emails = sum(len(g['emails']) for g in groups)
+    total_emails = sum(
+        len(g.get('email_objs') or g.get('emails_direct', [])) for g in groups
+    )
     notice = OfficialNotice.objects.create(
         subject=subject,
         body=body,
         send_mode=send_mode,
         recipients_json=json.dumps(
-            [{'customer': g['customer_name'], 'emails': g['emails']} for g in groups],
+            [{'customer': g['customer_name'],
+              'emails': [e.email for e in g['email_objs']] if g.get('email_objs') else g.get('emails_direct', [])}
+             for g in groups],
             ensure_ascii=False,
         ),
         recipient_count=total_emails,
@@ -407,20 +423,39 @@ def send_notice(request):
     logs = []
     success_count = 0
     for g in groups:
-        ok, err = _send_official_email(g['emails'], subject, body)
-        if ok:
-            success_count += 1
-        logs.append(DispatchLog(
-            log_type=DispatchLog.TYPE_OFFICIAL,
-            channel=DispatchLog.CHANNEL_EMAIL,
-            customer=g['customer'],
-            official_notice=notice,
-            recipient=', '.join(g['emails']),
-            subject=subject,
-            status=DispatchLog.STATUS_SUCCESS if ok else DispatchLog.STATUS_FAILED,
-            error_message=err,
-            sent_at=now,
-        ))
+        if g.get('email_objs'):
+            for email_obj in g['email_objs']:
+                _unsub_path = reverse('customer:unsubscribe_notice', args=[email_obj.unsubscribe_token])
+                _unsub_url = f"{_base_url}{_unsub_path}"
+                ok, err = _send_official_email([email_obj.email], subject, body, unsubscribe_url=_unsub_url)
+                if ok:
+                    success_count += 1
+                logs.append(DispatchLog(
+                    log_type=DispatchLog.TYPE_OFFICIAL,
+                    channel=DispatchLog.CHANNEL_EMAIL,
+                    customer=g['customer'],
+                    official_notice=notice,
+                    recipient=email_obj.email,
+                    subject=subject,
+                    status=DispatchLog.STATUS_SUCCESS if ok else DispatchLog.STATUS_FAILED,
+                    error_message=err,
+                    sent_at=now,
+                ))
+        else:
+            ok, err = _send_official_email(g.get('emails_direct', []), subject, body)
+            if ok:
+                success_count += 1
+            logs.append(DispatchLog(
+                log_type=DispatchLog.TYPE_OFFICIAL,
+                channel=DispatchLog.CHANNEL_EMAIL,
+                customer=g['customer'],
+                official_notice=notice,
+                recipient=', '.join(g.get('emails_direct', [])),
+                subject=subject,
+                status=DispatchLog.STATUS_SUCCESS if ok else DispatchLog.STATUS_FAILED,
+                error_message=err,
+                sent_at=now,
+            ))
 
     DispatchLog.objects.bulk_create(logs)
 
