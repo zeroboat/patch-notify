@@ -84,6 +84,15 @@
           </div>
         </div>
 
+        <!-- 이메일 제목 접두사 -->
+        <div class="card mb-4">
+          <div class="card-header"><h6 class="mb-0">이메일 제목 접두사</h6></div>
+          <div class="card-body">
+            <input type="text" name="email_subject_prefix" class="form-control form-control-sm" value="{{ cfg.email_subject_prefix }}">
+            <div class="form-text">이메일 제목 앞에 <code>[접두사]</code> 형태로 붙습니다. 예: <code>Patch Notify</code> → <code>[Patch Notify] 제목</code></div>
+          </div>
+        </div>
+
         <!-- 패치노트 제목 형식 -->
         <div class="card mb-4">
           <div class="card-header"><h6 class="mb-0">패치노트 이메일 제목 형식</h6></div>

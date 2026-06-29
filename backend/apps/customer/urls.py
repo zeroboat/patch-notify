@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     CustomerManagementView, create_customer, update_customer, delete_customer,
-    add_email, delete_email, import_csv,
+    add_email, delete_email, import_csv, unsubscribe_notice,
 )
 
 app_name = 'customer'
@@ -14,4 +14,5 @@ urlpatterns = [
     path('email/add/', add_email, name='add_email'),
     path('email/delete/', delete_email, name='delete_email'),
     path('import-csv/', import_csv, name='import_csv'),
+    path('unsubscribe/<uuid:token>/', unsubscribe_notice, name='unsubscribe_notice'),
 ]

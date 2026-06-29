@@ -54,6 +54,8 @@ class SubscriptionEmail(models.Model):
     )
     email = models.EmailField(verbose_name='이메일')
     name = models.CharField(max_length=100, blank=True, verbose_name='담당자명')
+    is_active = models.BooleanField(default=True, verbose_name='수신 활성화')
+    unsubscribe_token = models.UUIDField(default=_uuid.uuid4, unique=True, editable=False, verbose_name='수신 거부 토큰')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
