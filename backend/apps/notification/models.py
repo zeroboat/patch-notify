@@ -11,6 +11,7 @@ _DEFAULT_FOOTER_TEXT = (
 )
 
 _DEFAULT_PATCHNOTE_TITLE_FORMAT = '{product} Release 안내'
+_DEFAULT_EMAIL_SUBJECT_PREFIX = 'Patch Notify'
 
 
 class NoticeConfig(models.Model):
@@ -26,6 +27,11 @@ class NoticeConfig(models.Model):
         max_length=200,
         default=_DEFAULT_PATCHNOTE_TITLE_FORMAT,
         verbose_name='패치노트 이메일 제목 형식',
+    )
+    email_subject_prefix = models.CharField(
+        max_length=100,
+        default=_DEFAULT_EMAIL_SUBJECT_PREFIX,
+        verbose_name='이메일 제목 접두사',
     )
 
     class Meta:
