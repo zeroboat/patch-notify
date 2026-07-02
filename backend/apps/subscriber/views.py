@@ -128,7 +128,7 @@ def get_customer_subscriptions(request, customer_id):
         SubscriptionEmail.objects
         .filter(customer=customer)
         .order_by('id')
-        .values('id', 'email', 'name')
+        .values('id', 'email', 'name', 'is_active')
     )
 
     util_subs = UtilitySubscription.objects.filter(customer=customer).select_related('utility')
@@ -239,6 +239,16 @@ def admin_remove_subscription_email(request, customer_id):
     email_id = request.POST.get('email_id')
     deleted, _ = SubscriptionEmail.objects.filter(pk=email_id, customer_id=customer_id).delete()
     if not deleted:
+        return JsonResponse({'ok': False, 'error': '이메일을 찾을 수 없습니다.'})
+    return JsonResponse({'ok': True})
+
+
+@require_POST
+@role_required('se')
+def admin_reactivate_subscription_email(request, customer_id):
+    email_id = request.POST.get('email_id')
+    updated = SubscriptionEmail.objects.filter(pk=email_id, customer_id=customer_id).update(is_active=True)
+    if not updated:
         return JsonResponse({'ok': False, 'error': '이메일을 찾을 수 없습니다.'})
     return JsonResponse({'ok': True})
 
