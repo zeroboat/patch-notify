@@ -49,6 +49,7 @@ services:
     volumes:
       - notion_md_data:/app/notion_md
       - patchnote_files:/app/media/patchnotes
+      - notice_logo_files:/app/media/notice_logos
     depends_on:
       db:
         condition: service_healthy
