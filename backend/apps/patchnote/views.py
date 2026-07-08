@@ -395,6 +395,9 @@ def _send_internal_slack_notification(patch_note):
 def _send_slack_notifications(patch_note):
     """발행 시 활성 Slack 구독자에게 해당 버전 패치노트 전송 (고객사용)"""
     try:
+        if patch_note.is_custom:
+            return
+
         from slack_sdk import WebClient
         from apps.slack_app.models import SlackWorkspace
         from apps.subscriber.models import Subscription
@@ -489,6 +492,9 @@ def _log_dispatch(*, channel, customer, solution, recipient, subject,
 def _send_email_notifications(patch_note):
     """발행 시 활성 이메일 구독자에게 패치노트 발송 (고객사용)"""
     try:
+        if patch_note.is_custom:
+            return
+
         from apps.config.models import SiteConfig
         from apps.notification.models import NoticeConfig
         from apps.subscriber.models import Subscription
@@ -769,6 +775,8 @@ class PatchNoteDetailView(LoginRequiredMixin, TemplateView):
         patch_notes = PatchNote.objects.filter(product=product).prefetch_related(
             'features', 'improvements', 'bugfixes', 'remarks', 'internals', 'files'
         ).order_by('-release_date', '-version')
+        if get_user_role(self.request.user) == 'guest':
+            patch_notes = patch_notes.filter(is_custom=False)
 
         context.update({
             'selected_product': product,
@@ -791,6 +799,8 @@ class UtilityPatchNoteDetailView(LoginRequiredMixin, TemplateView):
         patch_notes = PatchNote.objects.filter(utility=utility).prefetch_related(
             'features', 'improvements', 'bugfixes', 'remarks', 'internals', 'files'
         ).order_by('-release_date', '-version')
+        if get_user_role(self.request.user) == 'guest':
+            patch_notes = patch_notes.filter(is_custom=False)
 
         context.update({
             'selected_utility': utility,
@@ -803,20 +813,28 @@ class UtilityPatchNoteDetailView(LoginRequiredMixin, TemplateView):
 # 헬퍼: 섹션 HTML 저장 / 조회
 # ──────────────────────────────────────────────
 
-def _save_section(patch_note, html, model_class):
-    """CKEditor HTML을 섹션당 1개 레코드로 저장 (실제 텍스트 없으면 건너뜀)"""
+def _normalize_editor_html(html):
+    """CKEditor HTML 정규화. 실제 텍스트가 없으면 빈 문자열 반환."""
     html = (html or '').strip()
     if not html:
-        return
+        return ''
     # 내용이 없는 <p> 태그 먼저 제거 (<p>&nbsp;</p>, <p><br></p> 등)
     html = re.sub(r'<p(?=\s|>)[^>]*>(\s|&nbsp;|<br\s*/?>)*</p>', '', html)
     # <p> 태그 제거 (내용은 유지, <pre> 등은 건드리지 않음)
     html = re.sub(r'<p(?=\s|>)[^>]*>', '', html)
     html = re.sub(r'</p>', '', html)
     html = html.strip()
-    # 태그 제거 후 텍스트가 없으면 저장 안 함 (&nbsp; 엔티티 문자열도 함께 처리)
+    # 태그 제거 후 텍스트가 없으면 빈 문자열 취급 (&nbsp; 엔티티 문자열도 함께 처리)
     text_only = re.sub(r'<[^>]+>', '', html).replace('\xa0', '').replace('&nbsp;', '').strip()
     if not text_only:
+        return ''
+    return html
+
+
+def _save_section(patch_note, html, model_class):
+    """CKEditor HTML을 섹션당 1개 레코드로 저장 (실제 텍스트 없으면 건너뜀)"""
+    html = _normalize_editor_html(html)
+    if not html:
         return
     model_class.objects.create(patch_note=patch_note, content=html, order=0)
 
@@ -825,6 +843,12 @@ def _get_section_html(manager):
     """섹션의 저장된 HTML 반환 (수정 모달용)"""
     obj = manager.filter(parent__isnull=True).order_by('order', 'id').first()
     return obj.content if obj else ''
+
+
+def _get_section_html_en(manager):
+    """섹션의 저장된 영문 HTML 반환 (영문 수정 모달용)"""
+    obj = manager.filter(parent__isnull=True).order_by('order', 'id').first()
+    return (obj.content_en or '') if obj else ''
 
 
 # ──────────────────────────────────────────────
@@ -839,6 +863,7 @@ def patch_note_append(request):
         product_id  = request.POST.get('product_id', '').strip()
         version     = request.POST.get('version', '').strip()
         patch_date  = request.POST.get('patch_date', '').strip()
+        is_custom   = request.POST.get('is_custom') == 'on'
 
         new_features_html    = request.POST.get('new_features', '')
         improvements_html    = request.POST.get('improvements', '')
@@ -864,7 +889,7 @@ def patch_note_append(request):
             patch_note, created = PatchNote.objects.get_or_create(
                 utility=utility,
                 version=version,
-                defaults={'release_date': patch_date},
+                defaults={'release_date': patch_date, 'is_custom': is_custom},
             )
         else:
             try:
@@ -874,7 +899,7 @@ def patch_note_append(request):
             patch_note, created = PatchNote.objects.get_or_create(
                 product=product,
                 version=version,
-                defaults={'release_date': patch_date},
+                defaults={'release_date': patch_date, 'is_custom': is_custom},
             )
         if not created:
             return JsonResponse(
@@ -921,6 +946,7 @@ def get_patch_note_data(request, patch_note_id):
         'id': note.id,
         'version': note.version,
         'release_date': str(note.release_date),
+        'is_custom': note.is_custom,
         'features_html':     _get_section_html(note.features),
         'improvements_html': _get_section_html(note.improvements),
         'bugfixes_html':     _get_section_html(note.bugfixes),
@@ -940,6 +966,7 @@ def patch_note_update(request):
         patch_note_id        = request.POST.get('patch_note_id', '').strip()
         version              = request.POST.get('version', '').strip()
         patch_date           = request.POST.get('patch_date', '').strip()
+        is_custom            = request.POST.get('is_custom') == 'on'
 
         new_features_html    = request.POST.get('new_features', '')
         improvements_html    = request.POST.get('improvements', '')
@@ -965,6 +992,7 @@ def patch_note_update(request):
 
         note.version = version
         note.release_date = patch_date
+        note.is_custom = is_custom
         note.save()
 
         note.features.all().delete()
@@ -989,6 +1017,78 @@ def patch_note_update(request):
                          {'version': version, 'release_date': patch_date})
 
         return JsonResponse({'message': '패치노트가 수정되었습니다.', 'patch_note_id': note.id})
+
+    except Exception as e:
+        return JsonResponse({'error': f'서버 오류: {str(e)}'}, status=500)
+
+
+# ──────────────────────────────────────────────
+# 패치노트 영문 데이터 조회 / 수정 API (AI 번역 결과 직접 보정용)
+# ──────────────────────────────────────────────
+
+@require_GET
+@role_required('dev')
+def get_patch_note_data_en(request, patch_note_id):
+    try:
+        note = PatchNote.objects.prefetch_related(
+            'features', 'improvements', 'bugfixes', 'remarks', 'internals',
+        ).get(id=patch_note_id)
+    except PatchNote.DoesNotExist:
+        return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
+
+    return JsonResponse({
+        'id': note.id,
+        'version': note.version,
+        'has_features':     note.features.exists(),
+        'has_improvements': note.improvements.exists(),
+        'has_bugfixes':     note.bugfixes.exists(),
+        'has_remarks':      note.remarks.exists(),
+        'has_internals':    note.internals.exists(),
+        'features_html_en':     _get_section_html_en(note.features),
+        'improvements_html_en': _get_section_html_en(note.improvements),
+        'bugfixes_html_en':     _get_section_html_en(note.bugfixes),
+        'remarks_html_en':      _get_section_html_en(note.remarks),
+        'internals_html_en':    _get_section_html_en(note.internals),
+    })
+
+
+@require_POST
+@role_required('dev')
+def patch_note_update_en(request):
+    """번역된 영문 패치노트 내용만 직접 수정. 한글 원문/번역 상태는 건드리지 않음."""
+    try:
+        patch_note_id = request.POST.get('patch_note_id', '').strip()
+        if not patch_note_id:
+            return JsonResponse({'error': '패치노트 ID가 누락되었습니다.'}, status=400)
+
+        try:
+            note = PatchNote.objects.get(id=patch_note_id)
+        except PatchNote.DoesNotExist:
+            return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
+
+        section_map = [
+            ('features_en',     note.features),
+            ('improvements_en', note.improvements),
+            ('bugfixes_en',     note.bugfixes),
+            ('remarks_en',      note.remarks),
+            ('internals_en',    note.internals),
+        ]
+
+        for field_name, manager in section_map:
+            if field_name not in request.POST:
+                continue
+            obj = manager.filter(parent__isnull=True).order_by('order', 'id').first()
+            if not obj:
+                continue
+            obj.content_en = _normalize_editor_html(request.POST.get(field_name, '')) or None
+            obj.save(update_fields=['content_en', 'updated_at'])
+
+        from apps.logs.models import ActionLog
+        ActionLog.record(request, ActionLog.PATCHNOTE_UPDATE,
+                         f'{note.subject} v{note.version} (EN)',
+                         {'version': note.version})
+
+        return JsonResponse({'message': '영문 패치노트가 수정되었습니다.', 'patch_note_id': note.id})
 
     except Exception as e:
         return JsonResponse({'error': f'서버 오류: {str(e)}'}, status=500)
@@ -1061,19 +1161,28 @@ def patch_note_publish(request):
     note.is_published = True
     note.save(update_fields=['is_published', 'updated_at'])
 
-    # 즉시 처리: Notion 등록, 사내 Slack 알림 (Internal 항목 포함)
+    # Notion 페이지는 제품별 공개 문서(KO/EN)라 외부 배포 채널로 취급 — 커스텀 버전은 건너뜀
     # notion_pushed_at 유무로 Insert/Update 자동 판단 (수동 push 후 발행 시 중복 방지)
-    _push_to_notion_safe(note)
+    if note.is_custom:
+        logger.info(f'커스텀 버전 (id={note.id}) — Notion push 건너뜀')
+    else:
+        _push_to_notion_safe(note)
+
+    # 사내 Slack 알림은 커스텀 버전이어도 진행 (내부 전용 배포)
     _send_internal_slack_notification(note)
 
-    # 외부 발송 (고객사 Slack/Gmail) — SiteConfig 의 지연 시간만큼 미뤄서 Q2 task로 처리
-    try:
-        _schedule_external_send(note)
-    except Exception as e:
-        logger.exception(f'외부 발송 예약 실패 (id={note.id}): {e}')
-        note.external_send_status = PatchNote.EXTERNAL_SEND_FAILED
-        note.external_send_error = f'예약 실패: {e}'[:1000]
-        note.save(update_fields=['external_send_status', 'external_send_error', 'updated_at'])
+    # 외부 발송 (고객사 Slack/Gmail) — 커스텀 버전은 내부 전용이라 건너뜀
+    if note.is_custom:
+        logger.info(f'커스텀 버전 (id={note.id}) — 외부 발송 건너뜀')
+    else:
+        # SiteConfig 의 지연 시간만큼 미뤄서 Q2 task로 처리
+        try:
+            _schedule_external_send(note)
+        except Exception as e:
+            logger.exception(f'외부 발송 예약 실패 (id={note.id}): {e}')
+            note.external_send_status = PatchNote.EXTERNAL_SEND_FAILED
+            note.external_send_error = f'예약 실패: {e}'[:1000]
+            note.save(update_fields=['external_send_status', 'external_send_error', 'updated_at'])
 
     from apps.logs.models import ActionLog
     ActionLog.record(request, ActionLog.PATCHNOTE_PUBLISH,
@@ -1194,34 +1303,14 @@ def _format_file_size(size_bytes):
     return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
 
 
-@require_POST
-@role_required('dev')
-def patch_note_file_upload(request):
-    """패치노트 파일 업로드 (release / debug)"""
-    patch_note_id = request.POST.get('patch_note_id', '').strip()
-    file_type = request.POST.get('file_type', '').strip()
-
-    if not patch_note_id or not file_type:
-        return JsonResponse({'error': '필수 파라미터가 누락되었습니다.'}, status=400)
-    if file_type not in ('release', 'debug'):
-        return JsonResponse({'error': '유효하지 않은 파일 유형입니다.'}, status=400)
-
-    uploaded_file = request.FILES.get('file')
-    if not uploaded_file:
-        return JsonResponse({'error': '파일이 첨부되지 않았습니다.'}, status=400)
-
-    try:
-        note = PatchNote.objects.get(id=patch_note_id)
-    except PatchNote.DoesNotExist:
-        return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
-
+def _create_patch_note_file(note, file_type, uploaded_file, user):
     pf = PatchNoteFile.objects.create(
         patch_note=note,
         file_type=file_type,
         file=uploaded_file,
         original_filename=uploaded_file.name,
         file_size=uploaded_file.size,
-        uploaded_by=request.user,
+        uploaded_by=user,
     )
 
     # Nextcloud 이중 저장
@@ -1231,17 +1320,50 @@ def patch_note_file_upload(request):
             pf.nextcloud_url = share_url
             pf.save(update_fields=['nextcloud_url'])
 
+    return {
+        'id': pf.id,
+        'file_type': pf.file_type,
+        'original_filename': pf.original_filename,
+        'file_size': pf.file_size,
+        'file_size_display': _format_file_size(pf.file_size),
+        'created_at': pf.created_at.strftime('%Y-%m-%d %H:%M'),
+        'nextcloud_url': pf.nextcloud_url or '',
+    }
+
+
+@require_POST
+@role_required('dev')
+def patch_note_file_upload(request):
+    """패치노트 파일 업로드. release_files / debug_files 각각 다중 파일 지원."""
+    patch_note_id = request.POST.get('patch_note_id', '').strip()
+    release_files = request.FILES.getlist('release_files')
+    debug_files = request.FILES.getlist('debug_files')
+
+    if not patch_note_id:
+        return JsonResponse({'error': '필수 파라미터가 누락되었습니다.'}, status=400)
+    if not release_files and not debug_files:
+        return JsonResponse({'error': '파일이 첨부되지 않았습니다.'}, status=400)
+
+    try:
+        note = PatchNote.objects.get(id=patch_note_id)
+    except PatchNote.DoesNotExist:
+        return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
+
+    uploaded, errors = [], []
+    for file_type, files in (('release', release_files), ('debug', debug_files)):
+        for uploaded_file in files:
+            try:
+                uploaded.append(_create_patch_note_file(note, file_type, uploaded_file, request.user))
+            except Exception as e:
+                errors.append({'filename': uploaded_file.name, 'error': str(e)})
+
+    if not uploaded:
+        return JsonResponse({'error': '파일 업로드에 실패했습니다.', 'errors': errors}, status=500)
+
     return JsonResponse({
-        'message': '파일이 업로드되었습니다.',
-        'file': {
-            'id': pf.id,
-            'file_type': pf.file_type,
-            'original_filename': pf.original_filename,
-            'file_size': pf.file_size,
-            'file_size_display': _format_file_size(pf.file_size),
-            'created_at': pf.created_at.strftime('%Y-%m-%d %H:%M'),
-            'nextcloud_url': pf.nextcloud_url or '',
-        },
+        'message': f'{len(uploaded)}개 파일이 업로드되었습니다.',
+        'files': uploaded,
+        'errors': errors,
     })
 
 

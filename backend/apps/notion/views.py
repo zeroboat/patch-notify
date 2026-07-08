@@ -200,6 +200,9 @@ def notion_push(request):
     except PatchNote.DoesNotExist:
         return JsonResponse({'error': '패치노트를 찾을 수 없습니다.'}, status=404)
 
+    if patch_note.is_custom:
+        return JsonResponse({'error': '커스텀 버전은 외부 공개 문서인 Notion에 push할 수 없습니다.'}, status=400)
+
     try:
         result = push_patch_note_to_notion(patch_note, is_new=is_new)
         from django.utils import timezone
