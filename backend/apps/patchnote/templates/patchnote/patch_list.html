@@ -119,6 +119,13 @@
                         </div>
                     </div>
 
+                    <div class="form-check mb-4">
+                        <input class="form-check-input" type="checkbox" name="is_custom" id="patchIsCustom">
+                        <label class="form-check-label" for="patchIsCustom">
+                            🔒 커스텀 버전 <span class="text-muted">(외부 미배포 — 내부 기록 및 사내 Slack 공유만 진행)</span>
+                        </label>
+                    </div>
+
                     <hr class="my-4">
 
                     <div class="card mb-4 shadow-none border">
@@ -237,6 +244,13 @@
                         </div>
                     </div>
 
+                    <div class="form-check mb-4">
+                        <input class="form-check-input" type="checkbox" name="is_custom" id="editPatchIsCustom">
+                        <label class="form-check-label" for="editPatchIsCustom">
+                            🔒 커스텀 버전 <span class="text-muted">(외부 미배포 — 내부 기록 및 사내 Slack 공유만 진행)</span>
+                        </label>
+                    </div>
+
                     <hr class="my-4">
 
                     <div class="card mb-4 shadow-none border">
@@ -318,6 +332,62 @@
         </div>
     </div>
 
+    <!-- 패치노트 영문 수정 모달 -->
+    <div class="modal fade" id="patchEditEnModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <form id="editEnForm" action="{% url 'patchnote:patch_note_update_en' %}" method="POST" class="modal-content">
+                {% csrf_token %}
+                <input type="hidden" name="patch_note_id" id="editEnPatchNoteId">
+
+                <div class="modal-header border-bottom pb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar flex-shrink-0 me-3">
+                            <span class="avatar-initial rounded bg-label-info">
+                                <i class="bx bx-world fs-4"></i>
+                            </span>
+                        </div>
+                        <div>
+                            <h4 class="modal-title mb-0 fw-bold">영문 패치노트 수정</h4>
+                            <small class="text-muted">AI 번역 결과를 직접 보정합니다. (버전/한글 원문에는 영향 없음)</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div id="editor-edit-en-section-container">
+                        <div id="wrapper-edit-en-new" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🚀 New Features</label>
+                            <textarea id="editor-edit-en-features" name="features_en"></textarea>
+                        </div>
+                        <div id="wrapper-edit-en-improve" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🛠️ Improvements</label>
+                            <textarea id="editor-edit-en-improvements" name="improvements_en"></textarea>
+                        </div>
+                        <div id="wrapper-edit-en-bug" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🐛 Bug Fixes</label>
+                            <textarea id="editor-edit-en-bugfixes" name="bugfixes_en"></textarea>
+                        </div>
+                        <div id="wrapper-edit-en-note" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">📝 Notes</label>
+                            <textarea id="editor-edit-en-remarks" name="remarks_en"></textarea>
+                        </div>
+                        <div id="wrapper-edit-en-internal" class="editor-wrapper mb-3" style="display:none;">
+                            <label class="form-label fw-bold mb-1">🔒 Internal Only <span class="badge bg-label-dark" style="font-size:0.65rem;">외부 미공유</span></label>
+                            <textarea id="editor-edit-en-internals" name="internals_en"></textarea>
+                        </div>
+                        <p class="text-muted small mb-0" id="editEnEmptyMsg" style="display:none;">번역된 항목이 없습니다. 번역이 완료된 후 이용해주세요.</p>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-info" id="btn-edit-en-patch">저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div class="row flex-nowrap">
         <div class="d-none d-md-block flex-shrink-0" style="width: 170px;">
             <div class="card sticky-top" style="top: 100px; z-index: 10;">
@@ -342,13 +412,22 @@
                         <div class="d-flex align-items-center gap-2">
                             <i class="bx bx-tag-alt text-primary"></i>
                             <h5 class="mb-0 text-primary fw-bold">{{ note.version }}</h5>
+                            {% if note.is_custom %}
+                            <span class="badge bg-label-dark fs-small" title="외부 미배포 — 내부 기록 및 사내 Slack 공유만 진행">
+                                <i class="bx bx-lock-alt me-1"></i>커스텀
+                            </span>
+                            {% endif %}
                         </div>
                         <div class="d-flex align-items-center gap-2">
                             {% if note.is_published %}
                             <span class="badge bg-label-success fs-small">
                                 <i class="bx bx-send me-1"></i>발행됨
                             </span>
-                            {% if note.external_send_status == 'pending' %}
+                            {% if note.is_custom %}
+                            <span class="badge bg-label-secondary fs-small" title="커스텀 버전은 외부로 발송되지 않습니다">
+                                <i class="bx bx-block me-1"></i>외부 미배포
+                            </span>
+                            {% elif note.external_send_status == 'pending' %}
                             <span class="badge bg-label-warning fs-small" title="외부 발송 예정">
                                 <i class="bx bx-time me-1"></i>발송 대기 · {{ note.external_send_scheduled_at|date:"H:i" }}
                             </span>
@@ -404,6 +483,10 @@
                                     data-id="{{ note.id }}" title="수정">
                                 <i class="bx bx-edit"></i>
                             </button>
+                            <button class="btn btn-sm btn-icon btn-label-info btn-edit-note-en"
+                                    data-id="{{ note.id }}" title="영문 수정">
+                                <i class="bx bx-world"></i>
+                            </button>
                             <button class="btn btn-sm btn-icon btn-label-danger btn-delete-note"
                                     data-id="{{ note.id }}" data-version="{{ note.version }}" title="삭제">
                                 <i class="bx bx-trash"></i>
@@ -417,7 +500,8 @@
                         {% if feat and feat.content %}
                         <div class="patch-section border-start border-3 border-success ps-3 mb-4">
                             <div class="d-flex align-items-center gap-2 mb-2">
-                                <span class="fw-bold text-success small text-uppercase">🚀 기능 추가</span>
+                                <span class="fw-bold text-success small text-uppercase lang-ko">🚀 기능 추가</span>
+                                <span class="fw-bold text-success small text-uppercase lang-en d-none">🚀 New Features</span>
                             </div>
                             <div class="patch-html-body lang-ko">{{ feat.content|safe }}</div>
                             <div class="patch-html-body lang-en d-none">
@@ -433,7 +517,8 @@
                         {% if note.features.exists %}<hr class="my-3 opacity-25">{% endif %}
                         <div class="patch-section border-start border-3 border-info ps-3 mb-4">
                             <div class="d-flex align-items-center gap-2 mb-2">
-                                <span class="fw-bold text-info small text-uppercase">🛠️ 기능 개선</span>
+                                <span class="fw-bold text-info small text-uppercase lang-ko">🛠️ 기능 개선</span>
+                                <span class="fw-bold text-info small text-uppercase lang-en d-none">🛠️ Improvements</span>
                             </div>
                             <div class="patch-html-body lang-ko">{{ impr.content|safe }}</div>
                             <div class="patch-html-body lang-en d-none">
@@ -449,7 +534,8 @@
                         {% if note.features.exists or note.improvements.exists %}<hr class="my-3 opacity-25">{% endif %}
                         <div class="patch-section border-start border-3 border-danger ps-3 mb-4">
                             <div class="d-flex align-items-center gap-2 mb-2">
-                                <span class="fw-bold text-danger small text-uppercase">🐛 버그 수정</span>
+                                <span class="fw-bold text-danger small text-uppercase lang-ko">🐛 버그 수정</span>
+                                <span class="fw-bold text-danger small text-uppercase lang-en d-none">🐛 Bug Fixes</span>
                             </div>
                             <div class="patch-html-body lang-ko">{{ bugf.content|safe }}</div>
                             <div class="patch-html-body lang-en d-none">
@@ -465,7 +551,8 @@
                         {% if note.features.exists or note.improvements.exists or note.bugfixes.exists %}<hr class="my-3 opacity-25">{% endif %}
                         <div class="patch-section border-start border-3 border-warning ps-3 mb-4">
                             <div class="d-flex align-items-center gap-2 mb-2">
-                                <span class="fw-bold text-warning small text-uppercase">📝 특이 사항</span>
+                                <span class="fw-bold text-warning small text-uppercase lang-ko">📝 특이 사항</span>
+                                <span class="fw-bold text-warning small text-uppercase lang-en d-none">📝 Notes</span>
                             </div>
                             <div class="patch-html-body lang-ko">{{ remk.content|safe }}</div>
                             <div class="patch-html-body lang-en d-none">
@@ -481,7 +568,8 @@
                         {% if note.features.exists or note.improvements.exists or note.bugfixes.exists or note.remarks.exists %}<hr class="my-3 opacity-25">{% endif %}
                         <div class="patch-section border-start border-3 border-dark ps-3 mb-4">
                             <div class="d-flex align-items-center gap-2 mb-2">
-                                <span class="fw-bold text-dark small text-uppercase">🔒 내부 공유</span>
+                                <span class="fw-bold text-dark small text-uppercase lang-ko">🔒 내부 공유</span>
+                                <span class="fw-bold text-dark small text-uppercase lang-en d-none">🔒 Internal Only</span>
                                 <span class="badge bg-label-dark" style="font-size:0.6rem;">외부 미공유</span>
                             </div>
                             <div class="patch-html-body lang-ko">{{ intl.content|safe }}</div>
@@ -498,12 +586,13 @@
                         <hr class="my-3 opacity-25">
                         <div class="patch-section border-start border-3 border-secondary ps-3 mb-2">
                             <div class="d-flex align-items-center justify-content-between mb-2">
-                                <span class="fw-bold text-secondary small text-uppercase">📎 첨부 파일</span>
+                                <span class="fw-bold text-secondary small text-uppercase lang-ko">📎 첨부 파일</span>
+                                <span class="fw-bold text-secondary small text-uppercase lang-en d-none">📎 Attachments</span>
                                 {% if user_role == 'admin' or user_role == 'manager' or user_role == 'dev' %}
                                 <button class="btn btn-xs btn-label-primary btn-file-upload"
                                         data-id="{{ note.id }}" data-version="{{ note.version }}"
                                         style="font-size:0.7rem; padding: 2px 8px;">
-                                    <i class="bx bx-upload me-1"></i>업로드
+                                    <i class="bx bx-upload me-1"></i><span class="lang-ko">업로드</span><span class="lang-en d-none">Upload</span>
                                 </button>
                                 {% endif %}
                             </div>
@@ -535,7 +624,8 @@
                                     </div>
                                     {% endif %}
                                 {% empty %}
-                                    <p class="text-muted small mb-0 no-files-msg">등록된 파일이 없습니다.</p>
+                                    <p class="text-muted small mb-0 no-files-msg lang-ko">등록된 파일이 없습니다.</p>
+                                    <p class="text-muted small mb-0 no-files-msg lang-en d-none">No files uploaded.</p>
                                 {% endfor %}
                             </div>
                         </div>
@@ -665,6 +755,7 @@
                 // 기본 필드 채우기
                 document.getElementById('editPatchNoteId').value = data.id;
                 document.getElementById('editPatchVersion').value = data.version;
+                document.getElementById('editPatchIsCustom').checked = !!data.is_custom;
                 if (!editDatepicker) {
                     editDatepicker = initSimpleDatePicker('#editPatchDate');
                 }
@@ -730,6 +821,90 @@
             for (const [switchId, editorId] of Object.entries(sectionMap)) {
                 if (!document.getElementById(switchId).checked) {
                     document.getElementById(editorId).value = '';
+                }
+            }
+
+            const formData = new FormData(this);
+            try {
+                const res = await fetch(this.action, { method: 'POST', body: formData });
+                const result = await res.json();
+                if (res.ok) {
+                    await Swal.fire({ icon: 'success', title: '수정 완료', text: result.message, timer: 1500, showConfirmButton: false });
+                    location.reload();
+                } else {
+                    Swal.fire('오류', result.error || '수정 중 오류가 발생했습니다.', 'error');
+                }
+            } catch (e) {
+                Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        // ── 영문 수정 모달 ───────────────────────────────────────────────────────
+        const activeEditEnEditors = {};
+
+        const editEnSectionMap = {
+            'has_features':     { wrapperId: 'wrapper-edit-en-new',      html: 'features_html_en',     editorId: 'editor-edit-en-features' },
+            'has_improvements': { wrapperId: 'wrapper-edit-en-improve',  html: 'improvements_html_en',  editorId: 'editor-edit-en-improvements' },
+            'has_bugfixes':     { wrapperId: 'wrapper-edit-en-bug',      html: 'bugfixes_html_en',      editorId: 'editor-edit-en-bugfixes' },
+            'has_remarks':      { wrapperId: 'wrapper-edit-en-note',     html: 'remarks_html_en',       editorId: 'editor-edit-en-remarks' },
+            'has_internals':    { wrapperId: 'wrapper-edit-en-internal', html: 'internals_html_en',     editorId: 'editor-edit-en-internals' },
+        };
+
+        document.querySelectorAll('.btn-edit-note-en').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                const noteId = this.dataset.id;
+                let data;
+                try {
+                    const res = await fetch(`/patchnote/data-en/${noteId}/`);
+                    if (!res.ok) {
+                        const err = await res.json();
+                        Swal.fire('오류', err.error || '데이터를 불러올 수 없습니다.', 'error');
+                        return;
+                    }
+                    data = await res.json();
+                } catch (e) {
+                    Swal.fire('오류', '네트워크 오류가 발생했습니다.', 'error');
+                    return;
+                }
+
+                document.getElementById('editEnPatchNoteId').value = data.id;
+
+                let anyVisible = false;
+                for (const [flag, cfg] of Object.entries(editEnSectionMap)) {
+                    const wrapper = document.getElementById(cfg.wrapperId);
+                    if (!data[flag]) {
+                        wrapper.style.display = 'none';
+                        continue;
+                    }
+                    anyVisible = true;
+                    wrapper.style.display = 'block';
+                    if (!activeEditEnEditors[cfg.editorId]) {
+                        activeEditEnEditors[cfg.editorId] = await initCKEditor(`#${cfg.editorId}`);
+                    }
+                    const editor = activeEditEnEditors[cfg.editorId];
+                    if (editor && typeof editor.then === 'function') {
+                        activeEditEnEditors[cfg.editorId] = await editor;
+                    }
+                    activeEditEnEditors[cfg.editorId].setData(data[cfg.html] || '');
+                }
+                document.getElementById('editEnEmptyMsg').style.display = anyVisible ? 'none' : 'block';
+
+                const modal = new bootstrap.Modal(document.getElementById('patchEditEnModal'));
+                modal.show();
+            });
+        });
+
+        document.getElementById('editEnForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-edit-en-patch');
+            btn.disabled = true;
+
+            for (const [editorId, editor] of Object.entries(activeEditEnEditors)) {
+                const textarea = document.getElementById(editorId);
+                if (textarea && editor && typeof editor.getData === 'function') {
+                    textarea.value = editor.getData();
                 }
             }
 
@@ -1071,7 +1246,7 @@
 
     <!-- ===== 파일 업로드 모달 ===== -->
     <div class="modal fade" id="fileUploadModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header border-bottom py-3">
                     <h6 class="modal-title fw-bold mb-0">
@@ -1081,32 +1256,34 @@
                 </div>
                 <div class="modal-body">
                     <p class="small text-muted mb-3">
-                        <strong id="uploadVersion"></strong> 에 파일을 첨부합니다.
+                        <strong id="uploadVersion"></strong> 에 파일을 첨부합니다. 여러 파일을 한 번에 올릴 수 있습니다.
                     </p>
                     <input type="hidden" id="uploadNoteId">
+
                     <div class="mb-3">
-                        <label class="form-label fw-semibold small">파일 유형</label>
-                        <div class="d-flex gap-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="uploadFileType" id="fileTypeRelease" value="release" checked>
-                                <label class="form-check-label small" for="fileTypeRelease">
-                                    <strong>Release</strong>
-                                    <span class="text-muted d-block" style="font-size:0.75rem;">릴리즈용 파일</span>
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="uploadFileType" id="fileTypeDebug" value="debug">
-                                <label class="form-check-label small" for="fileTypeDebug">
-                                    <strong>Debug</strong>
-                                    <span class="text-muted d-block" style="font-size:0.75rem;">디버깅용 파일</span>
-                                </label>
-                            </div>
+                        <label class="form-label fw-semibold small mb-1">
+                            <span class="badge bg-label-success" style="font-size:0.7rem;">Release</span> 릴리즈용 파일
+                        </label>
+                        <div class="file-drop-zone border border-2 border-dashed rounded p-3 text-center small text-muted" data-type="release" style="cursor:pointer;">
+                            <i class="bx bx-cloud-upload fs-3 d-block mb-1"></i>
+                            클릭하거나 파일을 끌어다 놓으세요
+                            <input type="file" class="d-none file-drop-input" data-type="release" multiple>
                         </div>
+                        <div class="file-pending-list mt-2 d-flex flex-column gap-1" data-type="release"></div>
                     </div>
+
                     <div class="mb-3">
-                        <label for="uploadFileInput" class="form-label fw-semibold small">파일 선택</label>
-                        <input type="file" class="form-control form-control-sm" id="uploadFileInput">
+                        <label class="form-label fw-semibold small mb-1">
+                            <span class="badge bg-label-danger" style="font-size:0.7rem;">Debug</span> 디버깅용 파일
+                        </label>
+                        <div class="file-drop-zone border border-2 border-dashed rounded p-3 text-center small text-muted" data-type="debug" style="cursor:pointer;">
+                            <i class="bx bx-cloud-upload fs-3 d-block mb-1"></i>
+                            클릭하거나 파일을 끌어다 놓으세요
+                            <input type="file" class="d-none file-drop-input" data-type="debug" multiple>
+                        </div>
+                        <div class="file-pending-list mt-2 d-flex flex-column gap-1" data-type="debug"></div>
                     </div>
+
                     <div id="uploadResult" class="d-none"></div>
                 </div>
                 <div class="modal-footer py-2">
@@ -1127,15 +1304,78 @@
         const uploadModal = new bootstrap.Modal(uploadModalEl);
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
 
+        // 업로드 대기 중인 파일 (release / debug 별도 보관)
+        let pendingFiles = { release: [], debug: [] };
+
+        function renderPendingList(type) {
+            const listEl = document.querySelector(`.file-pending-list[data-type="${type}"]`);
+            listEl.innerHTML = pendingFiles[type].map((file, idx) => `
+                <div class="d-flex align-items-center gap-2 small bg-label-secondary rounded px-2 py-1">
+                    <i class="bx bx-file"></i>
+                    <span class="text-truncate flex-grow-1" style="max-width:300px;" title="${file.name}">${file.name}</span>
+                    <span class="text-muted" style="font-size:0.7rem;">${(file.size / 1024).toFixed(1)} KB</span>
+                    <button type="button" class="btn btn-xs btn-icon btn-label-danger btn-pending-remove" data-type="${type}" data-idx="${idx}" style="width:18px;height:18px;font-size:0.6rem;">
+                        <i class="bx bx-x"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function addPendingFiles(type, fileList) {
+            for (const file of fileList) {
+                pendingFiles[type].push(file);
+            }
+            renderPendingList(type);
+        }
+
+        uploadModalEl.querySelector('.modal-body').addEventListener('click', function (e) {
+            const btn = e.target.closest('.btn-pending-remove');
+            if (!btn) return;
+            const type = btn.dataset.type;
+            pendingFiles[type].splice(parseInt(btn.dataset.idx, 10), 1);
+            renderPendingList(type);
+        });
+
+        // 드래그 앤 드롭 / 클릭 업로드 영역
+        document.querySelectorAll('.file-drop-zone').forEach(zone => {
+            const type = zone.dataset.type;
+            const input = zone.querySelector('.file-drop-input');
+
+            zone.addEventListener('click', function (e) {
+                if (e.target === input) return;
+                input.click();
+            });
+            input.addEventListener('change', function () {
+                addPendingFiles(type, this.files);
+                this.value = '';
+            });
+
+            zone.addEventListener('dragover', function (e) {
+                e.preventDefault();
+                zone.classList.add('border-primary', 'text-primary');
+            });
+            zone.addEventListener('dragleave', function () {
+                zone.classList.remove('border-primary', 'text-primary');
+            });
+            zone.addEventListener('drop', function (e) {
+                e.preventDefault();
+                zone.classList.remove('border-primary', 'text-primary');
+                if (e.dataTransfer.files.length) {
+                    addPendingFiles(type, e.dataTransfer.files);
+                }
+            });
+        });
+
         // 업로드 모달 열기
         document.querySelectorAll('.btn-file-upload').forEach(btn => {
             btn.addEventListener('click', function () {
                 document.getElementById('uploadNoteId').value = this.dataset.id;
                 document.getElementById('uploadVersion').textContent = 'v' + this.dataset.version;
-                document.getElementById('uploadFileInput').value = '';
                 document.getElementById('uploadResult').classList.add('d-none');
                 document.getElementById('btnFileUpload').disabled = false;
-                document.getElementById('fileTypeRelease').checked = true;
+                pendingFiles = { release: [], debug: [] };
+                renderPendingList('release');
+                renderPendingList('debug');
                 uploadModal.show();
             });
         });
@@ -1144,11 +1384,9 @@
         document.getElementById('btnFileUpload').addEventListener('click', async function () {
             const btn = this;
             const noteId = document.getElementById('uploadNoteId').value;
-            const fileType = document.querySelector('input[name="uploadFileType"]:checked').value;
-            const fileInput = document.getElementById('uploadFileInput');
             const resultEl = document.getElementById('uploadResult');
 
-            if (!fileInput.files.length) {
+            if (!pendingFiles.release.length && !pendingFiles.debug.length) {
                 resultEl.classList.remove('d-none');
                 resultEl.innerHTML = '<div class="alert alert-warning mb-0 py-2 small">파일을 선택해주세요.</div>';
                 return;
@@ -1161,8 +1399,8 @@
             const fd = new FormData();
             fd.append('csrfmiddlewaretoken', csrfToken);
             fd.append('patch_note_id', noteId);
-            fd.append('file_type', fileType);
-            fd.append('file', fileInput.files[0]);
+            pendingFiles.release.forEach(f => fd.append('release_files', f));
+            pendingFiles.debug.forEach(f => fd.append('debug_files', f));
 
             try {
                 const res = await fetch("{% url 'patchnote:file_upload' %}", { method: 'POST', body: fd });
@@ -1170,39 +1408,45 @@
                 resultEl.classList.remove('d-none');
                 if (res.ok) {
                     resultEl.innerHTML = `<div class="alert alert-success mb-0 py-2 small">${data.message}</div>`;
-                    // 파일 목록에 새 항목 추가
                     const listEl = document.getElementById(`file-list-${noteId}`);
                     const noFilesMsg = listEl.querySelector('.no-files-msg');
                     if (noFilesMsg) noFilesMsg.remove();
 
-                    const f = data.file;
-                    const badgeClass = f.file_type === 'release' ? 'bg-label-success' : 'bg-label-danger';
-                    const typeLabel = f.file_type === 'release' ? 'Release' : 'Debug';
-                    const newItem = document.createElement('div');
-                    newItem.className = 'd-flex align-items-center gap-2 mb-1 file-item';
-                    newItem.dataset.fileId = f.id;
-                    const nasBtn = f.nextcloud_url
-                        ? `<button class="btn btn-xs btn-icon btn-label-info btn-copy-nas"
-                              style="width:20px; height:20px; font-size:0.6rem;" title="NAS 링크 복사"
-                              data-url="${f.nextcloud_url}">
-                              <i class="bx bx-link"></i>
-                           </button>`
-                        : '';
-                    newItem.innerHTML = `
-                        <span class="badge ${badgeClass}" style="font-size:0.65rem;">${typeLabel}</span>
-                        <a href="/patchnote/file/download/${f.id}/" class="text-body small text-truncate" style="max-width:300px;" title="${f.original_filename}">${f.original_filename}</a>
-                        <span class="text-muted" style="font-size:0.7rem;">${f.file_size_display}</span>
-                        ${nasBtn}
-                        <button class="btn btn-xs btn-icon btn-label-danger btn-file-delete"
-                                data-file-id="${f.id}" data-filename="${f.original_filename}"
-                                style="width:20px; height:20px; font-size:0.6rem;" title="삭제">
-                            <i class="bx bx-x"></i>
-                        </button>
-                    `;
-                    listEl.appendChild(newItem);
-                    bindFileDeleteBtn(newItem.querySelector('.btn-file-delete'));
+                    (data.files || []).forEach(f => {
+                        const badgeClass = f.file_type === 'release' ? 'bg-label-success' : 'bg-label-danger';
+                        const typeLabel = f.file_type === 'release' ? 'Release' : 'Debug';
+                        const newItem = document.createElement('div');
+                        newItem.className = 'd-flex align-items-center gap-2 mb-1 file-item';
+                        newItem.dataset.fileId = f.id;
+                        const nasBtn = f.nextcloud_url
+                            ? `<button class="btn btn-xs btn-icon btn-label-info btn-copy-nas"
+                                  style="width:20px; height:20px; font-size:0.6rem;" title="NAS 링크 복사"
+                                  data-url="${f.nextcloud_url}">
+                                  <i class="bx bx-link"></i>
+                               </button>`
+                            : '';
+                        newItem.innerHTML = `
+                            <span class="badge ${badgeClass}" style="font-size:0.65rem;">${typeLabel}</span>
+                            <a href="/patchnote/file/download/${f.id}/" class="text-body small text-truncate" style="max-width:300px;" title="${f.original_filename}">${f.original_filename}</a>
+                            <span class="text-muted" style="font-size:0.7rem;">${f.file_size_display}</span>
+                            ${nasBtn}
+                            <button class="btn btn-xs btn-icon btn-label-danger btn-file-delete"
+                                    data-file-id="${f.id}" data-filename="${f.original_filename}"
+                                    style="width:20px; height:20px; font-size:0.6rem;" title="삭제">
+                                <i class="bx bx-x"></i>
+                            </button>
+                        `;
+                        listEl.appendChild(newItem);
+                        bindFileDeleteBtn(newItem.querySelector('.btn-file-delete'));
+                    });
 
-                    fileInput.value = '';
+                    pendingFiles = { release: [], debug: [] };
+                    renderPendingList('release');
+                    renderPendingList('debug');
+
+                    if ((data.errors || []).length) {
+                        resultEl.innerHTML += `<div class="alert alert-warning mb-0 mt-2 py-2 small">일부 파일 실패: ${data.errors.map(e => e.filename).join(', ')}</div>`;
+                    }
                 } else {
                     resultEl.innerHTML = `<div class="alert alert-danger mb-0 py-2 small">${data.error}</div>`;
                 }
